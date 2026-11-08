@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../api/models.dart';
-import '../game_colors.dart';
 import '../theme/halved_brand.dart';
+import 'side_colour.dart';
 import 'tray_edit_header.dart';
 
 // Las Vegas score entry — `~/Downloads/handoff-vegas-score-entry`.
@@ -22,15 +22,9 @@ import 'tray_edit_header.dart';
 // shipped, and a header in a different colour from the rows it heads is
 // worse than one in a different colour from the design.
 
-/// The side colours, on a light card and on the dark tray.
-///
-/// `onDark3` is the tray's blue — the light blue-grey the packets draw is
-/// indistinguishable from the tray's own label grey, which is why that token
-/// exists.
-Color vegasSideColour(int side, {bool onDark = false}) {
-  if (onDark) return side == 1 ? Halved.onDark3 : Halved.onDark2;
-  return side == 1 ? GameColors.team1 : GameColors.team2;
-}
+/// The side colours — see `widgets/side_colour.dart`, which Fourball shares.
+Color vegasSideColour(int side, {bool onDark = false}) =>
+    sideColour(side, onDark: onDark);
 
 const Color _secondary = Color(0xFFB9CCC3);
 const Color _trayMuted = Color(0xFF7F968C);

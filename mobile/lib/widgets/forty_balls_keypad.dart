@@ -219,6 +219,15 @@ class FortyBallsKeypad extends StatefulWidget {
   /// does not apply.
   final int? capMax;
 
+  /// Marks this golfer as not scoring the hole and moves on.
+  ///
+  /// **Fourball, after a close-out, and nowhere else.** The match is over,
+  /// the group is playing the rest of the card, and a golfer is allowed to
+  /// pick up — so the bottom row becomes three equal keys. Null everywhere
+  /// else, which keeps `10+` narrow beside a wide `Clear` and the two
+  /// destructive-ish controls at different widths.
+  final VoidCallback? onNoScore;
+
   const FortyBallsKeypad({
     super.key,
     required this.playerName,
@@ -229,6 +238,7 @@ class FortyBallsKeypad extends StatefulWidget {
     this.netStyle = false,
     this.onDone,
     this.capMax,
+    this.onNoScore,
   });
 
   @override
@@ -346,12 +356,20 @@ class _FortyBallsKeypadState extends State<FortyBallsKeypad> {
       Row(children: [
         // 10+ takes ONE column and Clear the remaining two, so the two
         // destructive-ish controls are never adjacent at the same width.
+        // With `No score` in play there are three keys and they share
+        // evenly, which is what the Fourball packet draws.
         Expanded(child: _flatButton('10+', onTap: () {
           setState(() { _typing = true; _ctrl.clear(); });
         })),
         const SizedBox(width: 8),
+        if (widget.onNoScore != null) ...[
+          Expanded(
+            child: _flatButton('No score', onTap: widget.onNoScore!),
+          ),
+          const SizedBox(width: 8),
+        ],
         Expanded(
-          flex: 2,
+          flex: widget.onNoScore == null ? 2 : 1,
           child: _flatButton('Clear', filled: true, onTap: widget.onClear),
         ),
       ]),

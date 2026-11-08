@@ -382,7 +382,8 @@ void main() {
       // The tray IS the bottom bar while it is up, so its own arrows are the
       // only ones on screen — which is what lets the forward button finish
       // the round on the last hole.
-      expect(src, contains('if (!sixTray && !spTray && !vgTray)'));
+      expect(src, contains('!vgTray'));
+      expect(src, contains('if (!sixTray && !spTray && !vgTray && !fourTray)'));
     });
 
     test('the card is fetched for the hole on screen', () {

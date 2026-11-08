@@ -317,11 +317,19 @@ void main() {
       // keypad was never posted — the tray waited for a result from a save
       // that had not happened. Annandale hit exactly this when IT joined the
       // keypad; the gate has to name every tray game, not one of them.
-      final at = src.indexOf('if (n > 0 && ');
-      expect(at, greaterThan(0));
-      final gate = src.substring(at, at + 120);
-      expect(gate, contains('af != null'));
-      expect(gate, contains('six != null'));
+      // **The gate is `_raisesTray`, not a list of games.** It was a
+      // hand-written `af || six || spCard`, and Las Vegas was added to this
+      // screen without being added to it — so a Vegas hole's last score was
+      // never posted. It asks the one function that means "this hole ends in
+      // a tray" now, which is also what makes the NEXT tray game free.
+      final at = src.indexOf('if (n > 0 && !_fortyBallsRound(rp)');
+      expect(at, greaterThan(0), reason: 'the post-on-last-score gate moved');
+      final gate = src.substring(at, src.indexOf('{', at + 40));
+      expect(gate, contains('_raisesTray(rp)'));
+      // …and `_raisesTray` names this game.
+      final tray = src.indexOf('bool _raisesTray(RoundProvider rp) =>');
+      final body = src.substring(tray, src.indexOf(';', tray));
+      expect(body, contains('_sixesCard(rp)'));
       // 40 Balls still posts with its count, not with the last score.
       expect(gate, contains('!_fortyBallsRound(rp)'));
     });

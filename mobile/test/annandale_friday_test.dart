@@ -180,11 +180,20 @@ void main() {
       // reworded the day Sixes joined the keypad and needed the same post,
       // and a guard that breaks on a rewording is one that gets deleted.
       final src = _src('lib/screens/score_entry_screen.dart');
-      final at = src.indexOf('if (n > 0 && ');
-      expect(at, greaterThan(0));
-      final block = src.substring(at, at + 600);
-      expect(block, contains('af != null'));
-      expect(block, contains('_saveCurrentHole('));
+      // **The gate is `_raisesTray`, not a list of games.** It was a
+      // hand-written `af || six || spCard`, and Las Vegas was added to this
+      // screen without being added to it — so a Vegas hole's last score was
+      // never posted. It asks the one function that means "this hole ends in
+      // a tray" now, which is also what makes the NEXT tray game free.
+      final at = src.indexOf('if (n > 0 && !_fortyBallsRound(rp)');
+      expect(at, greaterThan(0), reason: 'the post-on-last-score gate moved');
+      final gate = src.substring(at, src.indexOf('{', at + 40));
+      expect(gate, contains('_raisesTray(rp)'));
+      // …and `_raisesTray` names this game.
+      final tray = src.indexOf('bool _raisesTray(RoundProvider rp) =>');
+      final body = src.substring(tray, src.indexOf(';', tray));
+      expect(body, contains('annandaleFridaySummary'));
+      expect(src.substring(at, at + 900), contains('_saveCurrentHole('));
     });
 
     test("the keypad's strokes are the game's, not full handicap", () {

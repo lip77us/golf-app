@@ -399,10 +399,19 @@ void main() {
       // Annandale's tray rose over a hole that had never been sent, and
       // Sixes repeated it because the gate still read `af != null`. A tray
       // reports the SERVER's result, so the hole has to go.
+      // **The gate is `_raisesTray`, not a list of games.** It was a
+      // hand-written `af || six || spCard`, and Las Vegas was added to this
+      // screen without being added to it — so a Vegas hole's last score was
+      // never posted. It asks the one function that means "this hole ends in
+      // a tray" now, which is also what makes the NEXT tray game free.
       final at = src.indexOf('if (n > 0 && !_fortyBallsRound(rp)');
       expect(at, greaterThan(0), reason: 'the post-on-last-score gate moved');
-      expect(src.substring(at, src.indexOf('{', at + 40)),
-          contains('spCard != null'));
+      final gate = src.substring(at, src.indexOf('{', at + 40));
+      expect(gate, contains('_raisesTray(rp)'));
+      // …and `_raisesTray` names this game.
+      final tray = src.indexOf('bool _raisesTray(RoundProvider rp) =>');
+      final body = src.substring(tray, src.indexOf(';', tray));
+      expect(body, contains('_strokePlayCard(rp)'));
     });
 
     test('the keypad takes the strokes and the ceiling from the CARD', () {

@@ -11385,3 +11385,293 @@ class VegasRoundWinner {
         level: j['level'] as bool? ?? false,
       );
 }
+
+/// Everything the Fourball score-entry screen draws for one hole
+/// (`~/Downloads/handoff-fourball-score-entry`).
+///
+/// **Every figure arrives decided.** The best balls, the hole, the match
+/// state and the close-out are the engine's — the `&M` in `3&2` especially,
+/// because only the server knows the group's play order.
+class FourballHoleCard {
+  final int hole;
+  final int? par;
+  final int? strokeIndex;
+  final int? yards;
+  final String nine;
+  final int thru;
+
+  /// Per golfer. 0 means no stakes.
+  final double stake;
+
+  /// The group in SIDE order: side 1's two golfers, then side 2's.
+  final List<FourballHolePlayer> players;
+
+  /// Side 1 then side 2 — the order the golfer card lists them.
+  final List<FourballHoleSide> sides;
+
+  /// How many of the four have a score.
+  final int scored;
+  final bool holeComplete;
+
+  /// This hole is past the close-out: gross and net only, no team score.
+  final bool countsForCard;
+
+  /// The match was decided before the last hole.
+  final bool closedOut;
+  final int? finishedOnHole;
+
+  final FourballMatchState match;
+
+  /// Nine tiles for the nine being played.
+  final List<FourballStripHole> strip;
+
+  /// Two rows, the leading side first. Empty when there is no stake.
+  final List<FourballMoneyRow> money;
+
+  final bool roundOver;
+  final int? nextHole;
+
+  const FourballHoleCard({
+    required this.hole,
+    required this.par,
+    required this.strokeIndex,
+    required this.yards,
+    required this.nine,
+    required this.thru,
+    required this.stake,
+    required this.players,
+    required this.sides,
+    required this.scored,
+    required this.holeComplete,
+    required this.countsForCard,
+    required this.closedOut,
+    required this.finishedOnHole,
+    required this.match,
+    required this.strip,
+    required this.money,
+    required this.roundOver,
+    required this.nextHole,
+  });
+
+  factory FourballHoleCard.fromJson(Map<String, dynamic> j) =>
+      FourballHoleCard(
+        hole: (j['hole'] as num?)?.toInt() ?? 0,
+        par: (j['par'] as num?)?.toInt(),
+        strokeIndex: (j['stroke_index'] as num?)?.toInt(),
+        yards: (j['yards'] as num?)?.toInt(),
+        nine: j['nine'] as String? ?? '',
+        thru: (j['thru'] as num?)?.toInt() ?? 0,
+        stake: (j['stake'] as num?)?.toDouble() ?? 0,
+        players: ((j['players'] as List?) ?? const [])
+            .map((e) => FourballHolePlayer.fromJson(
+                (e as Map).cast<String, dynamic>()))
+            .toList(),
+        sides: ((j['sides'] as List?) ?? const [])
+            .map((e) =>
+                FourballHoleSide.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+        scored: (j['scored'] as num?)?.toInt() ?? 0,
+        holeComplete: j['hole_complete'] as bool? ?? false,
+        countsForCard: j['counts_for_card'] as bool? ?? false,
+        closedOut: j['closed_out'] as bool? ?? false,
+        finishedOnHole: (j['finished_on_hole'] as num?)?.toInt(),
+        match: FourballMatchState.fromJson(
+            ((j['match'] as Map?) ?? const {}).cast<String, dynamic>()),
+        strip: ((j['strip'] as List?) ?? const [])
+            .map((e) => FourballStripHole.fromJson(
+                (e as Map).cast<String, dynamic>()))
+            .toList(),
+        money: ((j['money'] as List?) ?? const [])
+            .map((e) =>
+                FourballMoneyRow.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+        roundOver: j['round_over'] as bool? ?? false,
+        nextHole: (j['next_hole'] as num?)?.toInt(),
+      );
+
+  bool get staked => stake > 0;
+
+  FourballHolePlayer? playerById(int id) {
+    for (final p in players) {
+      if (p.playerId == id) return p;
+    }
+    return null;
+  }
+
+  /// This golfer's side, for the header strip above his row.
+  FourballHoleSide? sideOf(int playerId) {
+    for (final s in sides) {
+      if (s.playerIds.contains(playerId)) return s;
+    }
+    return null;
+  }
+}
+
+class FourballHolePlayer {
+  final int playerId;
+  final String name;
+  final String short;
+  final String first;
+  final int? courseHandicap;
+  final int strokes;
+  final int? gross;
+  final int? net;
+  final int side;
+
+  /// His ball was his side's best on a hole that counts. Always false after
+  /// a close-out, where there is no team score to be the best of.
+  final bool counted;
+
+  const FourballHolePlayer({
+    required this.playerId,
+    required this.name,
+    required this.short,
+    required this.first,
+    required this.courseHandicap,
+    required this.strokes,
+    required this.gross,
+    required this.net,
+    required this.side,
+    required this.counted,
+  });
+
+  factory FourballHolePlayer.fromJson(Map<String, dynamic> j) =>
+      FourballHolePlayer(
+        playerId: (j['player_id'] as num?)?.toInt() ?? 0,
+        name: j['name'] as String? ?? '',
+        short: j['short'] as String? ?? '',
+        first: j['first'] as String? ?? '',
+        courseHandicap: (j['course_handicap'] as num?)?.toInt(),
+        strokes: (j['strokes'] as num?)?.toInt() ?? 0,
+        gross: (j['gross'] as num?)?.toInt(),
+        net: (j['net'] as num?)?.toInt(),
+        side: (j['side'] as num?)?.toInt() ?? 0,
+        counted: j['counted'] as bool? ?? false,
+      );
+}
+
+class FourballHoleSide {
+  final int side;
+
+  /// `Paul + Larry`, in the order the card lists them.
+  final String label;
+  final List<int> playerIds;
+
+  /// The side's best net — null until one of its two has a score.
+  final int? best;
+
+  /// Whose ball it was. Two names when they tie for it.
+  final List<String> counts;
+
+  /// `won` · `lost` · `halved`, null until the hole settles — and null for
+  /// good on a hole past the close-out.
+  final String? result;
+
+  const FourballHoleSide({
+    required this.side,
+    required this.label,
+    required this.playerIds,
+    required this.best,
+    required this.counts,
+    required this.result,
+  });
+
+  factory FourballHoleSide.fromJson(Map<String, dynamic> j) =>
+      FourballHoleSide(
+        side: (j['side'] as num?)?.toInt() ?? 0,
+        label: j['label'] as String? ?? '',
+        playerIds: ((j['player_ids'] as List?) ?? const [])
+            .map((e) => (e as num).toInt())
+            .toList(),
+        best: (j['best'] as num?)?.toInt(),
+        counts: ((j['counts'] as List?) ?? const [])
+            .map((e) => e as String)
+            .toList(),
+        result: j['result'] as String?,
+      );
+}
+
+class FourballMatchState {
+  /// 1, 2 or null when level.
+  final int? leader;
+  final int margin;
+
+  /// `Paul + Larry` · `All square` · `Paul + Larry win` · `Match halved`.
+  final String headline;
+
+  /// `1 UP` · `AS` · `3&2`.
+  final String figure;
+
+  /// `thru 5 · 13 to play` · `Closed out on 16. Holes 17–18 don't count.`
+  final String line;
+
+  /// The same thing in one phrase, for the hole card's pill.
+  final String state;
+
+  final bool isFinal;
+
+  const FourballMatchState({
+    required this.leader,
+    required this.margin,
+    required this.headline,
+    required this.figure,
+    required this.line,
+    required this.state,
+    required this.isFinal,
+  });
+
+  factory FourballMatchState.fromJson(Map<String, dynamic> j) =>
+      FourballMatchState(
+        leader: (j['leader'] as num?)?.toInt(),
+        margin: (j['margin'] as num?)?.toInt() ?? 0,
+        headline: j['headline'] as String? ?? '',
+        figure: j['figure'] as String? ?? '',
+        line: j['line'] as String? ?? '',
+        state: j['state'] as String? ?? '',
+        isFinal: j['is_final'] as bool? ?? false,
+      );
+}
+
+class FourballStripHole {
+  final int hole;
+
+  /// `T1` · `T2` · `Halved`, null when the hole has not been played.
+  final String? result;
+  final bool played;
+
+  /// After the close-out — it cannot be played for the match.
+  final bool dead;
+
+  const FourballStripHole({
+    required this.hole,
+    required this.result,
+    required this.played,
+    required this.dead,
+  });
+
+  factory FourballStripHole.fromJson(Map<String, dynamic> j) =>
+      FourballStripHole(
+        hole: (j['hole'] as num?)?.toInt() ?? 0,
+        result: j['result'] as String?,
+        played: j['played'] as bool? ?? false,
+        dead: j['dead'] as bool? ?? false,
+      );
+}
+
+class FourballMoneyRow {
+  final int side;
+  final String label;
+  final double amount;
+
+  const FourballMoneyRow({
+    required this.side,
+    required this.label,
+    required this.amount,
+  });
+
+  factory FourballMoneyRow.fromJson(Map<String, dynamic> j) => FourballMoneyRow(
+        side: (j['side'] as num?)?.toInt() ?? 0,
+        label: j['label'] as String? ?? '',
+        amount: (j['amount'] as num?)?.toDouble() ?? 0,
+      );
+}

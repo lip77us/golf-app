@@ -38,6 +38,7 @@ import '../utils/stableford_standing.dart';
 import '../utils/triple_cup_standing.dart';
 import '../utils/vegas_standing.dart';
 import '../widgets/vegas_entry.dart';
+import '../widgets/fourball_entry.dart';
 import '../widgets/banker_entry_strip.dart';
 import '../widgets/triple_cup_pairings.dart';
 import '../widgets/standing_ribbon.dart';
@@ -1180,6 +1181,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     for (int i = 0; i < players.length; i++) {
       if (_isInactiveAltShotPlayer(players[i].player.id)) continue;
       if (players[i].isWithdrawnOnHole(_selectedHole)) continue;
+      // Picked up on a Fourball hole past the close-out — see `_noScore`.
+      if (_isNoScore(_selectedHole, players[i].player.id)) continue;
       if (!scores.containsKey(players[i].player.id)) return i;
     }
     return -1;
@@ -1531,7 +1534,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         // entry changed by it.
         primary == GameIds.strokePlay ||
         // Las Vegas, per `~/Downloads/handoff-vegas-score-entry`.
-        primary == GameIds.vegas;
+        primary == GameIds.vegas ||
+        // Fourball, per `~/Downloads/handoff-fourball-score-entry`.
+        primary == GameIds.fourball;
   }
 
   /// This hole ends in a TRAY — Annandale Friday's, Sixes' or Stroke Play's.
@@ -1541,6 +1546,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       rp.annandaleFridaySummary != null ||
       _sixesCard(rp) != null ||
       _vegasCard(rp) != null ||
+      _fourballCard(rp) != null ||
       _strokePlayCard(rp) != null;
 
   /// The hole we have asked the server for; see `_ensureSixesCard`.
@@ -1635,6 +1641,75 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       return null;
     }
     return rp.vegasHole(_selectedHole);
+  }
+
+  /// The hole we have asked the server for; see `_ensureFourballCard`.
+  int? _fourballCardAsked;
+
+  /// **Make sure the hole on screen has a Fourball card.** Same gap Sixes,
+  /// Rabbit, Wolf and Las Vegas each showed: a save drops every other hole's
+  /// card because they can be stale — and here they genuinely can, since
+  /// editing one hole can undo a close-out and change whether the LATER
+  /// holes count at all.
+  void _ensureFourballCard(RoundProvider rp) {
+    if (!_activeGames(rp.round).contains(GameIds.fourball)) return;
+    if (rp.fourballHole(_selectedHole) != null) {
+      _fourballCardAsked = null;
+      return;
+    }
+    if (_fourballCardAsked == _selectedHole) return;
+    _fourballCardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<RoundProvider>()
+          .loadFourballHole(widget.foursomeId, _selectedHole);
+    });
+  }
+
+  /// The Fourball card for the hole on screen, when it is the primary.
+  FourballHoleCard? _fourballCard(RoundProvider rp) {
+    final games = _activeGames(rp.round);
+    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.fourball) {
+      return null;
+    }
+    return rp.fourballHole(_selectedHole);
+  }
+
+  /// Golfers the scorer has marked as not scoring a hole, by hole.
+  ///
+  /// **Fourball after a close-out, and client-side on purpose.** A hole past
+  /// the close-out does not count for the match, so a golfer picking up is a
+  /// thing the group does rather than a fact the server stores — and there
+  /// is no row on `HoleScore` that can express "deliberately no score" (a
+  /// null gross DELETES the row). It lets the keypad skip him and the tray
+  /// rise on what was actually played; reopening the hole asks again, and
+  /// Complete Round still reports the missing score, which is true.
+  final Map<int, Set<int>> _noScore = {};
+
+  bool _isNoScore(int hole, int playerId) =>
+      _noScore[hole]?.contains(playerId) ?? false;
+
+  /// Every golfer who is GOING to score this hole has.
+  ///
+  /// Normally that is every golfer, which is what `_allScored` answers. The
+  /// one carve-out is a Fourball hole past the close-out, where a golfer may
+  /// pick up — so the tray rises, and the hole posts, on what the group
+  /// actually played.
+  bool _holeReady(List<Membership> players, Map<int, int> scores, int hole,
+                  FourballHoleCard? four) {
+    if (_allScored(players, scores, hole)) return true;
+    if (four == null || !four.countsForCard) return false;
+    return players.every((m) =>
+        scores.containsKey(m.player.id) ||
+        _isNoScore(hole, m.player.id) ||
+        m.isWithdrawnOnHole(hole));
+  }
+
+  void _markNoScore(int hole, int playerId) {
+    setState(() {
+      _noScore.putIfAbsent(hole, () => <int>{}).add(playerId);
+      _editHotPid = null;
+    });
   }
 
   /// The field-wide side games on the hole on screen: the ball game's carrier
@@ -3222,6 +3297,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final vgTray =
         vgCard != null && fbActive && allDone && _editHotPid == null;
 
+    // **Fourball.** Same tray, and the one game on this screen whose tray
+    // can rise with three of four: past the close-out a golfer may pick up,
+    // so the gate is every golfer still PLAYING rather than every golfer.
+    _ensureFourballCard(rp);
+    final fourCard = _fourballCard(rp);
+    final fourTray = fourCard != null && fbActive && _editHotPid == null &&
+        _holeReady(players, scores, _selectedHole, fourCard);
+
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -3322,6 +3405,33 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 _editHotPid = null;
               }),
             )
+          else if (fourTray)
+            FourballHoleTray(
+              card: fourCard,
+              // While this tray is up it IS the bottom bar — the pager below
+              // is hidden, so these are the only arrows on screen, and on
+              // the last hole the forward button is Complete Round.
+              onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
+              onNext: rp.submitting
+                  ? null
+                  : (_nextHoleInOrder(rp) == null
+                      ? () => _completeRound(ctx, players, par)
+                      : _advance),
+              // **The way out of a decided match**, without walking the rest
+              // of the card hole by hole.
+              onFinishNow: rp.submitting
+                  ? null
+                  : () => _completeRound(ctx, players, par),
+              gettingResult: rp.trayResultPending(_selectedHole) ||
+                  _hasRealPending(_selectedHole),
+              notSynced: rp.trayHoleUnsynced(_selectedHole),
+              // Picks nobody — see the Sixes tray above.
+              picking: _trayEditing,
+              onEdit: () => setState(() {
+                _trayEditing = !_trayEditing;
+                _editHotPid = null;
+              }),
+            )
           else if (afTray)
             AnnandaleHoleTray(
               summary  : af,
@@ -3356,6 +3466,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               // The net double bogey ceiling, when Stroke Play is in force.
               // Null everywhere else, so no other game grows a maximum.
               capMax    : spCard?.player(fbMember.player.id)?.capMax,
+              // **Only past a Fourball close-out.** Null everywhere else, so
+              // no other game grows a way to skip a golfer.
+              onNoScore : (fourCard?.countsForCard ?? false)
+                  ? () => _markNoScore(_selectedHole, fbMember.player.id)
+                  : null,
               onDone    : _trayEditing
                   ? () => setState(() {
                         _trayEditing = false;
@@ -3363,6 +3478,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                       })
                   : null,
               onScore   : (n) {
+                // A digit replaces a pick-up mark — the handoff's own rule,
+                // and the only way back for a golfer marked by mistake who
+                // then holes out.
+                _noScore[_selectedHole]?.remove(fbMember.player.id);
                 _selectScore(fbMember, n, _selectedHole);
                 // **`Edit scores` is a SESSION, not one score** (Paul, 30 Oct
                 // 2026). While `_trayEditing` the keypad stays on the golfer
@@ -3386,11 +3505,19 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 // 40 Balls is still left alone: it posts when the group picks
                 // its count. An edit to a complete hole posts too, or the
                 // tray would describe the number that was just replaced.
-                if (n > 0 && !_fortyBallsRound(rp) &&
-                    (af != null || six != null || spCard != null)) {
+                //
+                // **The gate is `_raisesTray`, not a list of games.** It was
+                // a hand-written `af || six || spCard` and Las Vegas was
+                // added to this screen without being added to it — so a
+                // Vegas hole's last score was never posted and its tray
+                // waited on a result nothing had asked for. That is the
+                // third time this exact gate has been missed, which is why
+                // it now asks the one function that means "this hole ends in
+                // a tray".
+                if (n > 0 && !_fortyBallsRound(rp) && _raisesTray(rp)) {
                   final hole = _selectedHole;
                   final now = _effectiveScores(sc, hole);
-                  if (_allScored(players, now, hole)) {
+                  if (_holeReady(players, now, hole, fourCard)) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (!mounted || _selectedHole != hole) return;
                       if (context.read<RoundProvider>().submitting) return;
@@ -3399,9 +3526,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                   }
                 }
               },
-              // `-1` is this screen's clear, not a score of minus one.
-              onClear   : () =>
-                  _selectScore(fbMember, -1, _selectedHole),
+              // `-1` is this screen's clear, not a score of minus one. It
+              // also takes a pick-up mark off, because `Clear` is how a
+              // golfer who picked up by mistake gets his row back.
+              onClear   : () {
+                _noScore[_selectedHole]?.remove(fbMember.player.id);
+                _selectScore(fbMember, -1, _selectedHole);
+              },
             ),
           // Nassau match status bar
           if (nas != null)
@@ -3446,7 +3577,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // hole. Two pagers at the bottom is what a phone showed; the design
           // has the tray overlaying this row, so this is the half that goes
           // (Paul, 30 Oct 2026).
-          if (!sixTray && !spTray && !vgTray)
+          if (!sixTray && !spTray && !vgTray && !fourTray)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Column(children: [
@@ -3754,6 +3885,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 useKeypad: _keypadRound(rp) &&
                            rp.round?.status != 'complete',
                 vegasHole: _vegasCard(rp),
+                // Hidden past the close-out — see the field's own comment.
+                fourballHole: (_fourballCard(rp)?.countsForCard ?? true)
+                    ? null
+                    : _fourballCard(rp),
+                pickedUpIds: _noScore[_selectedHole] ?? const {},
                 annandaleSummary:
                     _activeGames(rp.round).contains('annandale_friday')
                         ? rp.annandaleFridaySummary : null,
@@ -4231,11 +4367,23 @@ class _HoleScoreCard extends StatelessWidget {
   /// empty.
   final VegasHoleCard? vegasHole;
 
+  /// Fourball's hole card, for the side headers and their best-ball tags.
+  /// **Null once the match has closed out** — past that hole there is no
+  /// team score for a ball to be the best of, so the caller stops passing it
+  /// rather than the header pretending there is.
+  final FourballHoleCard? fourballHole;
+
+  /// Golfers the scorer has marked as picked up on this hole. Empty on every
+  /// round but a Fourball past its close-out.
+  final Set<int> pickedUpIds;
+
   const _HoleScoreCard({
     this.fortyBallsNet,
     this.ball,
     this.rumble,
     this.vegasHole,
+    this.fourballHole,
+    this.pickedUpIds = const {},
     this.useKeypad = false,
     this.solo = false,
     this.anchorId,
@@ -4937,6 +5085,14 @@ class _HoleScoreCard extends StatelessWidget {
                    vegasHole!.sideOf(players[idx - 1].player.id)?.side !=
                        vegasHole!.sideOf(m.player.id)?.side))
                 VegasSideHeader(side: vegasHole!.sideOf(m.player.id)!),
+              // Fourball: the same slot, carrying the side's BEST BALL as
+              // its two scores land.
+              if (fourballHole?.sideOf(m.player.id) != null &&
+                  (idx == 0 ||
+                   fourballHole!.sideOf(players[idx - 1].player.id)?.side !=
+                       fourballHole!.sideOf(m.player.id)?.side))
+                FourballSideHeader(
+                    side: fourballHole!.sideOf(m.player.id)!),
             ];
             final gross      = scores[m.player.id];
             final isHot      = idx == hotSpotIdx;
@@ -4957,6 +5113,7 @@ class _HoleScoreCard extends StatelessWidget {
             // first-tee-off pick (server-supplied).
             final dimmed = _isInactiveAltShot(m.player.id);
             final withdrawn = m.isWithdrawnOnHole(holeNumber);
+            final pickedUp  = pickedUpIds.contains(m.player.id);
             final rowWidget = GestureDetector(
               onLongPress: onWithdrawTap != null
                   ? () => onWithdrawTap!(m)
@@ -4986,11 +5143,13 @@ class _HoleScoreCard extends StatelessWidget {
                 dimmed:              dimmed,
                 deemphasized:        hotSpotIdx != -1 && !isHot,
                 withdrawn:           withdrawn,
+                pickedUp:            pickedUp,
                 p531HolePoints:      p531Hole,
                 p531CumulativePoints: p531Cumulative,
                 // Block taps while extra-match teams are unassigned, and for
                 // withdrawn players on holes they're out for.
-                onTap: (!withdrawn && gross != null && !isHot
+                onTap: (pickedUp ||
+                        !withdrawn && gross != null && !isHot
                         && blockedExtraSeg == null)
                     ? () => onEditTap(m)
                     : null,
@@ -5805,6 +5964,14 @@ class _PlayerRow extends StatelessWidget {
   /// for the hole being shown — render a WD badge and no score box.
   final bool          withdrawn;
 
+  /// Picked up on a Fourball hole past the close-out.
+  ///
+  /// Dimmed with a dash where the score box is, and still TAPPABLE: a digit
+  /// or `Clear` takes the mark off, which is the only way back for a golfer
+  /// marked by mistake. Distinct from [withdrawn], which is the round-level
+  /// "can't continue" and is the server's.
+  final bool          pickedUp;
+
   /// Points 5-3-1: points this player earned on the active hole (null = not yet scored).
   final double?       p531HolePoints;
 
@@ -5834,6 +6001,7 @@ class _PlayerRow extends StatelessWidget {
     this.dimmed = false,
     this.deemphasized = false,
     this.withdrawn = false,
+    this.pickedUp = false,
     this.p531HolePoints,
     this.p531CumulativePoints,
   });
@@ -6082,6 +6250,18 @@ class _PlayerRow extends StatelessWidget {
                     color: theme.colorScheme.onSurfaceVariant,
                     fontStyle: FontStyle.italic)),
           )
+        else if (pickedUp)
+          GestureDetector(
+            onTap: onTap,
+            child: Container(
+              width: 40,
+              height: 36,
+              alignment: Alignment.center,
+              child: Text('–',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ),
+          )
         else
         // Score box — shows a NetScoreButton-style result once a score is
         // entered, or a plain highlighted border while the player is hot.
@@ -6133,6 +6313,9 @@ class _PlayerRow extends StatelessWidget {
     // stands out via its team-coloured bounding box, so this only needs to be
     // subtle. (Too dim made an interactive spots/junk count on another row hard
     // to read while entering it.)
+    // Picked up: dimmed, but NOT ignored — tapping the row is how the mark
+    // comes off.
+    if (pickedUp) return Opacity(opacity: 0.5, child: body);
     if (deemphasized) return Opacity(opacity: 0.78, child: body);
     return body;
   }

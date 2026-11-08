@@ -10558,3 +10558,96 @@ examples through the real engine on par 4 / SI 5, where Dave takes no stroke
 and Sam and Lee each take one), `api/test_vegas_hole_card.py` (6) and
 `mobile/test/vegas_entry_test.dart` (22). Every guard mutation-checked; the
 side-ordering one twice, because the first version passed against the bug.
+
+## Fourball score entry — and the post gate that was a list of games
+
+`~/Downloads/handoff-fourball-score-entry`. The keypad and dark tray carried
+to Fourball, on the shared `score_entry_screen` — Fourball has no play screen
+of its own, the same shape as Sixes, Stroke Play, Annandale and Las Vegas.
+
+### `fourball_hole_card(foursome, hole)`
+
+Renders the engine. The one thing it ADDS is **which ball counted** — the
+handoff's `counts: Paul · Larry`. The engine stores a side's best NET and not
+whose it was, so the names come from the same `_fourball_score_index` it
+measured with, compared against the same `_team_best`. Two golfers tie for it
+often enough that it is a list.
+
+**`closed_out` is not `finished_on_hole is not None`.** The engine sets that
+field for a 1 UP win on the 18th as well, because `abs(holes_up) > remaining`
+is true when nothing remains — so a card reading it directly called every
+finished match a close-out and took the `3&2` wording, which came out as
+`1 up` (lower case, from `_result_label`). It is `closed_pos < len(order) - 1`
+now, and the `&M` is composed from the margin and the engine's own
+`holes_to_play` rather than parsed back out of a sentence.
+
+**`counts_for_card`** says a hole is past the close-out: gross and net only,
+no team score, no ball marked as counting. The engine already stops writing
+rows there, which is the rule; the card states it rather than leaving the
+screen to infer it from a missing row. Editing an earlier hole can undo a
+close-out and the later holes count again — pinned, because it is the one
+case where a card held for another hole is genuinely wrong.
+
+The nine strip is the block of nine **in play order**, so a shotgun group off
+the 7th gets 7–15 and then 16,17,18,1–6. Hole 1 is that round's 13th, which
+is the case a hole-number split gets wrong while agreeing on every other hole
+of the same round — so that is what the test hands it.
+
+### No score is CLIENT-side, and says so
+
+After a close-out a golfer can pick up. **There is no row that can express
+"deliberately no score"** — a null `gross_score` deletes the `HoleScore` — so
+`_noScore` is a per-hole set on the screen: the keypad skips him, the tray
+rises on `3 of 4 scored`, and his row dims with a dash. Reopening the hole
+asks again, and Complete Round still reports the missing score, which is
+true. A digit or `Clear` takes the mark off, which is the only way back for a
+golfer marked by mistake.
+
+`FortyBallsKeypad` gained `onNoScore`: non-null makes the bottom row three
+equal keys, null (every other caller) keeps `10+` narrow beside a wide
+`Clear` so the two destructive-ish controls are never the same size.
+
+### The bug this found: the keypad's post gate was a hand-written list
+
+```dart
+if (n > 0 && !_fortyBallsRound(rp) && (af != null || six != null || spCard != null))
+```
+
+**Las Vegas was added to this screen the commit before and not to that
+line**, so a Vegas hole's last score was never posted and its tray waited on
+a result nothing had asked for — the third time this exact gate has been
+missed (Annandale, then Sixes, then this). It asks `_raisesTray(rp)` now,
+which is the one function that already means "this hole ends in a tray", so
+the next tray game is covered for free. Four guards in three other test files
+pinned the old list and now assert the shared rule plus their own game's
+membership of `_raisesTray`.
+
+`_holeReady` is the companion: every golfer who is GOING to score the hole
+has. Normally that is `_allScored`; the Fourball carve-out is the only one.
+
+### Mobile
+
+`FourballSideHeader` rides the slot Annandale's team header and Vegas' side
+header already use, carrying `BEST` and the side's best ball — **hidden past
+the close-out**, because there is no team score for a ball to be the best of.
+`widgets/side_colour.dart` came out of `vegas_entry.dart` in the same change,
+second user earning a module, and carries the reason the sides are blue and
+orange rather than the packets' pine and clay.
+
+The tray has two shapes: best-ball rows while the hole counts, golfer rows
+(`HOLE 17 · FOR THE CARD`, `match over`) once it does not. Its forward button
+reads `Hole 17 · play on ›` after a close-out, with `Finish round now`
+underneath — the way out of a decided match without walking the rest of the
+card.
+
+`_PlayerRow` gained `pickedUp`: dimmed with a dash, and **not** wrapped in an
+`IgnorePointer` the way `dimmed` is, because tapping the row is how the mark
+comes off.
+
+Tests: `scoring/tests/test_fourball_hole_card.py` (26),
+`api/test_fourball_hole_card.py` (6), `mobile/test/fourball_entry_test.dart`
+(23). Every guard mutation-checked; the strip's play-order split needed a
+second attempt, because the first fixture agreed with a hole-number split.
+
+**Not built:** the hole card's restyle (the match-state pill). `HoleHeader`
+is shared by eleven screens, and `card.match.state` is emitted ready for it.

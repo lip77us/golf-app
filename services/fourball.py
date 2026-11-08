@@ -519,3 +519,260 @@ def fourball_summary(foursome) -> dict | None:
         'scorecard'        : scorecard,
         'holes_in_play'    : holes_in_play,
     }
+
+
+# ---------------------------------------------------------------------------
+# Score-entry card — `~/Downloads/handoff-fourball-score-entry`
+# ---------------------------------------------------------------------------
+
+def fourball_hole_card(foursome, hole: int) -> dict:
+    """Everything the Fourball score-entry screen draws for ONE hole.
+
+    **It renders the engine.** The best ball, the hole, the match state and
+    the close-out are `calculate_fourball`'s; the `&M` in `3&2` especially,
+    because only the server knows the group's play order.
+
+    The one thing this adds is **which ball counted** — the handoff's
+    `counts: Paul · Larry`. The engine stores the side's best NET and not
+    whose it was, so the names come from the same `_fourball_score_index`
+    the engine measured with, compared against the same `_team_best`. Two
+    golfers tie for it often enough that it is a list.
+
+    **Holes after a close-out carry no team score at all** (`counts_for_card`
+    false). The engine stops writing rows there, which is the rule; this says
+    so rather than leaving the card to infer it from a missing row.
+
+    Returns `{}` when the game is not set up, so a caller can test the key.
+    Gated on the GAME, not its status — no card means no keypad, which is the
+    failure Points, Rabbit, Sixes, Wolf and Vegas each hit in turn.
+    """
+    from services.hole_plan import play_order
+    from services.player_labels import first_names
+    from services.live_activity_registry import full_round_strokes
+
+    summary = fourball_summary(foursome)
+    if not summary:
+        return {}
+    try:
+        game = (FourballGame.objects
+                .prefetch_related('teams__players').get(foursome=foursome))
+    except FourballGame.DoesNotExist:        # pragma: no cover - summary implies one
+        return {}
+
+    teams = {t.team_number: t for t in game.teams.all()}
+    if not teams.get(1) or not teams.get(2):
+        return {}
+
+    order = play_order(foursome.round, foursome) or list(range(1, 19))
+    if hole not in order:
+        return {}
+    pos = order.index(hole)
+
+    members = [m for m in foursome.memberships.select_related('player', 'tee')
+               if not m.player.is_phantom]
+    by_pid = {m.player_id: m.player for m in members}
+    rank = {m.player_id: i for i, m in enumerate(members)}
+    # **In MEMBERSHIP order**, which is the order the names appear on the
+    # card — `FourballTeam.players` is a many-to-many and comes back in
+    # whatever order the database gives.
+    side_ids = {n: sorted((p.id for p in t.players.all() if not p.is_phantom),
+                          key=lambda pid: rank.get(pid, 99))
+                for n, t in teams.items()}
+    label = first_names(by_pid)
+
+    index = _fourball_score_index(
+        foursome, game.handicap_mode, game.net_percent)
+    strokes_by = full_round_strokes(
+        foursome, handicap_mode=game.handicap_mode,
+        net_percent=game.net_percent, holes=order)
+    gross_by = {
+        r['player_id']: r['gross_score']
+        for r in (HoleScore.objects
+                  .filter(foursome=foursome, hole_number=hole,
+                          player_id__in=list(by_pid))
+                  .exclude(gross_score=None)
+                  .values('player_id', 'gross_score'))
+    }
+
+    tee = next((m.tee for m in members if m.tee_id), None)
+    geometry = tee.hole(hole) if tee else {}
+
+    per_hole = {h['hole']: h for h in (summary.get('holes') or [])}
+    entry    = per_hole.get(hole) or {}
+
+    # **Does this hole count?** The engine stops writing rows at the
+    # close-out, so a hole past it has no team score — only each golfer's own
+    # card, and anything the group decides to play for.
+    finished_on = summary.get('finished_on_hole')
+    closed_pos  = (order.index(finished_on)
+                   if finished_on is not None and finished_on in order
+                   else None)
+    # **Closed out EARLY is a different thing from decided on the last hole**,
+    # and the engine sets `finished_on_hole` for both — a 1 UP win on the 18th
+    # leaves no holes to play, so `abs(holes_up) > remaining` is true there
+    # too. Only the early one takes the `3&2` wording and leaves holes that
+    # stop counting.
+    closed_out = closed_pos is not None and closed_pos < len(order) - 1
+    counts_for_card = closed_out and pos > closed_pos
+
+    rows = []
+    for n in (1, 2):
+        for pid in side_ids[n]:
+            rows.append({
+                'player_id'      : pid,
+                'name'           : by_pid[pid].name,
+                'short'          : by_pid[pid].short_name,
+                'first'          : label.get(pid, ''),
+                'course_handicap': next(
+                    (m.course_handicap for m in members
+                     if m.player_id == pid), None),
+                'strokes'        : strokes_by.get(pid, {}).get(hole, 0),
+                'gross'          : gross_by.get(pid),
+                'net'            : index.get(pid, {}).get(hole),
+                'side'           : n,
+                'counted'        : False,
+            })
+    by_row = {r['player_id']: r for r in rows}
+
+    sides = []
+    for n in (1, 2):
+        best = _team_best(side_ids[n], hole, index)
+        counts = [pid for pid in side_ids[n]
+                  if index.get(pid, {}).get(hole) == best] if best is not None \
+            else []
+        # Only a hole that COUNTS has a ball that counted — after a close-out
+        # there is no team score to be the best of.
+        if not counts_for_card:
+            for pid in counts:
+                by_row[pid]['counted'] = True
+        result = None
+        w = entry.get('winner')
+        if w == 'Halved':
+            result = 'halved'
+        elif w in ('T1', 'T2'):
+            result = 'won' if w == f'T{n}' else 'lost'
+        sides.append({
+            'side'      : n,
+            'label'     : ' + '.join(label.get(pid, '') for pid in side_ids[n]),
+            'player_ids': list(side_ids[n]),
+            'best'      : best,
+            'counts'    : [label.get(pid, '') for pid in counts],
+            'result'    : result,
+        })
+
+    # **Every golfer still playing has a score.** After a close-out the
+    # scorer may mark a golfer as picked up, which no row on this server can
+    # express — the tray counts what it has and says so.
+    scored = sum(1 for r in rows if r['gross'] is not None)
+    hole_complete = scored == len(rows)
+
+    # ── The match card ──────────────────────────────────────────────────────
+    holes_up = entry.get('margin')
+    if holes_up is None:
+        # Not this hole's row — the standing coming INTO it, which is what a
+        # part-scored hole should report.
+        prior = [per_hole[h] for h in order[:pos] if h in per_hole]
+        holes_up = prior[-1]['margin'] if prior else 0
+    leader = 1 if holes_up > 0 else (2 if holes_up < 0 else None)
+    margin = abs(holes_up)
+    played = len([h for h in order[:pos + 1] if h in per_hole])
+    to_play = len(order) - 1 - pos
+
+    is_final = (pos == len(order) - 1 and hole in per_hole) or (
+        closed_out and pos >= closed_pos)
+    lead_label = sides[leader - 1]['label'] if leader else ''
+
+    if closed_out and pos >= closed_pos:
+        # The `&M` is the engine's, because only it knows the group's play
+        # order — `18 - finished_on_hole` is right from the 1st tee and wrong
+        # off every shotgun.
+        to_play_at_close = summary.get('holes_to_play') or 0
+        figure = (f'{margin}&{to_play_at_close}' if to_play_at_close
+                  else f'{margin} UP')
+        headline = f'{lead_label} won' if counts_for_card \
+            else f'{lead_label} win'
+        after = list(order[closed_pos + 1:])
+        if counts_for_card:
+            line = (f'Closed out on {finished_on}. '
+                    'Scores here go on the card only.')
+        elif after:
+            span = (f'{after[0]}–{after[-1]}' if len(after) > 1
+                    else f'{after[0]}')
+            line = f'Closed out on {finished_on}. Holes {span} don’t count.'
+        else:                                 # pragma: no cover - defensive
+            line = f'Closed out on {finished_on}.'
+    elif pos == len(order) - 1 and hole in per_hole:
+        if leader is None:
+            headline, figure = 'Match halved', 'AS'
+            line = 'Level after 18 · a push'
+        else:
+            headline, figure = f'{lead_label} win', f'{margin} UP'
+            line = f'Final after {len(order)}'
+    elif leader is None:
+        headline, figure = 'All square', 'AS'
+        line = f'thru {played} · {to_play} to play'
+    else:
+        headline, figure = lead_label, f'{margin} UP'
+        line = f'thru {played} · {to_play} to play'
+
+    # The pill on the hole card says the same thing in one phrase.
+    if closed_out and pos >= closed_pos:
+        state = f'{headline} {figure}'
+    elif leader is None:
+        state = 'All square'
+    else:
+        state = f'{lead_label} {margin} UP'
+
+    # ── The nine strip: the block of nine this hole sits in, by PLAY ORDER ──
+    block = (pos // 9) * 9
+    strip = []
+    for i, h in enumerate(order[block:block + 9], start=block):
+        row = per_hole.get(h)
+        strip.append({
+            'hole'   : h,
+            'result' : (row['winner'] if row else None),
+            'played' : row is not None,
+            'dead'   : bool(closed_out and i > closed_pos),
+        })
+
+    bet = float(game.bet_amount or 0)
+    money = []
+    if bet:
+        # The engine settles only a FINISHED match; before that the figure is
+        # what the standing is worth if it holds, which is what `now` means.
+        for n in (1, 2):
+            amount = 0.0 if leader is None else (bet if n == leader else -bet)
+            money.append({'side': n, 'label': sides[n - 1]['label'],
+                          'amount': amount})
+        money.sort(key=lambda e: -e['amount'])
+
+    return {
+        'hole'        : hole,
+        'par'         : geometry.get('par'),
+        'stroke_index': geometry.get('stroke_index'),
+        'yards'       : geometry.get('yards'),
+        'nine'        : 'front nine' if hole <= 9 else 'back nine',
+        'thru'        : pos + 1,
+        'stake'       : bet,
+        'players'     : rows,
+        'sides'       : sides,
+        'scored'      : scored,
+        'hole_complete': hole_complete,
+        # This hole is past the close-out: gross and net only, no team score.
+        'counts_for_card': counts_for_card,
+        'closed_out'  : closed_out,
+        'finished_on_hole': finished_on if closed_out else None,
+        'match'       : {
+            'leader'  : leader,
+            'margin'  : margin,
+            'headline': headline,
+            'figure'  : figure,
+            'line'    : line,
+            'state'   : state,
+            'is_final': is_final,
+        },
+        'strip'       : strip,
+        'money'       : money,
+        'round_over'  : hole_complete and pos == len(order) - 1,
+        'next_hole'   : order[pos + 1] if pos + 1 < len(order) else None,
+    }

@@ -139,6 +139,7 @@ class RoundProvider extends ChangeNotifier {
   final Map<int, PointsHoleCard> _pointsHoles = {};
   final Map<int, WolfHoleCard> _wolfHoles = {};
   final Map<int, VegasHoleCard> _vegasHoles = {};
+  final Map<int, FourballHoleCard> _fourballHoles = {};
   final Map<int, SurvivorHoleCard> _survivorHoles = {};
   final Map<int, StrokePlayHoleCard> _strokePlayHoles = {};
   Points531Summary? _points531Summary;
@@ -213,6 +214,7 @@ class RoundProvider extends ChangeNotifier {
   PointsHoleCard?   pointsHole(int hole)   => _pointsHoles[hole];
   WolfHoleCard?     wolfHole(int hole)     => _wolfHoles[hole];
   VegasHoleCard?    vegasHole(int hole)    => _vegasHoles[hole];
+  FourballHoleCard? fourballHole(int hole) => _fourballHoles[hole];
   SurvivorHoleCard? survivorHole(int hole)  => _survivorHoles[hole];
   StrokePlayHoleCard? strokePlayHole(int hole) => _strokePlayHoles[hole];
   Points531Summary? get points531Summary   => _points531Summary;
@@ -294,6 +296,7 @@ class RoundProvider extends ChangeNotifier {
     _pointsHoles.clear();
     _wolfHoles.clear();
     _vegasHoles.clear();
+    _fourballHoles.clear();
     _survivorHoles.clear();
     _points531Summary        = null;
     _skinsSummary            = null;
@@ -437,6 +440,7 @@ class RoundProvider extends ChangeNotifier {
       _pointsHoles.clear();
       _wolfHoles.clear();
       _vegasHoles.clear();
+      _fourballHoles.clear();
       _survivorHoles.clear();
       _points531Summary = null;
       _honorsSummary    = null;
@@ -505,7 +509,7 @@ class RoundProvider extends ChangeNotifier {
           (_annandaleFridaySummary != null
            || _sixesHoles.isNotEmpty || _rabbitHoles.isNotEmpty
            || _pointsHoles.isNotEmpty || _wolfHoles.isNotEmpty
-           || _vegasHoles.isNotEmpty
+           || _vegasHoles.isNotEmpty || _fourballHoles.isNotEmpty
            || _survivorHoles.isNotEmpty || _strokePlayHoles.isNotEmpty)) {
         _annandaleResults.hold(holeNumber);
       }
@@ -1111,6 +1115,22 @@ class RoundProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Fetch one hole's Fourball card. Silent on failure, like Rabbit's: a
+  /// card that cannot be fetched must not stop a group entering scores.
+  Future<void> loadFourballHole(int foursomeId, int hole) async {
+    try {
+      final card = await _client.getFourballHoleCard(foursomeId, hole);
+      if (card != null) {
+        _fourballHoles[hole] = card;
+        notifyListeners();
+      }
+    } on NetworkException {
+      // Offline — keep whatever is on screen.
+    } catch (e) {
+      debugPrint('loadFourballHole error: $e');
+    }
+  }
+
   /// Fetch one hole's Las Vegas card. Silent on failure, like Rabbit's: a
   /// card that cannot be fetched must not stop a group entering scores.
   Future<void> loadVegasHole(int foursomeId, int hole) async {
@@ -1526,6 +1546,17 @@ class RoundProvider extends ChangeNotifier {
     if (rab is Map<String, dynamic>) {
       _rabbitHoles.clear();          // same staleness — see `sixes_hole`
       _rabbitHoles[holeNumber] = RabbitHoleCard.fromJson(rab);
+      _annandaleResults.answer(holeNumber);
+      notifyListeners();
+    }
+
+    final fourball = response['fourball_hole'];
+    if (fourball is Map<String, dynamic>) {
+      // Same staleness as the others, and sharper here: a posted hole moves
+      // the match on every card we hold, and editing one can undo a
+      // close-out, which changes whether the LATER holes count at all.
+      _fourballHoles.clear();
+      _fourballHoles[holeNumber] = FourballHoleCard.fromJson(fourball);
       _annandaleResults.answer(holeNumber);
       notifyListeners();
     }
