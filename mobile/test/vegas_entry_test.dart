@@ -231,6 +231,26 @@ void main() {
           reason: 'the note takes the slot on the hole it is true of');
     });
 
+    testWidgets('the cancel note fits beside the label on a narrow phone',
+        (t) async {
+      // It is the longest thing that slot carries — and it names the RULE
+      // rather than the shot, because the same branch covers two eagles.
+      await t.binding.setSurfaceSize(const Size(320, 900));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          bottomNavigationBar: VegasHoleTray(
+            card: _card(points: 10, note: 'both under par — no flip'),
+            onEdit: () {},
+          ),
+        ),
+      ));
+      await t.pumpAndSettle();
+      expect(t.takeException(), isNull);
+      expect(find.text('BOTH UNDER PAR — NO FLIP'), findsOneWidget);
+      expect(find.text('HOLE 7 · THE NUMBERS'), findsOneWidget);
+    });
+
     testWidgets('the standing is two rows, the leader first', (t) async {
       await _pumpTray(t, _card());
       expect(find.text('EACH · NOW'), findsOneWidget);

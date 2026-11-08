@@ -5,8 +5,8 @@ Each hole, a team's "number" is its two NET scores with the low score as the
 tens digit and the high as the ones (each digit capped at 9). The lower number
 wins the hole and scores the *difference* between the two numbers. A gross
 birdie either flips the opponents' digits or multiplies the points (per setup)
-— and under `flip`, birdies on BOTH sides cancel, so nothing flips. Tied holes
-can carry. Settlement is 1-to-1 per player: each player's money
+— and under `flip`, both sides going under par cancels, so nothing flips (an
+eagle is a birdie for that rule). Tied holes can carry. Settlement is 1-to-1 per player: each player's money
 is the running point differential × bet_unit (winners +, losers −), clipped by
 the optional per-side loss cap.
 
@@ -276,7 +276,10 @@ def calculate_vegas(foursome) -> list:
 
         if game.birdie_mode == 'flip':
             # A team's birdie flips the OTHER team's number, before deciding —
-            # but **birdies CANCEL**: when both sides make one, nothing flips.
+            # but they **CANCEL**: when both sides go under par, nothing
+            # flips. `_best_under >= 1` is the gate, so an eagle is a birdie
+            # for this rule and two eagles cancel exactly as two birdies do
+            # (Paul, 8 Nov 2026).
             #
             # Paul, 8 Nov 2026, settling the question
             # `~/Downloads/handoff-vegas-score-entry` asks. This engine used
@@ -505,8 +508,9 @@ def vegas_hole_card(foursome, hole: int) -> dict:
     **It renders the engine.**  The handoff lists three rules to confirm, and
     this is what `calculate_vegas` does with them:
 
-    * **Birdies on both sides CANCEL**, so nothing flips (Paul, 8 Nov 2026).
-      The card says so in `note`, because a group that made two birdies and
+    * **Both sides under par CANCELS**, so nothing flips (Paul, 8 Nov 2026).
+      An eagle is a birdie for this rule, so two eagles cancel too. The card
+      says so in `note`, because a group that went under par both ways and
       saw no flip would otherwise think the app had missed one.
     * **Carries stack.**  A second tie makes the next decided hole ×3.
     * **The 9 cap is applied before the flip**, inside `_team_number` — which
@@ -692,17 +696,21 @@ def vegas_hole_card(foursome, hole: int) -> dict:
             tie_note = (f'hole {nxt} pays ×{carry_in + 1}' if nxt
                         else 'nothing left to carry into')
 
-    # **Birdies cancelled**, which is a thing that HAPPENED and leaves no
-    # other mark: both flips are suppressed, so without this a group that
-    # made two birdies and saw no flip would think the app had missed one.
-    # The birdie test is the calculator's own `_best_under`, not a second
+    # **The cancel**, which is a thing that HAPPENED and leaves no other
+    # mark: both flips are suppressed, so without this a group that went
+    # under par on both sides and saw no flip would think the app had missed
+    # one. The test is the calculator's own `_best_under`, not a second
     # reading of the same scores.
+    #
+    # It names the RULE rather than the shot — `both under par` covers an
+    # eagle against a birdie and two eagles, which cancel exactly as two
+    # birdies do and which `birdies cancelled` would have described wrongly.
     if game.birdie_mode == 'flip' and hole_complete:
         par_by_hole = _par_by_hole(foursome)
         gross_index = build_score_index(foursome, handicap_mode=HandicapMode.GROSS)
         if all(_best_under(gross_index, par_by_hole, side_ids[n], hole) >= 1
                for n in (1, 2)):
-            bits.append('birdies cancelled')
+            bits.append('both under par — no flip')
     note = ' · '.join(bits)
 
     round_over = hole_complete and pos == len(order) - 1

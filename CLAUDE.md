@@ -10426,7 +10426,7 @@ Wolf's or Rabbit's.
 
 | it asks | `calculate_vegas` |
 |---|---|
-| do birdies on both sides cancel? | **Yes** — as of 8 Nov 2026, see below. |
+| do birdies on both sides cancel? | **Yes** — and two eagles too; as of 8 Nov 2026, see below. |
 | do carries stack? | **Yes.** A second tie makes the next decided hole ×3. |
 | is the flip checked before or after the 9 cap? | **After**, inside `_team_number` — the same order the reference uses. |
 
@@ -10446,22 +10446,32 @@ harmless. When they differ it is large: 35 against 38 became **53 against
 something: `website/games/las-vegas/index.html` said *"Both numbers flip…
 it usually leaves the hole roughly where it started — which is the point.
 You matched them."* The reasoning is right and the rule it attached to was
-not; the card now says they cancel and keeps the reason. **That page is
-edited but not deployed** — `cd website && ./build-zip.sh && npx wrangler
-deploy`.
+not; the card now says they cancel, keeps the reason, and is retitled
+**Both teams go under par** so it covers the eagle cases it always did.
+**That page is edited but not deployed** — `cd website && ./build-zip.sh &&
+npx wrangler deploy`.
 
-`_best_under` was lifted to module level in the same change, because the
-score-entry card has to ask the same question the calculator does — whether
-a side birdied — to say `birdies cancelled`, and a second copy of that walk
-would be a second opinion about whether a flip happened. **The card says
-so** because cancelling leaves no other mark: both flips are suppressed, so
-a group that made two birdies and saw none would think the app had missed
-one.
+**It is UNDER PAR, not a birdie.** `_best_under >= 1` is the gate, so an
+eagle is a birdie for this rule and **two eagles cancel** out of the same
+branch rather than needing their own (Paul named that case; it was already
+true, which is why this half is a test and not a change). The card's note
+therefore names the RULE — `both under par — no flip` — because
+`birdies cancelled` describes two eagles wrongly.
 
-**Still true of the guide, and NOT fixed here:** its Eagle card describes
-*"flip, then double the whole hole"*, which is a house rule the app cannot
-play — `birdie_mode` is flip OR multiplier, never both. Left alone rather
-than rewritten under cover of a different decision.
+`_best_under` was lifted to module level for it: the score-entry card has
+to ask the same question the calculator does, and a second copy of that
+walk would be a second opinion about whether a flip happened. **The card
+says so at all** because cancelling leaves no other mark — both flips are
+suppressed, so a group that went under par both ways and saw none would
+think the app had missed one.
+
+**The guide's Eagle card was wrong in its own way** and is fixed with it:
+it read *"flip, then double the whole hole"*, which is neither mode —
+`birdie_mode` is flip OR multiplier, never both. It now says an eagle under
+Flip does exactly what a birdie does (one flip, no doubling) and points at
+Multiply, where the winner's best ball is ×2 for a birdie and ×3 for an
+eagle. The FAQ further down the same page already described the two modes
+correctly, so the card was contradicting its own article.
 
 ### `vegas_hole_card(foursome, hole)`
 

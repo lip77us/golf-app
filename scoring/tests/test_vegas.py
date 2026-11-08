@@ -112,6 +112,23 @@ class VegasFlipTests(VegasBase):
         self.assertEqual((h['team1_number'], h['team2_number']), (24, 35))
         self.assertEqual(h['points'], 11)
 
+    def test_two_eagles_cancel(self):
+        # Paul, 8 Nov 2026, naming the case. `_best_under >= 1` is the gate,
+        # so it is UNDER PAR rather than exactly one under — which is what
+        # makes this fall out of the same branch rather than need its own.
+        self._setup(birdie_mode='flip')
+        self._play(1, 2, 5, 2, 8)
+        h = self._hole(1)
+        self.assertEqual((h['team1_number'], h['team2_number']), (25, 28))
+        self.assertEqual(h['points'], 3)
+
+    def test_an_eagle_alone_still_flips_once(self):
+        # And it flips ONCE — an eagle is not two birdies' worth of flip.
+        self._setup(birdie_mode='flip')
+        self._play(1, 2, 5, 4, 8)
+        h = self._hole(1)
+        self.assertEqual((h['team1_number'], h['team2_number']), (25, 84))
+
     def test_three_on_a_par_three_is_par_not_a_birdie_no_flip(self):
         # Hole 3 is a PAR 3, so a gross 3 is PAR — NOT a birdie — and nothing
         # flips: a straight 45-35 = 10, exactly what a mid-round par-3 shows.

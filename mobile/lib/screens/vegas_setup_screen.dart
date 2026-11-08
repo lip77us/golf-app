@@ -274,7 +274,7 @@ class _VegasSetupScreenState extends State<VegasSetupScreen> {
               _birdieMode == 'flip'
                   ? 'A gross birdie reverses the opponents’ number (e.g. '
                     '46 → 64) before the hole is decided — it can swing it. '
-                    'Birdies on both sides cancel, so nothing flips.'
+                    'If both sides go under par they cancel, and nothing flips.'
                   : 'The winning team’s best ball multiplies the points: '
                     'birdie ×2, eagle ×3 (no stacking).',
               style: theme.textTheme.bodySmall

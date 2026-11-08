@@ -188,13 +188,26 @@ class TheThreeRulesTheHandoffAsksAboutTests(_VegasCardBase):
         self.assertEqual(card['winner'], 'team2')
         self.assertEqual(card['points'], 10)
 
-    def test_the_card_says_the_birdies_cancelled(self):
+    def test_the_card_says_the_flips_cancelled(self):
         """It leaves no other mark — both flips are suppressed — so a group
-        that made two birdies and saw no flip would think the app had missed
-        one."""
+        that went under par both ways and saw no flip would think the app
+        had missed one.
+
+        It names the RULE rather than the shot, because the same branch
+        covers two eagles."""
         self._setup()
         self._score(HOLE, paul=3, dave=5, sam=3, lee=6)
-        self.assertEqual(self._card()['note'], 'birdies cancelled')
+        self.assertEqual(self._card()['note'],
+                         'both under par — no flip')
+
+    def test_two_eagles_cancel_and_say_the_same_thing(self):
+        self._setup()
+        # Par 4: Paul 2 and Sam 2 are both eagles.
+        self._score(HOLE, paul=2, dave=5, sam=2, lee=6)
+        card = self._card()
+        self.assertFalse(card['sides'][0]['flipped'])
+        self.assertFalse(card['sides'][1]['flipped'])
+        self.assertEqual(card['note'], 'both under par — no flip')
 
     def test_one_birdie_says_nothing_of_the_kind(self):
         self._setup()
