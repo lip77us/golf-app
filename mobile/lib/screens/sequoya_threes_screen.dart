@@ -685,6 +685,9 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
                 child: HoleGridScorecard(
+                  // A progress read-out under a keypad: a second table here would push
+                  // the entry card off the screen. See `HoleGridScorecard.showStrokes`.
+                  showStrokes: false,
                   holes:        summary.cardHoles,
                   participants: summary.cardPlayers,
                   holesInPlay:  summary.cardHolesInPlay,

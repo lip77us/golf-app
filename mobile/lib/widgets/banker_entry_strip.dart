@@ -75,6 +75,9 @@ class BankerEntryStrip extends StatelessWidget {
       // golfer. No green: green means "won the hole" everywhere else, and a
       // Banker hole has three results rather than one winner.
       HoleGridScorecard(
+        // A progress read-out under a keypad: a second table here would push
+        // the entry card off the screen. See `HoleGridScorecard.showStrokes`.
+        showStrokes: false,
         holes: _gridWithPending(),
         participants: summary.gridPlayers,
         legend: null,

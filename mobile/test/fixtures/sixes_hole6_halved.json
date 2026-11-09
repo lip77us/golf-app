@@ -1,0 +1,97 @@
+{
+  "hole": 6,
+  "par": 4,
+  "stroke_index": 13,
+  "yards": 380,
+  "nine": "front nine",
+  "match": {
+    "number": 1,
+    "start_hole": 1,
+    "end_hole": 6,
+    "is_extra": false,
+    "teams_set": true,
+    "team1": {
+      "player_ids": [
+        211829,
+        211831
+      ],
+      "names": [
+        "Paul",
+        "Dave"
+      ],
+      "short": "P & D"
+    },
+    "team2": {
+      "player_ids": [
+        211830,
+        211832
+      ],
+      "names": [
+        "Sam",
+        "Lee"
+      ],
+      "short": "S & L"
+    },
+    "up_before": 0,
+    "to_play": 1
+  },
+  "players": [
+    {
+      "player_id": 211829,
+      "name": "Paul",
+      "short": "P",
+      "course_handicap": 6,
+      "team": 1,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "is_best": true
+    },
+    {
+      "player_id": 211830,
+      "name": "Sam",
+      "short": "S",
+      "course_handicap": 14,
+      "team": 2,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "is_best": true
+    },
+    {
+      "player_id": 211831,
+      "name": "Dave",
+      "short": "D",
+      "course_handicap": 9,
+      "team": 1,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "is_best": true
+    },
+    {
+      "player_id": 211832,
+      "name": "Lee",
+      "short": "L",
+      "course_handicap": 18,
+      "team": 2,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "is_best": true
+    }
+  ],
+  "hole_complete": true,
+  "result": {
+    "winner": "Halved",
+    "t1_net": 4,
+    "t2_net": 4,
+    "up_after": 0,
+    "left_after": 0,
+    "closed": false,
+    "margin_text": null
+  },
+  "next_match": null,
+  "previous_match": null,
+  "bet_unit": 5.0
+}

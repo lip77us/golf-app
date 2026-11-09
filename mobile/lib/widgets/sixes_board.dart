@@ -21,6 +21,7 @@ import 'package:flutter/material.dart';
 
 import '../api/models.dart';
 import '../theme/halved_brand.dart';
+import 'strokes_table.dart';
 
 /// Side B.
 ///
@@ -242,8 +243,10 @@ class _LiveMatchCard extends StatelessWidget {
             child: Text(
               over
                   ? 'ROUND OVER'
-                  : 'LIVE · ${match.seg.label.toUpperCase()} · '
-                    'HOLES ${match.seg.startHole}–${match.seg.endHole}',
+                  // **Once.** `seg.label` is already
+                  // `Holes 1–6 (Match 1)`, so appending the range read
+                  // `LIVE · HOLES 1–6 (MATCH 1) · HOLES 1–6`.
+                  : 'LIVE · ${match.seg.label.toUpperCase()}',
               style: const TextStyle(
                   fontSize: 11, fontWeight: FontWeight.w700,
                   letterSpacing: 0.7, color: Halved.deepPine),
@@ -370,9 +373,15 @@ class _HolesWonCard extends StatelessWidget {
     final next = m.nextHole;
     return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       SizedBox(
-        width: 44,
+        // **`Match 1`, not `Holes 1–6 (Match 1)`.** The holes ARE the
+        // chips to the right — the label was printing the six numbers
+        // sitting beside it, and at 44pt it wrapped to four lines and
+        // spilled past them, which is the extra line Paul circled
+        // (8 Nov 2026). The column is wide enough for `Undrawn` on one.
+        width: 58,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(m.seg.label,
+          Text(_matchLabel(m),
+              maxLines: 1, overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   fontSize: 12, fontWeight: FontWeight.w700,
                   color: Halved.deepPine)),
@@ -405,6 +414,15 @@ class _HolesWonCard extends StatelessWidget {
         ],
       )),
     ]);
+  }
+
+  /// `Match 2` — the six holes it covers are the chips beside it.
+  ///
+  /// The engine writes `Holes 7–12 (Match 2)`, which is right on a card
+  /// that has no hole numbers of its own; this one has six of them.
+  static String _matchLabel(SixesMatch m) {
+    final n = RegExp(r'Match\s+(\d+)').firstMatch(m.seg.label);
+    return n == null ? m.seg.label : 'Match ${n.group(1)}';
   }
 
   /// Range before it starts, `Live` while it runs, and once it is
@@ -561,17 +579,8 @@ class _StrokesCard extends StatelessWidget {
     return 0;
   }
 
-
-  String _name(int pid) {
-    final p = players.firstWhere(
-        (x) => (x['player_id'] as num?)?.toInt() == pid,
-        orElse: () => const {});
-    return (p['short_name'] ?? p['name'] ?? '—').toString();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final next = match.nextHole;
     final hs = [
       for (var h = match.seg.startHole; h <= match.seg.endHole; h++) h,
     ];
@@ -582,96 +591,23 @@ class _StrokesCard extends StatelessWidget {
     int totalFor(List<int> side) =>
         side.fold(0, (a, p) => a + hs.fold(0, (b, h) => b + _strokes(p, h)));
 
-    return _shell(
-      title: 'STROKES',
+    // **The shared table**, with Sixes' own three arguments: THIS MATCH's
+    // six holes, the two sides split by a rule, and a footer naming what
+    // each side gets. Everything else about it — the dots, the totals, the
+    // self-gate on nobody stroking — is the same widget every other board
+    // draws, which is what keeps one answer to "where do I stroke".
+    return StrokesTable(
+      holes: holes,
+      participants: players,
+      holesInPlay: hs,
+      sides: [sideA, sideB],
       trailing: 'THIS MATCH',
-      child: Column(children: [
-        Row(children: [
-          const SizedBox(width: 62),
-          for (final h in hs) ...[
-            Expanded(child: Text('$h',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: h == next ? FontWeight.w700 : FontWeight.w400,
-                    color: h == next ? Halved.deepPine : Halved.muted))),
-          ],
-          const SizedBox(width: 26),
-        ]),
-        const SizedBox(height: 6),
-        for (final pid in sideA) _playerRow(pid, hs, next),
-        if (sideA.isNotEmpty && sideB.isNotEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 6),
-            child: Divider(height: 1, color: Halved.cardBorder),
-          ),
-        for (final pid in sideB) _playerRow(pid, hs, next),
-        const SizedBox(height: 10),
-        Text(
-          '${match.sideLabel(true)} get ${totalFor(sideA)} · '
+      footer: '${match.sideLabel(true)} get ${totalFor(sideA)} · '
           '${match.sideLabel(false)} get ${totalFor(sideB)} in this match',
-          style: const TextStyle(fontSize: 11, color: Halved.muted),
-        ),
-      ]),
-    );
-  }
-
-  Widget _playerRow(int pid, List<int> hs, int? next) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(children: [
-          SizedBox(
-            width: 62,
-            child: Text(_name(pid),
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w600,
-                    color: Halved.deepPine)),
-          ),
-          for (final h in hs)
-            Expanded(child: Center(child: _dot(_strokes(pid, h)))),
-          SizedBox(
-            width: 26,
-            child: Text(
-                '${hs.fold(0, (a, h) => a + _strokes(pid, h))}',
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w700,
-                    color: Halved.deepPine)),
-          ),
-        ]),
-      );
-
-  /// **Every stroke is a filled dot** (Paul, 30 Oct 2026: *"just leave them
-  /// all filled in"*).
-  ///
-  /// A spent stroke used to be drawn hollow, on the reasoning that the filled
-  /// ones are the strokes still to come. Two things against it: nobody could
-  /// read it — the question that retired it was *"what are the closed circles
-  /// vs the open circles"* — and it INVERTED this app's own vocabulary, where
-  /// filled means settled and outlined means still live. The ledger directly
-  /// below this card says exactly that, so one screen carried both readings.
-  ///
-  /// Which holes have been played is already on the card: the hole in play is
-  /// the bold column header, and the HOLES WON grid above shows the rest.
-  static Widget _dot(int strokes) {
-    if (strokes <= 0) return const SizedBox(width: 9, height: 9);
-    return Container(
-      width: 9, height: 9,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        color: Halved.brightMint,
-      ),
     );
   }
 }
 
-/// What each golfer is up or down, and which match did it.
-///
-/// Money is **per match**: the winning side's two golfers each take the
-/// stake from the losing side's two, and a pushed match pays nobody. So a
-/// row's three marks and its figure are the same fact twice — which is the
-/// point, because the argument afterwards is never the total, it is which
-/// match it came from.
 class _Ledger extends StatelessWidget {
   final SixesSummary summary;
   final List<SixesMatch> matches;

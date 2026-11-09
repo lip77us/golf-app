@@ -862,6 +862,9 @@ class _Points531ScreenState extends State<Points531Screen>
               if (rp.points531Summary != null &&
                   rp.points531Summary!.scorecardHoles.isNotEmpty) ...[
                 HoleGridScorecard(
+                  // A progress read-out under a keypad: a second table here would push
+                  // the entry card off the screen. See `HoleGridScorecard.showStrokes`.
+                  showStrokes: false,
                   holes:        rp.points531Summary!.scorecardHoles,
                   participants: rp.points531Summary!.scorecardPlayers,
                   showPoints:   true,

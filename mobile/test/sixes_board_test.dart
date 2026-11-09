@@ -181,14 +181,17 @@ void main() {
       // that retired it was "what are the closed circles vs the open circles"
       // — and it inverted this app's vocabulary, where filled means settled.
       // The ledger on the same screen says exactly that.
-      final src = File('lib/widgets/sixes_board.dart').readAsStringSync();
+      // The dot moved to the SHARED table when every board got one; the
+      // rule it carries did not.
+      final src = File('lib/widgets/strokes_table.dart').readAsStringSync();
       final at = src.indexOf('static Widget _dot(');
       expect(at, greaterThan(0));
       final body = src.substring(at, src.indexOf('\n  }', at));
       expect(body.contains('Border.all'), isFalse,
           reason: 'a stroke dot is filled, never outlined');
       expect(body.contains('Colors.transparent'), isFalse);
-      expect(body, contains('Halved.brightMint'));
+      expect(src.substring(at, src.indexOf('\n}', at)),
+          contains('Halved.brightMint'));
     });
   });
 

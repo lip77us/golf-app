@@ -11268,3 +11268,89 @@ so its id is highest while his player pk stays lowest), because a fixture
 whose two orderings agree cannot pin which one is read — which is exactly how
 the Sixes anchor test passed against its own bug. All four games were
 mutation-checked, and so were both shapes the scan exists for.
+## Three from a Sixes round — and a strokes table for every board
+
+All three reported with screenshots on 8 Nov 2026.
+
+### The extra line was a label four lines tall
+
+HOLES WON gives each match a 44pt label column and put
+`Holes 1–6 (Match 1)` in it, which wraps to **Holes / 1–6 / (Match / 1)**
+and then `Live` — five lines beside two lines of content, spilling past the
+chips and colliding with the legend under them. That overflow is the extra
+line.
+
+**The label says `Match 1` now, because the six holes ARE the chips beside
+it.** The engine's `Holes 7–12 (Match 2)` is right on a card with no hole
+numbers of its own; this one has six. The column went to 58pt so `Undrawn`
+fits on one line too.
+
+And the status card above printed the range **twice** —
+`LIVE · HOLES 1–6 (MATCH 1) · HOLES 1–6` — because `seg.label` already
+contains it.
+
+### `widgets/strokes_table.dart` — on every board, gated on the strokes
+
+> *"where a player strokes is not clear. I have seen on other games
+> leaderboard a strokes table. Can you find it and add it here. I suspect we
+> will want to make it universal for all non-gross games."*
+
+The table he had seen is Sixes' and Sequoya's, which each grew one. **A
+scorecard's stroke dots are not the same question**: a dot on a cell says
+*this score was made with a shot*, and a golfer asking where he strokes is
+looking at holes with no score on them yet — he had to pick the dots out of
+a grid of numbers to do it.
+
+So the Sixes card was extracted and now draws **under every
+`HoleGridScorecard`**, which is what eleven boards and screens already use.
+It needs nothing new from the server: the same `holes` / `participants` /
+`holesInPlay` those callers already pass carry `strokes` per golfer per
+hole.
+
+**It gates itself on the strokes rather than on a list of games.** A gross
+round allocates none, so the table is empty and does not draw — which means
+"universal for all non-gross games" needs no list to keep in step, a game
+added tomorrow is covered, and a scratch round does not carry eighteen
+blank cells.
+
+`showStrokes` **defaults TRUE** for the same reason the Android board's
+phone list defaults to everyone: a new board should be covered without
+anybody remembering. The cost is that a screen which does NOT want one has
+to say so, and four score-entry grids do — there the grid is a progress
+read-out under a keypad, and a second table would push the entry card off
+the screen. A test counts the opt-outs against the calls in those four
+files, so a new grid added without the flag fails rather than growing a
+table nobody asked for.
+
+Sixes keeps its own card ONLY in the sense that it passes three arguments —
+this match's six holes, the two sides split by a rule, and a footer naming
+what each side gets. The dots, the totals and the gate are the shared
+widget, which is what keeps one answer to "where do I stroke".
+
+**Two strokes on a hole are two dots.** A single stroke keeps the 9px dot
+Sixes has always drawn and only a doubled hole shrinks to 7, so the common
+case does not resize to make room for a rare one. Bright mint, not deep
+pine: the app already draws stroke dots in two places and a third ink for
+one fact is one too many.
+
+### `AS · 0 to play` on a match that had finished
+
+The tray's `closed` means closed out EARLY, so a match that went the
+distance all square fell through to the RUNNING line — a standing, on a
+match that was over, beside a count of holes that do not exist.
+
+**Level is the only case that reaches it**, which is what makes the fix one
+branch: a margin of 1 with none left already satisfies `|up| > left` and is
+a close-out above. So `leftAfter == 0` with no leader reads
+`Halved · match 1 over · no money`.
+
+Tests: `mobile/test/strokes_table_test.dart` (15), the halved match in
+`sixes_entry_test.dart` against a new real-engine fixture
+(`REGEN_SIXES_FIXTURES=1`), and the Sixes label fixes. Every guard
+mutation-checked.
+
+Two existing tests had to move with it, both legitimately: the dot guard
+re-points at the shared file (the rule did not change, the file did), and
+40 Balls' card test counts a golfer's name with `findsWidgets` because the
+table names him a second time — which is the table working, not a duplicate
+row.

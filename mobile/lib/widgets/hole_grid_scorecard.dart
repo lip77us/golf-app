@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../game_colors.dart';
 import '../theme/halved_brand.dart';
+import 'strokes_table.dart';
 import 'stroke_dots.dart';
 import '../utils/nine_totals.dart';
 
@@ -98,10 +99,21 @@ class HoleGridScorecard extends StatefulWidget {
   final Color? parColor;
   final Color? playerColor;
 
+  /// Draw a [StrokesTable] under the grid.
+  ///
+  /// **Default ON, and it gates itself on the strokes**, so a new board is
+  /// covered without anybody remembering and a gross round draws nothing.
+  /// A score-entry screen passes false: there the grid is a progress
+  /// read-out under a keypad, and a second table would push the entry card
+  /// off the screen. (Paul, 8 Nov 2026 — on the Sixes board, where the
+  /// strokes were only legible as dots buried in the score cells.)
+  final bool showStrokes;
+
   const HoleGridScorecard({
     super.key,
     required this.holes,
     required this.participants,
+    this.showStrokes = true,
     this.showPoints = false,
     this.legend = 'green = skin winner',
     this.holesInPlay = const [],
@@ -672,6 +684,14 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
             ),
           ]);
         }),
+        if (widget.showStrokes) ...[
+          const SizedBox(height: 10),
+          StrokesTable(
+            holes: widget.holes,
+            participants: widget.participants,
+            holesInPlay: widget.holesInPlay,
+          ),
+        ],
       ],
     );
   }

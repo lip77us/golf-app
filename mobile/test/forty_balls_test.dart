@@ -660,10 +660,14 @@ void main() {
       for (final n in _names.values) {
         // The label column draws a RichText (name + playing handicap), so the
         // finder has to be told to look inside one.
+        //
+        // **`findsWidgets`, not `findsOneWidget`**: the card now carries a
+        // StrokesTable under the grid, which names every golfer a second
+        // time. That is the table doing its job, not a duplicate row.
         expect(
             find.descendant(
                 of: card, matching: find.text(n, findRichText: true)),
-            findsOneWidget);
+            findsWidgets);
       }
       // Par and Index bands, and the GROSS digit rather than the net.
       expect(find.descendant(of: card, matching: find.text('Index')),

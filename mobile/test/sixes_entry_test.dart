@@ -448,8 +448,28 @@ void main() {
               'the sync queue, withdrawal and the landscape card');
     });
   });
+
+  group('a finished match announces its RESULT', () {
+    testWidgets('a match that goes the distance all square is Halved',
+        (t) async {
+      // `AS · 0 to play` is a standing, on a match that has finished,
+      // beside a count of holes that do not exist (Paul, 8 Nov 2026).
+      await _pump(t, SixesHoleTray(
+          card: _card('sixes_hole6_halved'),
+          nextHole: 7,
+          onEdit: () {},
+          onNext: () {}));
+      final all = _allText(t);
+      expect(all, contains('Halved'));
+      expect(all, contains('match 1 over'));
+      expect(all, isNot(contains('0 to play')),
+          reason: 'a count of holes that do not exist');
+      expect(all, isNot(contains('AS ·')));
+    });
+  });
 }
 
 extension<T> on T {
   R let<R>(R Function(T) f) => f(this);
+
 }

@@ -1509,6 +1509,26 @@ class SixesFixtureRegenTests(_SixesCardBase):
         self.assertEqual(closed['result']['margin_text'], '3&2')
         self._write('sixes_hole10_closed.json', closed)
 
+    def test_regenerate_a_match_halved_over_the_distance(self):
+        """A match that goes all six holes and finishes LEVEL.
+
+        `closed` means closed out EARLY, so this one fell through to the
+        running line and announced `AS · 0 to play` — a standing, on a match
+        that had finished, beside a count of holes that do not exist (Paul,
+        8 Nov 2026).
+        """
+        self._setup()
+        for h in range(1, 6):
+            self._hole(h, 4, 4, 4, 4)            # halved
+        self._hole(6, 4, 4, 4, 4)
+        calculate_sixes(self.fs)
+        card = sixes_hole_card(self.fs, 6)
+        r = card['result']
+        self.assertEqual(r['left_after'], 0)
+        self.assertFalse(r['closed'], 'level, so it never closed out')
+        self.assertEqual(r['up_after'], 0, 'all square')
+        self._write('sixes_hole6_halved.json', card)
+
     def test_regenerate_the_band(self):
         # 3 · hole 7 with match 2's sides unset.
         setup_sixes(self.fs, self._td(teams_from=2), handicap_mode='gross')

@@ -4557,6 +4557,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 // two halves of the hole agreeing.
                 if (rp.bankerSummary!.grid.isNotEmpty) ...[
                   HoleGridScorecard(
+                    // A progress read-out under a keypad: a second table here would push
+                    // the entry card off the screen. See `HoleGridScorecard.showStrokes`.
+                    showStrokes: false,
                     holes:        rp.bankerSummary!.grid,
                     participants: rp.bankerSummary!.gridPlayers,
                     legend:       null,
@@ -7166,6 +7169,9 @@ class _GameStatusSection extends StatelessWidget {
         if (primaryGame == 'skins') ...[
           if (skins != null && skins!.scorecardHoles.isNotEmpty)
             HoleGridScorecard(
+              // A progress read-out under a keypad: a second table here would push
+              // the entry card off the screen. See `HoleGridScorecard.showStrokes`.
+              showStrokes: false,
               holes:        skins!.scorecardHoles,
               participants: skins!.scorecardPlayers,
               holesInPlay:  skins!.scorecardHolesInPlay,
@@ -7219,6 +7225,9 @@ class _GameStatusSection extends StatelessWidget {
         if (games.contains('triple_cup')) ...[
           if (tripleCupSummary != null) ...[
             HoleGridScorecard(
+              // A progress read-out under a keypad: a second table here would push
+              // the entry card off the screen. See `HoleGridScorecard.showStrokes`.
+              showStrokes: false,
               holes:        _tripleCupCardHoles(tripleCupSummary!),
               participants: _tripleCupCardPlayers(tripleCupSummary!),
               legend:       null,
@@ -7262,6 +7271,9 @@ class _GameStatusSection extends StatelessWidget {
           if (points531Summary != null &&
               points531Summary!.scorecardHoles.isNotEmpty)
             HoleGridScorecard(
+              // A progress read-out under a keypad: a second table here would push
+              // the entry card off the screen. See `HoleGridScorecard.showStrokes`.
+              showStrokes: false,
               holes:        points531Summary!.scorecardHoles,
               participants: points531Summary!.scorecardPlayers,
               showPoints:   true,
@@ -7298,6 +7310,9 @@ class _GameStatusSection extends StatelessWidget {
             // cards identical.
             if (vegasSummary!.scorecardHoles.isNotEmpty) ...[
               HoleGridScorecard(
+                // A progress read-out under a keypad: a second table here would push
+                // the entry card off the screen. See `HoleGridScorecard.showStrokes`.
+                showStrokes: false,
                 holes:        vegasSummary!.scorecardHoles,
                 participants: vegasSummary!.scorecardPlayers,
                 legend:       null,
@@ -7335,6 +7350,9 @@ class _GameStatusSection extends StatelessWidget {
           // team initials underneath was the same fact one line down.
           if (fourballSummary!.scorecardHoles.isNotEmpty)
             HoleGridScorecard(
+              // A progress read-out under a keypad: a second table here would push
+              // the entry card off the screen. See `HoleGridScorecard.showStrokes`.
+              showStrokes: false,
               holes:        fourballSummary!.scorecardHoles,
               participants: fourballSummary!.scorecardPlayers,
               legend:       null,
@@ -7458,6 +7476,9 @@ class _GameStatusSection extends StatelessWidget {
                       if (_bracketCardHoles(matchPlayData!).isNotEmpty) ...[
                         const SizedBox(height: 12),
                         HoleGridScorecard(
+                          // A progress read-out under a keypad: a second table here would push
+                          // the entry card off the screen. See `HoleGridScorecard.showStrokes`.
+                          showStrokes: false,
                           holes:        _bracketCardHoles(matchPlayData!),
                           participants: _bracketCardPlayers(matchPlayData!),
                           legend:       null,

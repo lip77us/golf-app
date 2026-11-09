@@ -602,6 +602,17 @@ class SixesHoleTray extends StatelessWidget {
       head = '$leadName win ${r.marginText}';
       tail = ' · match ${card.match.number} over'
           '${card.betUnit == null ? '' : ' · \$${_money(card.betUnit!)} each'}';
+    } else if (r.leftAfter == 0) {
+      // **A match with nothing left to play is OVER, whatever the margin.**
+      // `closed` means closed out EARLY, so a match that went the distance
+      // all square fell through to the running line and announced
+      // `AS · 0 to play` — a standing, on a match that had finished, beside
+      // a count of holes that do not exist (Paul, 8 Nov 2026).
+      //
+      // Level is the only case that reaches here: a margin of 1 with none
+      // left already satisfies `|up| > left`, so it is a close-out above.
+      head = 'Halved';
+      tail = ' · match ${card.match.number} over · no money';
     } else if (lead == null) {
       head = 'AS';
       tail = ' · ${r.leftAfter} to play';
