@@ -76,6 +76,67 @@ def _identity_phone(player) -> str | None:
     return getattr(u, 'phone', None) if u is not None else None
 
 
+def parked_foursome_ids(round_obj) -> set:
+    """Host-round foursomes that are PLACEHOLDERS, not groups still out.
+
+    Reported 9 Nov 2026 from a round whose board said **Final** directly
+    under a banner saying **"1 still out of 2 — Group 1 (thru 0)"**. Both
+    were reading real data. Paul: *"group 1 completed our round as a linked
+    round. The primary was sixes."*
+
+    A pool anchored on a host round can take in whole OTHER rounds. Those
+    golfers are usually also seated in the host round — parked there, so
+    they are on the roster — and they score in their own round instead. The
+    pool handles that: `_resolve_participant_memberships` binds each
+    participant to the source round where they actually posted. Nothing
+    else did, so `_field_progress` and `RoundCompleteView` kept waiting on a
+    seat that was never going to be filled, and the round could not be
+    finished by anybody short of the TD force.
+
+    Deliberately narrow — a foursome is parked only when ALL of:
+
+    * this round hosts a pool that has at least one LINKED round (no linked
+      round, no parking, and every ordinary round is untouched);
+    * every real member is a pool participant the resolver bound to a
+      DIFFERENT round — one member who is not in the pool, or who is bound
+      here, means somebody is genuinely expected to post;
+    * **nothing has been scored in this foursome.** A seat with scores is
+      being played in, whatever the pool thinks.
+
+    Returns foursome ids. Empty for every round that does not host a
+    cross-round pool, which is almost all of them.
+    """
+    game = getattr(round_obj, 'multi_skins_game', None)
+    if game is None:
+        return set()
+    if not game.linked_rounds.exists():
+        return set()
+
+    bound = _resolve_participant_memberships(game)
+    elsewhere = {canon for canon, m in bound.items()
+                 if m.foursome.round_id != round_obj.id}
+    if not elsewhere:
+        return set()
+
+    scored = set(
+        HoleScore.objects
+        .filter(foursome__round_id=round_obj.id)
+        .exclude(gross_score=None)
+        .values_list('foursome_id', flat=True)
+        .distinct()
+    )
+
+    out = set()
+    for fs in round_obj.foursomes.all().prefetch_related('memberships__player'):
+        if fs.id in scored:
+            continue
+        real = [m for m in fs.memberships.all()
+                if not getattr(m.player, 'is_phantom', False)]
+        if real and all(m.player_id in elsewhere for m in real):
+            out.add(fs.id)
+    return out
+
+
 def _pool_source_rounds(game: MultiSkinsGame) -> list:
     """Host round + every linked round (deduped, host first)."""
     rounds = [game.round]

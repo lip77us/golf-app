@@ -1276,6 +1276,17 @@ def _field_progress(round_obj, foursomes) -> dict | None:
         return None
     from services.group_field import holes_thru, scored_holes_by_foursome
     from services.hole_plan import play_order
+    from services.multi_skins import parked_foursome_ids
+
+    # A seat held for golfers who are playing in a LINKED round is not a
+    # group still out on the course — it is a placeholder that will never
+    # be filled. Reporting it as missing put "1 still out of 2" directly
+    # above a board reading Final (9 Nov 2026).
+    parked  = parked_foursome_ids(round_obj)
+    if parked:
+        foursomes = [fs for fs in foursomes if fs.id not in parked]
+        if len(foursomes) < 2:
+            return None
 
     scored  = scored_holes_by_foursome(round_obj)
     rows    = []
@@ -6838,8 +6849,14 @@ class RoundCompleteView(APIView):
         """`[{group_number, name, holes_scored, holes_expected}]` for the
         groups that have not finished. Empty when the round is ready."""
         from scoring.models import HoleScore
+        from services.multi_skins import parked_foursome_ids
+        # The dialog must name the same groups the gate waits on, or a TD
+        # reads a list he cannot act on.
+        parked = parked_foursome_ids(round_obj)
         out = []
         for fs in round_obj.foursomes.all():
+            if fs.id in parked:
+                continue
             expected = RoundCompleteView._expected_holes(fs)
             if not expected:
                 continue
@@ -6872,7 +6889,14 @@ class RoundCompleteView(APIView):
         too — so the round can still complete once everyone still playing
         has finished."""
         from scoring.models import HoleScore
+        from services.multi_skins import parked_foursome_ids
         foursomes = list(round_obj.foursomes.prefetch_related('memberships'))
+        # Same rule the board uses: a seat held for golfers scoring in a
+        # LINKED round is never going to post here, so waiting on it means
+        # the round can never be completed by anybody short of the force.
+        parked = parked_foursome_ids(round_obj)
+        if parked:
+            foursomes = [fs for fs in foursomes if fs.id not in parked]
         if not foursomes:
             return False
 

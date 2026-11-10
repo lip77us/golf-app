@@ -11443,11 +11443,41 @@ needs a POOL receipt, scoped to the participants rather than to a round, the
 way `services/receipt_field.py` is scoped to a tournament's field. It does
 not exist.
 
-**The round itself was never inspected.** A read-only production query was
-blocked by a built-in safety classifier and not worked around, so all of this
-is from the screenshot, Paul's description and the code. The probe that would
-settle it prints each pool's host round, its linked rounds, every host
-foursome's scored-hole count, and whether the summary's `net` sums to zero.
+#### The screenshot settled it, and the fix is `parked_foursome_ids`
+
+A second screenshot closed the question without any database access: the
+board read **Final** — four golfers **thru 18**, 8 skins, the $20 pool paid
+`$8 / $5 / $5 / $2` — directly under **"1 still out of 2 … Group 1 (thru
+0)"**. Both halves were reading real data, which is exactly the signature of
+two subsystems disagreeing about who is expected to post.
+
+(The payout is also the whole-dollar rule working: $2.50 a skin gives
+7.50 / 5 / 5 / 2.50, floored to 19, and the spare dollar goes to the largest
+fractional part — Jim and Paul tie at .50, ties break to the bigger share.
+Nets are +3 / 0 / 0 / −3, zero-sum.)
+
+`services.multi_skins.parked_foursome_ids(round)` is the shared answer, read
+by `_field_progress`, `RoundCompleteView._all_foursomes_done` and
+`_groups_outstanding` — **all three**, because a gate and the dialog that
+explains it must name the same groups or the TD reads a list he cannot act
+on.
+
+It is deliberately narrow. A foursome is parked only when the round hosts a
+pool **with at least one linked round**, every real member is a participant
+the resolver bound to a **different** round, and **nothing has been scored in
+that foursome** — a seat with scores is being played in, whatever the pool
+thinks. Empty for every round that is not this shape, which is nearly all of
+them.
+
+**The test that matters most is the narrow one**, and its first version was
+too weak to say so: with the parked seat removed only one real group was
+left, so the board returned None on the shipped `<2 groups` rule and the test
+passed while reporting nothing. It adds a THIRD group now, so there is still
+a field to be missing from, and asserts the genuinely-out group is named.
+
+**The round itself was still never inspected.** A read-only production query
+was blocked by a safety classifier and not worked around; everything here is
+from the two screenshots, Paul's description and the code.
 
 ### `T1` four times beside a +23
 
