@@ -44,6 +44,7 @@ import '../widgets/skins_board.dart';
 import '../utils/nassau_board_model.dart';
 import '../widgets/annandale_friday.dart';
 import '../widgets/nassau_board.dart';
+import '../widgets/nassau_progress_card.dart';
 import '../widgets/game_switcher.dart';
 import '../widgets/game_settings_strip.dart';
 import '../widgets/stroke_play_board.dart';
@@ -3423,14 +3424,15 @@ class _MatchLeaderboardCardState extends State<_MatchLeaderboardCard> {
           )),
           const SizedBox(height: 10),
 
-          // Per-hole scorecard — gross + strokes-off dots + hole-winner tint,
-          // the same grid the full Nassau card shows, so a strokes-off Singles
-          // Match shows where the strokes fall (docs/parallel-games.md).
-          HoleGridScorecard(
+          // The match's progress grid — gross with the stroke dots, and who
+          // won each hole underneath. The same card the full Nassau draws.
+          NassauProgressCard(
+            nassau: nas,
             holes: widget.scHoles,
-            participants: widget.scPlayers,
+            players: widget.scPlayers,
             holesInPlay: widget.scHolesInPlay,
-            legend: null,
+            side0Colour: t1Color,
+            side1Colour: t2Color,
           ),
         ]),
       ),
@@ -3558,15 +3560,16 @@ class _NassauGroupCard extends StatelessWidget {
               side0Colour: t1Color,
               side1Colour: team2Color,
             )),
-            // Round Progress — the per-hole grid (gross + strokes-off dots +
-            // hole-winner tint), same as the score-entry Round Progress card.
+            // The Nassau progress grid, in the cup's own colours.
             if (scHoles.isNotEmpty) ...[
               const Divider(height: 16),
-              HoleGridScorecard(
+              NassauProgressCard(
+                nassau: nas,
                 holes: scHoles,
-                participants: scPlayers,
+                players: scPlayers,
                 holesInPlay: scHolesInPlay,
-                legend: null,
+                side0Colour: t1Color,
+                side1Colour: team2Color,
               ),
             ],
           ]),
@@ -3616,11 +3619,14 @@ class _NassauGroupCard extends StatelessWidget {
               ),
             ),
 
-          // Scorecard: dots show where handicap strokes fall; the "Index" row
-          // shows the whole-round stroke plan (which holes get strokes).
+          // **The Nassau progress grid** — it came off score entry, where it
+          // sat half-visible behind the hole tray, and replaced the scorecard
+          // and the strokes table this card used to draw (Paul, 10 Nov 2026).
+          // Gross with the stroke dots, names in their side's colour, and
+          // who won each hole underneath.
           //
-          // Its own card now, rather than a divider inside a shared one —
-          // the board above is a stack of cards, so a rule across the page
+          // Its own card, rather than a divider inside a shared one — the
+          // board above is a stack of cards, so a rule across the page
           // would be the only thing on the screen pretending they are one
           // object.
           if (scHoles.isNotEmpty) ...[
@@ -3629,9 +3635,14 @@ class _NassauGroupCard extends StatelessWidget {
               margin: EdgeInsets.zero,
               child: Padding(
                 padding: const EdgeInsets.all(12),
-                child: HoleGridScorecard(holes: scHoles,
-                    participants: scPlayers, legend: null,
-                    holesInPlay: scHolesInPlay),
+                child: NassauProgressCard(
+                  nassau: nas,
+                  holes: scHoles,
+                  players: scPlayers,
+                  holesInPlay: scHolesInPlay,
+                  side0Colour: t1Color,
+                  side1Colour: team2Color,
+                ),
               ),
             ),
           ],

@@ -11897,3 +11897,37 @@ Tests: `ASideIsNamedByShortNamesTests` (5) and four `reason_parts` cases in
 `scoring/tests/test_nassau_hole_card.py`; five in the `the tray` group of
 `mobile/test/nassau_entry_test.dart`. Four server and four client mutations
 killed. Tray rendered to images with a real font.
+
+### The Nassau progress grid moved to the leaderboard too
+
+Paul, 10 Nov 2026, straight after the Stroke Play one: *"move the Nassau
+progress grid to the leaderboard and remove the scorecard and the strokes
+table."*
+
+**Score entry:** `_NassauProgressGrid` and its call are deleted (375 lines),
+for Nassau, Nassau Nine and the Singles Match — all three went through the one
+`_isNassauFamily` gate and all three now carry a hole tray it sat behind.
+
+**The board:** `widgets/nassau_progress_card.dart` `NassauProgressCard`
+replaces the `HoleGridScorecard` + `StrokesTable` on all three Nassau
+leaderboard cards (casual, cup, Singles Match). It is **drawn through
+`HoleGridScorecard`**, not a grid of its own — what makes it the Nassau grid
+is what is passed in:
+
+- `title` (`Nassau progress` / `Match progress`) — new on the shared card;
+- `teamColours`, tinting each golfer's NAME by his `team` — also new;
+- a `Won by` footer row (side initials, or the golfer's name in a 1-v-1), and
+  Claremont's `Top` and `Bottom`;
+- `showStrokes: false`, and `winner_team` stripped from the holes so the score
+  cells carry no winning-side tint — the row underneath names the winner.
+
+**The strokes are now the SERVER's.** The score-entry grid re-derived each
+golfer's allocation on the phone (`_strokesOnHoleFor`: mode, allowance, low
+man) — a second copy of the engine's rule, and one that did not know the
+forced playing handicap. The card reads the summary's own `scorecard` block.
+
+It takes the BOARD's side colours (pine and clay, or a cup's own), not the
+blue and orange score entry uses, so the grid matches the cards above it.
+
+Tests: `mobile/test/nassau_progress_card_test.dart` (11), eight mutations
+killed. Rendered to an image before trusting it.

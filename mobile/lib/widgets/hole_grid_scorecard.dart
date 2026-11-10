@@ -109,11 +109,24 @@ class HoleGridScorecard extends StatefulWidget {
   /// strokes were only legible as dots buried in the score cells.)
   final bool showStrokes;
 
+  /// The card's heading. `Scorecard` everywhere but the Nassau board, where
+  /// this card IS the game's progress grid and says so.
+  final String title;
+
+  /// A colour for each side's NAMES, keyed by the participant's `team`.
+  ///
+  /// Empty everywhere but Nassau. There the progress grid names its golfers
+  /// in their side's colour, which is how four rows read as two pairs
+  /// without a header a side.
+  final Map<int, Color> teamColours;
+
   const HoleGridScorecard({
     super.key,
     required this.holes,
     required this.participants,
     this.showStrokes = true,
+    this.title = 'Scorecard',
+    this.teamColours = const {},
     this.showPoints = false,
     this.legend = 'green = skin winner',
     this.holesInPlay = const [],
@@ -506,7 +519,7 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('Scorecard',
+            Text(widget.title,
                 style: theme.textTheme.titleSmall),
             const SizedBox(width: 8),
             // Expanded, not Spacer: the legend grew a third clause for the
@@ -612,8 +625,9 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
                   maxLines: 1,
                   softWrap: false,
                   text: TextSpan(
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(fontWeight: FontWeight.w600),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: widget.teamColours[p['team']]),
                     children: [
                       TextSpan(text:
                         (p['short_name'] as String?)?.isNotEmpty == true
