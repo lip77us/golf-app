@@ -10,6 +10,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:golf_mobile/widgets/strokes_table.dart';
 import 'package:golf_mobile/utils/sequoya_board_model.dart';
 import 'package:golf_mobile/widgets/sequoya_board.dart';
 
@@ -99,8 +100,8 @@ void main() {
       expect(find.textContaining('MATCH 5 OF 6'), findsOneWidget);
       expect(find.text('Auto press'), findsOneWidget);
       expect(find.text('starts 14'), findsOneWidget);
-      expect(find.textContaining('STROKES · MATCH 5'), findsNothing,
-          reason: 'gross fixture has no strokes to lay out');
+      expect(find.byType(StrokesTable), findsNothing,
+          reason: 'a gross game allocates no strokes to lay out');
       expect(find.text('Each · now'), findsOneWidget);
       expect(t.takeException(), isNull);
     });
@@ -114,13 +115,48 @@ void main() {
       expect(t.takeException(), isNull);
     });
 
-    testWidgets('a strokes round shows the strokes card', (t) async {
-      final raw = _json('sequoya_thru_13');
+    Map<String, dynamic> withStrokes(String name) {
+      final raw = _json(name);
       raw['handicap'] = {'mode': 'strokes_off', 'net_percent': 100};
-      await _pump(t, SequoyaBoardData.fromSummary(raw));
-      expect(find.textContaining('STROKES · MATCH 5'), findsOneWidget);
+      // One golfer strokes on the 2nd and the 17th — a hole long played and
+      // one in the last match, so a table scoped to the live match's three
+      // holes could show neither.
+      final holes = (raw['scorecard'] as Map)['holes'] as List;
+      for (final h in holes) {
+        if (h['hole'] == 2 || h['hole'] == 17) {
+          ((h['scores'] as List).first as Map)['strokes'] = 1;
+        }
+      }
+      return raw;
+    }
+
+    testWidgets('a strokes round shows the shared table, for the round',
+        (t) async {
+      await _pump(t, SequoyaBoardData.fromSummary(withStrokes('sequoya_thru_13')));
+      final table = t.widget<StrokesTable>(find.byType(StrokesTable));
+      expect(table.holesInPlay.length, 18);
+      expect(table.participants.length, 4);
       expect(find.text('OFF THE LOW'), findsOneWidget);
       expect(t.takeException(), isNull);
+    });
+
+    testWidgets('the table is still there once the round is over', (t) async {
+      await _pump(t, SequoyaBoardData.fromSummary(withStrokes('sequoya_final')));
+      expect(find.byType(StrokesTable), findsOneWidget);
+      expect(t.takeException(), isNull);
+    });
+
+    test('the board draws no strokes table of its own', () {
+      final src = File('lib/widgets/sequoya_board.dart').readAsStringSync();
+      expect(src, contains('StrokesTable('));
+      expect(src.contains('class _Strokes'), isFalse);
+    });
+
+    test('the score rows carry no handicap figure beside the name', () {
+      final src =
+          File('lib/screens/sequoya_threes_screen.dart').readAsStringSync();
+      expect(src.contains('showHcap'), isFalse);
+      expect(src.contains('effectiveMatchHandicap('), isFalse);
     });
 
     test('the leaderboard keeps the way to the receipts', () {

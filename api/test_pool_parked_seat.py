@@ -161,3 +161,98 @@ class TheRuleIsNarrowTests(_ParkedBase):
         self.assertEqual(
             [g['group_number']
              for g in RoundCompleteView._groups_outstanding(self.host)], [3])
+
+
+class TheBoardFollowsThemIntoTheLinkedRoundTests(_ParkedBase):
+    """Reported from production, 9 Nov 2026: *"On the leaderboard, the skins
+    shows all of the scores, the stroke play is missing all of the scores
+    from the foursomes that also played 6s."*
+
+    Both tabs were right about their own question. The pool follows a
+    participant into the round he actually played; `_build_ln_player_totals`
+    read `foursome__round=round_obj`, which a parked seat satisfies while
+    holding no scores — so those golfers sat on the board thru 0.
+
+    Paul chose to follow them rather than hide the rows, so a round-level
+    board now borrows the group (`pool_field_foursomes`).
+    """
+
+    def _board(self):
+        from services.low_net_round import low_net_round_standings
+        return {r['player_name']: r
+                for r in low_net_round_standings(self.host)}
+
+    def test_every_pool_golfer_is_on_the_board_with_his_real_holes(self):
+        self._play()
+        self.assertEqual(
+            {n: r['holes_played'] for n, r in self._board().items()},
+            {'Jim Diederich': 18, 'Paul Lipkin': 18,
+             'Larry Sanders': 18, 'Wendell Doman': 18},
+            'a golfer who played in the linked round read as thru 0')
+
+    def test_his_row_is_seeded_from_the_seat_he_PLAYED(self):
+        """Two seats, one golfer, and `totals` is keyed by player id — so a
+        duplicate ROW is not the failure mode and asserting unique names
+        proves nothing. What goes wrong is which seat seeds him: the parked
+        one comes first in the field, so dropping it is what puts his real
+        tee, handicap and foursome on the board.
+
+        The board must also not grow: four in the pool, four rows."""
+        self._play()
+        board = self._board()
+        self.assertEqual(len(board), 4)
+        self.assertEqual(board['Jim Diederich']['foursome_id'], self.lfs.pk)
+        self.assertEqual(board['Larry Sanders']['foursome_id'], self.here.pk)
+
+    def test_the_net_is_read_from_the_round_he_PLAYED(self):
+        """The sharpest half: he has a membership in each round, and a
+        handicap and a tee on both. Reading the parked one would net his
+        card against numbers he never played off.
+
+        The fixture forces them apart — the seats agree on everything by
+        default, so a board reading either one would pass."""
+        self.parked.memberships.filter(
+            player_id=self.pids['Jim Diederich']).update(
+                playing_handicap=0, course_handicap=0)
+        self.lfs.memberships.filter(
+            player_id=self.lpids['Jim Diederich']).update(
+                playing_handicap=14, course_handicap=14)
+        self._play()
+        self.assertEqual(self._board()['Jim Diederich']['handicap'], 14)
+
+    def test_a_golfer_in_the_linked_round_who_is_NOT_in_the_pool_stays_off(self):
+        """A borrowed group contributes its participants, not its roster.
+        Somebody else in that Sixes round is in his own round and in neither
+        this round nor this pool."""
+        from core.models import Player
+        from tournament.models import FoursomeMembership
+        outsider = Player.objects.create(
+            account=self.linked.account, name='Outsider', handicap_index=10)
+        FoursomeMembership.objects.create(
+            foursome=self.lfs, player=outsider, tee=self.tee,
+            course_handicap=10, playing_handicap=10)
+        self._play()
+        self.assertNotIn('Outsider', self._board())
+
+    def test_an_ordinary_round_is_untouched(self):
+        """The whole-field case is the SAME code path, so it has to be
+        asserted rather than assumed: no pool, no borrowing, and the
+        restriction map is empty."""
+        from services.multi_skins import pool_field_foursomes
+        plain = make_round(self.tee.course, handicap_mode='gross')
+        a = make_foursome(plain, [('A', 0), ('B', 0)], tee=self.tee,
+                          group_number=1)
+        b = make_foursome(plain, [('C', 0)], tee=self.tee, group_number=2)
+        fs, allowed = pool_field_foursomes(plain)
+        self.assertEqual({f.pk for f in fs}, {a.pk, b.pk})
+        self.assertEqual(allowed, {})
+
+    def test_a_pool_with_no_linked_round_borrows_nothing(self):
+        """A single-round pool is the common shape and must not start
+        reaching for other rounds."""
+        from services.multi_skins import pool_field_foursomes
+        self.host.multi_skins_game.linked_rounds.all().delete()
+        self._play()
+        fs, allowed = pool_field_foursomes(self.host)
+        self.assertEqual({f.round_id for f in fs}, {self.host.id})
+        self.assertEqual(allowed, {})

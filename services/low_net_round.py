@@ -82,18 +82,29 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
     cap_enabled = cap_in_force(round_obj, handicap_mode, net_percent,
                                force_cap=force_cap)
 
-    foursomes = list(
-        Foursome.objects
-        .filter(round=round_obj)
-        .prefetch_related('memberships__player', 'memberships__tee')
-    )
+    # The field, which is NOT always this round's own foursomes: a host round
+    # of a cross-round skins pool borrows the groups whose golfers played
+    # their cards in a linked round, because otherwise this board shows
+    # blanks for them while the pool tab beside it shows them thru 18.
+    # Every ordinary round gets its own foursomes and an empty restriction,
+    # so that is the same code path rather than a second one.
+    from services.multi_skins import pool_field_foursomes
+    foursomes, _allowed = pool_field_foursomes(round_obj)
+
+    def _counts(fs, m):
+        """Is this membership part of the field this board is ranking?"""
+        if m.player.is_phantom:
+            return False
+        if _subset is not None and m.player_id not in _subset:
+            return False
+        ok = _allowed.get(fs.pk)
+        return ok is None or m.player_id in ok
 
     # membership lookup: {player_id: membership}  (across all foursomes)
     membership_map = {}
     for fs in foursomes:
         for m in fs.memberships.all():
-            if not m.player.is_phantom and (
-                    _subset is None or m.player_id in _subset):
+            if _counts(fs, m):
                 membership_map[m.player_id] = m
 
     # par lookup: {foursome_id: {hole_number: par}}
@@ -120,9 +131,7 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
     if handicap_mode == HandicapMode.STROKES_OFF:
         from games.models import MatchPlayBracket
         for fs in foursomes:
-            real = [m for m in fs.memberships.all()
-                    if not m.player.is_phantom
-                    and (_subset is None or m.player_id in _subset)]
+            real = [m for m in fs.memberships.all() if _counts(fs, m)]
             fs_low = min((m.playing_handicap for m in real), default=0)
             # Singles pairings anchor each player on their opponent, not the
             # group.  Falls back to the foursome low for team games.
@@ -142,7 +151,12 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
 
     qs = (
         HoleScore.objects
-        .filter(foursome__round=round_obj, player__is_phantom=False)
+        # By FOURSOME, not by round — the field above may borrow a group from
+        # a linked round. Identical to `foursome__round` on every round that
+        # does not. A borrowed group's non-participants are dropped by the
+        # `membership_map` miss in the loop below.
+        .filter(foursome_id__in=[fs.pk for fs in foursomes],
+                player__is_phantom=False)
         .exclude(gross_score=None)
         .values('foursome_id', 'player_id', 'player__name',
                 'hole_number', 'gross_score', 'net_score')
@@ -157,15 +171,14 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
     from services.hole_plan import holes_in_play as _holes_in_play
     in_play_by_fs = {}
     for fs in foursomes:
-        hs_set = _holes_in_play(round_obj, fs)
+        # The foursome's OWN round: a borrowed group's play order belongs to
+        # the round it is playing in, not to the host.
+        hs_set = _holes_in_play(fs.round, fs)
         in_play_by_fs[fs.pk] = sorted(hs_set) if hs_set else list(range(1, 19))
     for fs in foursomes:
         holes_fs = in_play_by_fs.get(fs.pk) or list(range(1, 19))
         for m in fs.memberships.all():
-            if m.player.is_phantom or m.player_id in totals:
-                continue
-            # Subset side game: don't seed a prospective plan for non-participants.
-            if _subset is not None and m.player_id not in _subset:
+            if m.player_id in totals or not _counts(fs, m):
                 continue
             plan = {}
             if handicap_mode != HandicapMode.GROSS and m.tee_id is not None:

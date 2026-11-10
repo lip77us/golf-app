@@ -11,6 +11,7 @@
 /// transitions, and the two would disagree the first time one was edited.
 library;
 
+import 'reveal_on_mount.dart';
 import 'package:flutter/material.dart';
 
 import '../api/models.dart';
@@ -164,7 +165,7 @@ class SurvivorPlayersCard extends StatelessWidget {
             ),
           _band(s),
           for (final pid in s.playerIds)
-            if (byId[pid] != null) _row(byId[pid]!, s.isZombieville),
+            if (byId[pid] != null) _revealed(byId[pid]!, s.isZombieville),
         ],
       ]),
     );
@@ -207,6 +208,16 @@ class SurvivorPlayersCard extends StatelessWidget {
   int? _net(SurvivorCardPlayer p) {
     final g = _gross(p);
     return g == null ? null : g - p.strokes;
+  }
+
+  Widget _revealed(SurvivorCardPlayer p, bool inZombieville) {
+    // Brought into view when the keypad lands on him: it takes the lower
+    // half of the screen and can cover the last row. Keyed on hole and
+    // golfer, so each new entry is a new reveal and a visible row stays put.
+    final row = _row(p, inZombieville);
+    if (p.playerId != activePlayerId) return row;
+    return RevealOnMount(
+        key: ValueKey('entry-${card.hole}-${p.playerId}'), child: row);
   }
 
   Widget _row(SurvivorCardPlayer p, bool inZombieville) {

@@ -22,6 +22,9 @@ class SequoyaBoardData {
     required this.roundOver,
     this.nextHole,
     this.holesLeft = 0,
+    this.cardHoles = const [],
+    this.cardPlayers = const [],
+    this.cardHolesInPlay = const [],
   });
 
   /// Sorted by the money shown, because that is what the ledger ranks on.
@@ -35,6 +38,13 @@ class SequoyaBoardData {
   final bool roundOver;
   final int? nextHole;
   final int holesLeft;
+
+  /// The scorecard's own payload, untouched, for the shared `StrokesTable`
+  /// — raw maps because that widget takes raw maps, and a typed hop would
+  /// only have to be unwrapped again.
+  final List<Map<String, dynamic>> cardHoles;
+  final List<Map<String, dynamic>> cardPlayers;
+  final List<int> cardHolesInPlay;
 
   SequoyaBoardHole? hole(int number) {
     for (final h in holes) {
@@ -119,6 +129,18 @@ class SequoyaBoardData {
       roundOver: s['status'] == 'complete' || next == null,
       nextHole: s['status'] == 'complete' ? null : next?.number,
       holesLeft: holes.where((h) => !h.played).length,
+      cardHoles: [
+        for (final h in (card['holes'] as List? ?? const []))
+          (h as Map).cast<String, dynamic>(),
+      ],
+      cardPlayers: [
+        for (final p in (card['players'] as List? ?? const []))
+          (p as Map).cast<String, dynamic>(),
+      ],
+      cardHolesInPlay: [
+        for (final h in (card['holes_in_play'] as List? ?? const []))
+          (h as num).toInt(),
+      ],
     );
   }
 }

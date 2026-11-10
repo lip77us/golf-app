@@ -18,6 +18,7 @@
 /// because it has no engine.
 library;
 
+import 'reveal_on_mount.dart';
 import 'package:flutter/material.dart';
 
 import '../api/models.dart';
@@ -210,7 +211,7 @@ class RabbitPlayersCard extends StatelessWidget {
                     color: Halved.muted)),
           ]),
         ),
-        for (final p in card.players) _row(p),
+        for (final p in card.players) _revealed(p),
       ]),
     );
   }
@@ -229,6 +230,15 @@ class RabbitPlayersCard extends StatelessWidget {
   int? _net(RabbitHolePlayer p) {
     final g = _gross(p);
     return g == null ? null : g - p.strokes;
+  }
+
+  Widget _revealed(RabbitHolePlayer p) {
+    // Brought into view when the keypad lands on him: it takes the lower
+    // half of the screen and can cover the last row. Keyed on hole and
+    // golfer, so each new entry is a new reveal and a visible row stays put.
+    if (p.playerId != activePlayerId) return _row(p);
+    return RevealOnMount(
+        key: ValueKey('entry-${card.hole}-${p.playerId}'), child: _row(p));
   }
 
   Widget _row(RabbitHolePlayer p) {

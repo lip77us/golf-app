@@ -58,4 +58,24 @@ void main() {
     expect(src, contains("RevealOnMount(\n"));
     expect(src, contains(r"ValueKey('entry-$holeNumber-${m.player.id}')"));
   });
+
+  // The dedicated play screens draw their own rows, so each has to ask for
+  // the reveal itself — the fourth golfer sat under the keypad on Sequoya 3s
+  // (Paul, 9 Nov 2026) on a screen built the same day.
+  for (final f in [
+    'screens/sequoya_threes_screen',
+    'screens/wolf_screen',
+    'screens/points_531_screen',
+    // Rabbit and Survivor draw their rows in a card widget of their own.
+    'widgets/rabbit_entry',
+    'widgets/survivor_entry',
+  ]) {
+    test('$f reveals the golfer being scored', () {
+      final src = File('lib/$f.dart').readAsStringSync();
+      final at = src.indexOf('RevealOnMount(');
+      expect(at, greaterThan(0), reason: 'the keypad can cover the row');
+      final key = src.substring(at, src.indexOf('child:', at));
+      expect(key, contains("ValueKey('entry-"));
+    });
+  }
 }

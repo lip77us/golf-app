@@ -32,6 +32,7 @@ import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart' show scoreCellWithDots;
 import '../utils/sequoya_standing.dart';
+import '../widgets/reveal_on_mount.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/standing_ribbon.dart';
 import '../widgets/spots_capture.dart';
@@ -1344,11 +1345,6 @@ class _HoleScoreCard extends StatelessWidget {
       member:   m,
       gross:    gross,
       strokes:  strokes,
-      showHcap: _mode != 'gross',
-      hcap: effectiveMatchHandicap(
-          mode: _mode, netPercent: _netPercent,
-          playingHandicap: m.playingHandicap,
-          lowestPlayingHandicap: _lowPlaying),
       isHot:    isHot,
       colour:   colour,
       // With the keypad up any row can be tapped to score it next; with
@@ -1363,7 +1359,12 @@ class _HoleScoreCard extends StatelessWidget {
     );
     if (!isHot && !editing) return [row];
     return [
-      Container(
+      // Keyed on hole and golfer so each new entry reveals its row: the
+      // keypad takes the lower half of the screen and covered the fourth
+      // golfer (Paul, 9 Nov 2026). A row already in view does not move.
+      RevealOnMount(
+        key: ValueKey('entry-${holeData?.holeNumber}-$pid'),
+        child: Container(
         margin: const EdgeInsets.fromLTRB(0, 4, 8, 4),
         decoration: BoxDecoration(
           color: colour.withOpacity(0.08),
@@ -1385,7 +1386,7 @@ class _HoleScoreCard extends StatelessWidget {
               onScoreSelected: (v) => onScoreSelected(m, v),
             ),
         ]),
-      ),
+      )),
     ];
   }
 }
@@ -1394,8 +1395,6 @@ class _ScoreRow extends StatelessWidget {
   final Membership member;
   final int?       gross;
   final int        strokes;
-  final bool       showHcap;
-  final int        hcap;
   final bool       isHot;
   final Color      colour;
   final VoidCallback? onTap;
@@ -1408,7 +1407,7 @@ class _ScoreRow extends StatelessWidget {
 
   const _ScoreRow({
     required this.member, required this.gross, required this.strokes,
-    required this.showHcap, required this.hcap, required this.isHot,
+    required this.isHot,
     required this.colour, this.onTap,
     this.spotsActive = false, this.spotsTypes = const [],
     this.onSpotsTap, this.spotsSheetOpen = false, this.comboTee,
@@ -1443,13 +1442,10 @@ class _ScoreRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w600)),
                 ),
-                if (showHcap) ...[
-                  const SizedBox(width: 8),
-                  Text('$hcap',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurfaceVariant)),
-                ],
+                // No handicap figure beside the name (Paul, 9 Nov 2026):
+                // most games carry none, the stroke dots on the box say
+                // where he strokes on THIS hole, and the board's strokes
+                // table lays out the round.
                 // Which tee he plays on THIS hole, combo sets only.
                 ComboTeeChip(tee: comboTee),
               ]),

@@ -11591,3 +11591,95 @@ so off a shotgun start inside a match (say the 2nd) that match reads as
 unplayed until its lowest-numbered hole comes in at the end of the round.
 Pre-existing, and a format question (what are the six matches off a
 shotgun?) rather than an off-by-one.
+
+### Three from the first look at it (Paul, 9 Nov 2026)
+
+- **The keypad covered the fourth golfer.** `RevealOnMount` existed for
+  exactly this and only the universal screen used it — the dedicated play
+  screens draw their own rows, so each has to ask. Sequoya, Wolf and Points
+  wrap the active row; Rabbit and Survivor do it inside their player-card
+  widgets. `test/reveal_on_mount_test.dart` walks all five.
+- **No handicap figure beside the name on Sequoya's rows.** It was the
+  strokes-off number, which most games do not show and nothing about this
+  format needs: the dots on the score box say where a golfer strokes on the
+  hole, and the board lays out the round.
+- **The Sequoya board draws the shared `StrokesTable`, over the whole
+  round.** It had a card of its own (`_Strokes`, now deleted) for the LIVE
+  match's three holes, which was a second drawing of the table and vanished
+  once the round was over. This supersedes "strokes in the live match" in
+  the board note above. `SequoyaBoardData` carries the scorecard payload
+  through untouched (`cardHoles` / `cardPlayers` / `cardHolesInPlay`) because
+  the table takes raw maps. The live card's `Strokes on 8: …` line stays.
+
+### …and the Stroke Play tab was missing the same golfers
+
+Reported from production, 9 Nov 2026: *"On the leaderboard, the skins shows
+all of the scores, the stroke play is missing all of the scores from the
+foursomes that also played 6s."*
+
+The third surface with the same gap, and this one needed no database access —
+the existing linked-round fixture reproduces it exactly:
+
+```
+--- the POOL ---           --- STROKE PLAY, same round ---
+Jim    round 2  thru 18      Larry    thru 18
+Larry  round 1  thru 18      Wendell  thru 18
+Paul   round 2  thru 18      Jim      thru 0   ←
+Wendell round 1 thru 18      Paul     thru 0   ←
+```
+
+`_build_ln_player_totals` read `Foursome.objects.filter(round=round_obj)` and
+`HoleScore.objects.filter(foursome__round=round_obj)` — **the host round
+only**, which a parked seat satisfies while holding no scores.
+
+**Paul chose to FOLLOW them** over hiding the rows or dropping the tab.
+
+### `services.multi_skins.pool_field_foursomes(round)`
+
+`(foursomes, allowed_by_foursome_id)` — the field a ROUND-LEVEL board should
+read, with the groups whose golfers played in a linked round borrowed in. The
+second map names the player ids readable from a foursome and carries an entry
+only where the set is restricted, so **an ordinary round is the same code path
+with an empty map** rather than a second branch that can drift.
+
+Three rules, the third a by-product of the first:
+
+* **A participant is read from ONE round** — the one `_resolve_participant_
+  memberships` bound him to, which is where he has the most gross scores. His
+  other seat is dropped rather than seeded empty beside it.
+* **A borrowed foursome contributes its PARTICIPANTS only.** Its other members
+  are playing their own round and are in neither this round nor this pool.
+* **A host foursome left with nobody is dropped** — which is `parked_foursome_
+  ids`' answer falling out rather than being asked for.
+
+**The two id spaces are not the same** and the split matters across accounts:
+a participant is keyed by the host roster's `Player` (the canon id) while the
+membership he was bound to carries the id of the round he played in. Dropping
+host seats reads the canon; allowing borrowed members reads the membership.
+
+In `_build_ln_player_totals` the whole change is a `_counts(fs, m)` predicate
+replacing three `_subset` tests, plus two queries that follow the field rather
+than the round: `HoleScore` filters **by foursome id** (identical to
+`foursome__round` on every round that does not borrow) and `holes_in_play`
+takes **`fs.round`**, because a borrowed group's play order belongs to the
+round it is playing in.
+
+**Which seat seeds him is the half that costs money.** He has a membership in
+each round, with a handicap and a tee on both, so reading the parked one nets
+his card against numbers he never played off — and the parked seat comes
+FIRST in the field, so dropping it is the whole fix. The fixture forces the
+two apart (0 against 14) because the seats agree on everything by default and
+a board reading either would pass.
+
+**A guard that could not fail, caught by mutating.** The first version
+asserted his name appears once — but `totals` is keyed by player id, so a
+duplicate ROW is not the failure mode and no mutation could make that
+assertion fail. It pins the seat (`foursome_id`) and the field size instead.
+
+Also worth not repeating: the first debugging pass piped the test through
+`sed` to show one block, which **cut the traceback off** and made a
+`NameError` look like an empty board. Do not filter output while debugging.
+
+Tests: `TheBoardFollowsThemIntoTheLinkedRoundTests`
+(`api/test_pool_parked_seat.py`, 6). Every guard mutation-checked; reverting
+the borrow fails two and dropping the dedupe fails two.

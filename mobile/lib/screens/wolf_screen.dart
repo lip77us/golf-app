@@ -44,6 +44,7 @@ import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
 import '../widgets/forty_balls_keypad.dart';
 import '../widgets/wolf_entry.dart';
+import '../widgets/reveal_on_mount.dart';
 
 /// Team accent color for a player's role on a hole. Per the color standard the
 /// Wolf side (Wolf + partner) is team 1 (blue); the opponents are team 2
@@ -1544,6 +1545,16 @@ class _HoleScoreCard extends StatelessWidget {
                     ],
                   ),
                 ),
+              ];
+            }
+            // The keypad covers the last row of a four-man card, so the
+            // golfer being scored is brought into view — keyed on hole and
+            // golfer, like the universal screen.
+            if (isHot || isEditing) {
+              return [
+                RevealOnMount(
+                  key: ValueKey('entry-$holeNumber-${m.player.id}'),
+                  child: row),
               ];
             }
             return [row];

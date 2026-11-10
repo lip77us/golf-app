@@ -137,6 +137,86 @@ def parked_foursome_ids(round_obj) -> set:
     return out
 
 
+def pool_field_foursomes(round_obj):
+    """The foursomes a ROUND-LEVEL board should read, following a cross-round
+    pool's participants into the rounds they actually played.
+
+    Reported 9 Nov 2026: on a Multi-Group Skins host round the pool tab showed
+    every golfer thru 18 while the Stroke Play tab beside it showed BLANKS for
+    the groups that had played a linked Sixes round. Both were right about
+    their own question — the pool follows participants across rounds
+    (`_resolve_participant_memberships`) and a round-level board reads
+    `foursome__round=round_obj`, which a parked seat satisfies while holding
+    no scores. Paul chose to follow them rather than hide the rows.
+
+    Returns ``(foursomes, allowed_by_foursome_id)``. The second maps a
+    foursome id to the player ids that may be READ from it, and carries an
+    entry ONLY where the set is restricted — an absent foursome counts every
+    member, which is every foursome of every round that does not host a
+    cross-round pool.
+
+    Three rules, and the third is a by-product of the first:
+
+    * **A participant is read from ONE round** — the one the resolver bound
+      him to, which is where he has the most gross scores. His seat in the
+      other round is dropped rather than seeded empty beside it, or he would
+      appear twice and one of the rows would be blank.
+    * **A borrowed foursome contributes its PARTICIPANTS only.** Its other
+      members are playing their own round and are in neither this round nor
+      this pool.
+    * **A host foursome left with nobody is dropped**, which is exactly the
+      parked seat `parked_foursome_ids` names — here it falls out rather than
+      being asked for.
+
+    The two id spaces are NOT the same and the split matters across accounts:
+    a participant is keyed by the host roster's `Player` (the canon id), while
+    the membership he was bound to carries the id of the round he played in.
+    Dropping host seats reads the canon; allowing borrowed members reads the
+    membership.
+    """
+    from tournament.models import Foursome
+
+    host = list(
+        Foursome.objects
+        .filter(round=round_obj)
+        .select_related('round')
+        .prefetch_related('memberships__player', 'memberships__tee')
+    )
+    game = getattr(round_obj, 'multi_skins_game', None)
+    if game is None or not game.linked_rounds.exists():
+        return host, {}
+
+    bound       = _resolve_participant_memberships(game)
+    elsewhere   = {}        # borrowed foursome id -> {player_id}
+    moved_canon = set()     # participants read from another round
+    for canon, m in bound.items():
+        if m.foursome.round_id != round_obj.id:
+            elsewhere.setdefault(m.foursome_id, set()).add(m.player_id)
+            moved_canon.add(canon)
+    if not elsewhere:
+        return host, {}
+
+    allowed = dict(elsewhere)
+    kept    = []
+    for fs in host:
+        members = list(fs.memberships.all())
+        stay    = {m.player_id for m in members
+                   if m.player_id not in moved_canon}
+        if not stay:
+            continue
+        kept.append(fs)
+        if len(stay) != len(members):
+            allowed[fs.pk] = stay
+
+    extra = list(
+        Foursome.objects
+        .filter(id__in=elsewhere)
+        .select_related('round')
+        .prefetch_related('memberships__player', 'memberships__tee')
+    )
+    return kept + extra, allowed
+
+
 def _pool_source_rounds(game: MultiSkinsGame) -> list:
     """Host round + every linked round (deduped, host first)."""
     rounds = [game.round]

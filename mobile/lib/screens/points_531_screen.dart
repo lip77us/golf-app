@@ -30,6 +30,7 @@
 ///     5-3-1 points row — showing at-a-glance progress through the round.
 ///   • Bottom nav:  ← Hole N-1  |  Hole N+1 →   (Done on hole 18)
 
+import '../widgets/reveal_on_mount.dart';
 import '../utils/effective_scores.dart';
 import '../utils/handicap_rounding.dart';
 import 'package:flutter/material.dart';
@@ -1107,7 +1108,11 @@ class _P531HoleScoreCard extends StatelessWidget {
               // inset so the right line shows, faint wash fill.
               final boxColor = Theme.of(context).colorScheme.primary;
               return [
-                Container(
+                // Brought into view when the keypad lands on him — keyed on
+                // hole and golfer, like the universal screen.
+                RevealOnMount(
+                  key: ValueKey('entry-$holeNumber-${m.player.id}'),
+                  child: Container(
                   margin: const EdgeInsets.fromLTRB(0, 6, 8, 6),
                   decoration: BoxDecoration(
                     color: boxColor.withOpacity(0.10),
@@ -1132,7 +1137,7 @@ class _P531HoleScoreCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
+                )),
               ];
             }
             return [row];

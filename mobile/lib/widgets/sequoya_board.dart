@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'strokes_table.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/halved_brand.dart';
@@ -29,11 +31,23 @@ class SequoyaBoard extends StatelessWidget {
         live == null ? _RoundOver(data: data) : _LiveMatch(data: data, m: live),
         const SizedBox(height: 12),
         _Matches(data: data),
-        // Gross has no strokes to lay out, and a card of empty cells would
-        // read as a fetch that failed.
-        if (live != null && data.handicapMode != 'gross') ...[
+        // **The shared strokes table, over the whole round** — the one
+        // every other board draws (Paul, 9 Nov 2026). This board had a card
+        // of its own for the live match's three holes only, which was a
+        // second drawing of the table and vanished once the round was over.
+        // A stroke falls where the card puts it whichever match that is, so
+        // the round is the honest unit. It gates itself: a gross game
+        // allocates nothing and draws nothing.
+        if (data.handicapMode != 'gross') ...[
           const SizedBox(height: 12),
-          _Strokes(data: data, m: live),
+          StrokesTable(
+            holes: data.cardHoles,
+            participants: data.cardPlayers,
+            holesInPlay: data.cardHolesInPlay,
+            trailing: data.handicapMode == 'strokes_off'
+                ? 'OFF THE LOW'
+                : 'NET ${data.netPercent}%',
+          ),
         ],
         const SizedBox(height: 12),
         _Ledger(data: data),
@@ -537,158 +551,6 @@ class _MatchRow extends StatelessWidget {
             style: TextStyle(
                 fontSize: 10.5, fontWeight: FontWeight.w700, color: ink)),
       ),
-    );
-  }
-}
-
-// ── 3 · strokes in the live match ───────────────────────────────────────
-
-class _Strokes extends StatelessWidget {
-  const _Strokes({required this.data, required this.m});
-  final SequoyaBoardData data;
-  final SequoyaBoardMatch m;
-
-  static const double _nameWidth = 60;
-  static const double _totalWidth = 26;
-
-  @override
-  Widget build(BuildContext context) {
-    final holes = [
-      for (var h = m.startHole; h <= m.endHole; h++) h,
-    ];
-    final bySide = {
-      for (final side in [1, 2])
-        side: data.rosterOrder
-            .where((g) => (side == 1 ? m.side1Ids : m.side2Ids)
-                .contains(g.playerId))
-            .toList(),
-    };
-    int total(SequoyaBoardGolfer g) => holes.fold(
-        0, (n, h) => n + (data.hole(h)?.strokes[g.playerId] ?? 0));
-    int sideTotal(int s) => bySide[s]!.fold(0, (n, g) => n + total(g));
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Halved.card,
-        border: Border.all(color: Halved.cardBorder, width: 1.5),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          Text('STROKES · MATCH ${m.index}',
-              style: const TextStyle(
-                  fontSize: 11.5, fontWeight: FontWeight.w700,
-                  letterSpacing: .4, color: Halved.muted)),
-          const Spacer(),
-          Text(
-              data.handicapMode == 'strokes_off'
-                  ? 'OFF THE LOW'
-                  : 'NET ${data.netPercent}%',
-              style: const TextStyle(
-                  fontSize: 11.5, fontWeight: FontWeight.w700,
-                  letterSpacing: .4, color: Halved.muted)),
-        ]),
-        const SizedBox(height: 3),
-        Row(children: [
-          const SizedBox(width: _nameWidth),
-          for (final h in holes)
-            Expanded(
-              child: Text('$h',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 10, fontWeight: FontWeight.w700,
-                      color: h == data.nextHole
-                          ? Halved.deepPine : Halved.muted)),
-            ),
-          const SizedBox(
-            width: _totalWidth,
-            child: Text('Tot',
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                    fontSize: 10, fontWeight: FontWeight.w700,
-                    color: Halved.muted)),
-          ),
-        ]),
-        for (final side in [1, 2]) ...[
-          if (side == 2)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 2),
-              child: Divider(height: 1, thickness: 1, color: _hairline),
-            ),
-          for (final g in bySide[side]!)
-            Padding(
-              padding: const EdgeInsets.only(top: 3),
-              child: Row(children: [
-                SizedBox(
-                  width: _nameWidth,
-                  child: Row(children: [
-                    _swatch(side),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: Text(g.shortName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 12.5, fontWeight: FontWeight.w700,
-                              color: Halved.deepPine)),
-                    ),
-                  ]),
-                ),
-                for (final h in holes)
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 1.5),
-                      child: _cell(h, g),
-                    ),
-                  ),
-                SizedBox(
-                  width: _totalWidth,
-                  child: Text('${total(g)}',
-                      textAlign: TextAlign.right,
-                      style: _display(12.5, Halved.muted)),
-                ),
-              ]),
-            ),
-        ],
-        const SizedBox(height: 4),
-        Text(
-            '${m.names(1)} get ${sideTotal(1)} · '
-            '${m.names(2)} get ${sideTotal(2)} in this match',
-            style: const TextStyle(
-                fontSize: 11.5, fontWeight: FontWeight.w600,
-                color: Halved.muted)),
-      ]),
-    );
-  }
-
-  Widget _cell(int hole, SequoyaBoardGolfer g) {
-    final h = data.hole(hole);
-    final n = h?.strokes[g.playerId] ?? 0;
-    final isNext = hole == data.nextHole;
-    final played = h?.played ?? false;
-    return Container(
-      height: 20,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: isNext || played ? Halved.card : Halved.surface,
-        borderRadius: BorderRadius.circular(5),
-        border: isNext
-            ? Border.all(color: Halved.deepPine, width: 2)
-            : played
-                ? Border.all(color: Halved.cardBorder, width: 1.5)
-                : null,
-      ),
-      // One dot per stroke: strokes-off can give a high man two on one hole.
-      child: n == 0
-          ? null
-          : Row(mainAxisSize: MainAxisSize.min, children: [
-              for (var i = 0; i < n; i++)
-                Padding(
-                  padding: EdgeInsets.only(left: i == 0 ? 0 : 3),
-                  child: _mintDot(),
-                ),
-            ]),
     );
   }
 }
