@@ -197,30 +197,31 @@ def press_start_hole(net, side1, side2, match_index, current_hole):
     """
     lo, hi = MATCH_HOLES[match_index - 1]
     start = max(current_hole, lo)
-    if _hole_winner(net, side1, side2, start) is not None:
-        start += 1                      # that hole is played; press the next
+    # Past EVERY hole already played, not just the one being looked at. A
+    # scorer reviewing the 7th with the 8th in the book would otherwise press
+    # the 8th — a result everybody has seen.
+    while start <= hi and _hole_winner(net, side1, side2, start) is not None:
+        start += 1
     return start if start <= hi else None
 
 
-def call_press(foursome, *, match_index, side, called_by_id, current_hole):
-    """Record a hand-called press. Raises ValueError with a reason if refused.
+def press_offer(game, net, side1, side2, match_index, current_hole, *,
+                has_manual):
+    """Whether a hand-called press may be called now, and what it would be.
 
-    It covers the hole being played (see :func:`press_start_hole`), and only
-    the trailing side may call — both are rules the offer card states, and
-    both are enforced here rather than only in the UI, so they hold however
-    the call arrives.
+    Returns ``{'side': 1 | 2, 'start_hole': n}`` — the side that may call it
+    and the first hole it covers. Raises ValueError naming the rule otherwise.
+
+    **One writer.** `call_press` enforces this and the score-entry card offers
+    it, and a button the server then refuses is how the day bet's off switch
+    went missing. So the card asks here rather than re-deriving who is down.
     """
-    game = foursome.sequoya_threes_game
     if game.press_mode != SequoyaThreesGame.PRESS_MANUAL_AUTO:
         raise ValueError('This round is not playing hand-called presses.')
 
     lo, hi = MATCH_HOLES[match_index - 1]
     if not (lo <= current_hole <= hi):
         raise ValueError('That hole is not in this match.')
-
-    ids = [m.player_id for m in _real_members(foursome)]
-    side1, side2 = pairing_for_match(ids, game.match1_side1, match_index)
-    net = _net_by_hole(game, foursome)
 
     start = press_start_hole(net, side1, side2, match_index, current_hole)
     if start is None:
@@ -239,10 +240,8 @@ def call_press(foursome, *, match_index, side, called_by_id, current_hole):
         raise ValueError('The match is all square — only the side that is '
                          'down may press.')
     trailing = 2 if margin > 0 else 1
-    if side != trailing:
-        raise ValueError('Only the side that is down may press.')
 
-    if game.presses.filter(match_index=match_index).exists():
+    if has_manual:
         raise ValueError('This match already carries a hand-called press.')
 
     # **A press must be a NEW bet, not a repeat of one already running.** The
@@ -261,9 +260,31 @@ def call_press(foursome, *, match_index, side, called_by_id, current_hole):
                 f"{b['label']} is level with the same holes left — a press "
                 'over them would settle on exactly the same golf.')
 
+    return {'side': trailing, 'start_hole': start}
+
+
+def call_press(foursome, *, match_index, side, called_by_id, current_hole):
+    """Record a hand-called press. Raises ValueError with a reason if refused.
+
+    It covers the hole being played (see :func:`press_start_hole`), and only
+    the trailing side may call — both are rules the offer card states, and
+    both are enforced here rather than only in the UI, so they hold however
+    the call arrives. The rules themselves are :func:`press_offer`'s.
+    """
+    game = foursome.sequoya_threes_game
+    ids = [m.player_id for m in _real_members(foursome)]
+    side1, side2 = pairing_for_match(ids, game.match1_side1, match_index)
+    net = _net_by_hole(game, foursome)
+
+    offer = press_offer(
+        game, net, side1, side2, match_index, current_hole,
+        has_manual=game.presses.filter(match_index=match_index).exists())
+    if side != offer['side']:
+        raise ValueError('Only the side that is down may press.')
+
     return SequoyaThreesPress.objects.create(
         game=game, match_index=match_index, side=side,
-        called_by_id=called_by_id, start_hole=start)
+        called_by_id=called_by_id, start_hole=offer['start_hole'])
 
 
 def remove_press(foursome, *, match_index):
@@ -566,6 +587,28 @@ def _transfers(nets, names):
     return out
 
 
+def _match_live(bets, side1, side2, ids, amount):
+    """``{pid: money}`` for one match "if it ended here".
+
+    A settled bet as settled, a live one for whoever is up, a level or halved
+    one for nobody. Shared by the summary's `live_money` and the score-entry
+    card's `Each · now`, so the tray and the board are the same arithmetic.
+    """
+    out = {p: 0.0 for p in ids}
+    for b in bets:
+        if b['result'] in (1, 2):
+            side1_up = b['result'] == 1
+        elif b['result'] is None and b['played'] and b['margin']:
+            side1_up = b['margin'] > 0
+        else:
+            continue                       # halved, or nothing to lead yet
+        for p in side1:
+            out[p] += amount if side1_up else -amount
+        for p in side2:
+            out[p] += -amount if side1_up else amount
+    return out
+
+
 def sequoya_threes_summary(foursome) -> dict | None:
     """Everything the play screen, leaderboard, settlement and card need."""
     try:
@@ -621,18 +664,7 @@ def sequoya_threes_summary(foursome) -> dict | None:
                 for p in ids:
                     bet_record[p]['halved'] += 1
 
-        match_live = {p: 0.0 for p in ids}
-        for b in bets:
-            if b['result'] in (1, 2):
-                side1_up = b['result'] == 1
-            elif b['result'] is None and b['played'] and b['margin']:
-                side1_up = b['margin'] > 0
-            else:
-                continue                   # halved, or nothing to lead yet
-            for p in side1:
-                match_live[p] += amount if side1_up else -amount
-            for p in side2:
-                match_live[p] += -amount if side1_up else amount
+        match_live = _match_live(bets, side1, side2, ids, amount)
         for p in ids:
             live_nets[p] += match_live[p]
             by_match[p].append({
@@ -722,6 +754,280 @@ def sequoya_threes_summary(foursome) -> dict | None:
                 SequoyaThreesGame.PRESS_MANUAL_AUTO: 3,
             }.get(game.press_mode, 2), 2),
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# The score-entry card — one hole, and the round AS OF that hole
+# ---------------------------------------------------------------------------
+#
+# `~/Downloads/handoff-sequoya-score-entry`. The tray reports the hole just
+# played: who won it, every bet in this match, and what each golfer is up or
+# down. All of that is the engine's — `_bets_for_match` and `_match_live` —
+# run over a net table TRUNCATED to the holes played up to this one. A
+# truncated table is the engine's own answer to "what if the round stopped
+# here", which is what keeps a hole reopened on the 15th from reporting the
+# 15th's money (the Points tray's bug) without a second copy of any rule.
+
+def _join(names):
+    return ' + '.join(names)
+
+
+def _stake_label(amount):
+    if not amount:
+        return 'no stakes'
+    a = f'{amount:.0f}' if amount == int(amount) else f'{amount:.2f}'
+    return f'${a} a bet'
+
+
+def _chip(bet, names_of_side):
+    """One bet as the tray draws it: a name, a state, and how settled it is.
+
+    `status` is the design's three states — `live` is outlined, `pending` (a
+    press that has not reached its first hole) is dashed because it is a
+    promise rather than a bet, and `final` is filled because nothing more can
+    happen to it.
+    """
+    kind = bet['kind']
+    name = {'match': 'Match', 'auto_press': 'Auto press'}.get(kind)
+    if name is None:
+        side = bet.get('called_side')
+        name = f'Press · {names_of_side(side)}' if side else 'Press'
+
+    result, margin = bet['result'], bet['margin']
+    # Only a PRESS can be a promise. The match bet is live from its first tee,
+    # so before a ball is struck it reads `Match AS`, not `Match starts 1`.
+    if result is None and not bet['played'] and kind != 'match':
+        return {'kind': kind, 'text': f"{name} starts {bet['holes'][0]}",
+                'state': '', 'leader': None, 'status': 'pending'}
+    if result is None:
+        return {'kind': kind, 'text': name,
+                'state': 'AS' if margin == 0 else f'{abs(margin)} UP',
+                'leader': None if margin == 0 else (1 if margin > 0 else 2),
+                'status': 'live'}
+    if result == 0:
+        return {'kind': kind, 'text': name, 'state': 'Halved',
+                'leader': None, 'status': 'final'}
+    return {'kind': kind, 'text': name, 'state': _won_by(bet),
+            'leader': result, 'status': 'final'}
+
+
+def _won_by(bet):
+    """`2&1` for a bet closed early, else the margin it finished on."""
+    early = _close_out(bet)
+    if early:
+        return early.replace(' ', '')
+    # Decided on its last hole. The margin can only have moved on that hole,
+    # so it is the finishing margin.
+    return f"{abs(bet['margin'])} UP"
+
+
+def sequoya_hole_card(foursome, hole) -> dict:
+    """Everything the score-entry screen draws for ONE hole.
+
+    ``{}`` when the game is not set up or the hole is not in a match — the
+    screen then keeps its plain entry card, so a card that cannot be built
+    never stops a group entering scores.
+    """
+    try:
+        game = foursome.sequoya_threes_game
+    except SequoyaThreesGame.DoesNotExist:
+        return {}
+    members = _real_members(foursome)
+    idx = match_of_hole(hole)
+    order = play_order(foursome.round, foursome)
+    if len(members) != 4 or idx is None or hole not in order:
+        return {}
+
+    from services.player_labels import first_names
+    ids    = [m.player_id for m in members]
+    names  = {m.player_id: m.player.name for m in members}
+    first  = first_names({m.player_id: m.player for m in members})
+    amount = float(game.bet_amount)
+    lo, hi = MATCH_HOLES[idx - 1]
+
+    pos       = order.index(hole)
+    upto      = set(order[:pos + 1])
+    next_hole = order[pos + 1] if pos + 1 < len(order) else None
+
+    full = _net_by_hole(game, foursome)
+    net  = {p: {h: v for h, v in per.items() if h in upto}
+            for p, per in full.items()}
+    # A press belongs on this card once it has been called: its first hole is
+    # one already reached, or the very next one.
+    manual = [pr for pr in game.presses.all()
+              if pr.start_hole in upto or pr.start_hole == next_hole]
+
+    side1, side2 = pairing_for_match(ids, game.match1_side1, idx)
+    side_of = {p: 1 for p in side1} | {p: 2 for p in side2}
+
+    def side_names(side):
+        return _join(first[p] for p in (side1 if side == 1 else side2))
+
+    # ── this hole ──────────────────────────────────────────────────────────
+    gross = {hs.player_id: hs.gross_score for hs in HoleScore.objects.filter(
+        foursome=foursome, hole_number=hole, gross_score__isnull=False)}
+    alloc    = strokes_by_hole(game, foursome, [hole])
+    complete = all(p in gross for p in ids)
+    is_gross = game.handicap_mode == HandicapMode.GROSS
+
+    sample_tee = next((m.tee for m in members if m.tee_id is not None), None)
+    hole_info  = sample_tee.hole(hole) if sample_tee is not None else {}
+
+    players = [{
+        'player_id'      : m.player_id,
+        'name'           : m.player.name,
+        'first'          : first[m.player_id],
+        'side'           : side_of.get(m.player_id),
+        'course_handicap': m.course_handicap,
+        'gross'          : gross.get(m.player_id),
+        'net'            : net.get(m.player_id, {}).get(hole),
+        'strokes'        : alloc.get(m.player_id, {}).get(hole, 0),
+    } for m in members]
+
+    def best(side):
+        vals = [net.get(p, {}).get(hole) for p in side]
+        vals = [v for v in vals if v is not None]
+        return min(vals) if vals else None
+
+    sides = [
+        {'side': 1, 'label': side_names(1), 'player_ids': list(side1),
+         'best': best(side1)},
+        {'side': 2, 'label': side_names(2), 'player_ids': list(side2),
+         'best': best(side2)},
+    ]
+
+    winner = _hole_winner(net, side1, side2, hole)
+    result = None
+    if winner is not None:
+        word = 'gross' if is_gross else 'net'
+        result = {
+            'winner': winner or None,                 # None = halved
+            'text'  : f'Won hole {hole}' if winner else 'Halved',
+            'nets'  : f'{word} {best(side1)} v {best(side2)}',
+        }
+
+    # ── the bets in this match, as of this hole ────────────────────────────
+    bets  = _bets_for_match(
+        game, net, side1, side2, idx,
+        [pr for pr in manual if pr.match_index == idx])
+    chips = [_chip(b, side_names) for b in bets]
+
+    head    = bets[0]
+    left    = hi - hole                    # holes of this match still to come
+    riding  = [b for b in bets[1:] if b['result'] is None]
+    if head['result'] in (1, 2):
+        tail = [f'match {idx} over']
+        if left > 0:
+            # A closed match still has holes on the card. Say whether money
+            # rides on them, rather than leaving a scored hole looking like a
+            # bet that is not there.
+            tail.append(f'press live on {hole + 1}' if riding
+                        else f'nothing riding on {hole + 1}')
+        standing = {'text': f"{side_names(head['result'])} win {_won_by(head)}",
+                    'leader': head['result'], 'tail': ' · '.join(tail)}
+    elif head['result'] == 0:
+        standing = {'text': f'Match {idx} halved', 'leader': None,
+                    'tail': 'no carry'}
+    elif head['margin']:
+        lead = 1 if head['margin'] > 0 else 2
+        standing = {'text': f"{side_names(lead)} {abs(head['margin'])} UP",
+                    'leader': lead, 'tail': f"{head['to_play']} to play"}
+    else:
+        standing = {'text': 'AS', 'leader': None,
+                    'tail': f"{head['to_play']} to play"}
+
+    # ── a called press, on the engine's own say-so ─────────────────────────
+    press = None
+    if complete:
+        try:
+            offer = press_offer(
+                game, full, side1, side2, idx, hole,
+                has_manual=game.presses.filter(match_index=idx).exists())
+        except ValueError:
+            offer = None
+        # Only from the hole just played. A scorer reviewing an earlier hole
+        # must not be handed a button that presses a later one.
+        if offer and offer['start_hole'] == hole + 1:
+            who   = side_names(offer['side'])
+            start = offer['start_hole']
+            on    = f'{start}' if start == hi else f'{start}–{hi}'
+            price = _stake_label(amount).replace(' a bet', '')
+            press = {
+                'side'      : offer['side'],
+                'names'     : who,
+                'start_hole': start,
+                'note'      : (f'Press opens a {price} bet for {who} on {on}. '
+                               f'Only {who} can call it, once a match.'),
+            }
+
+    # ── the partners change ────────────────────────────────────────────────
+    next_match = None
+    if hole == hi and idx < MATCH_COUNT and complete:
+        n1, n2 = pairing_for_match(ids, game.match1_side1, idx + 1)
+        nlo, nhi = MATCH_HOLES[idx]
+        note = f'Holes {nlo}–{nhi}.'
+        if game.press_mode != SequoyaThreesGame.PRESS_NONE:
+            note += (f' Win {nlo} and the auto press opens on '
+                     f'{nlo + 1}–{nhi}.')
+        next_match = {
+            'index'     : idx + 1,
+            'start_hole': nlo,
+            'side1'     : _join(first[p] for p in n1),
+            'side2'     : _join(first[p] for p in n2),
+            # 4-6 repeat 1-3, which is the format: you partner everyone twice.
+            'repeats'   : f'repeats match {idx - 2}' if idx + 1 > 3 else '',
+            'note'      : note,
+        }
+
+    # ── each golfer, now ───────────────────────────────────────────────────
+    live = {p: 0.0 for p in ids}
+    for i in range(1, MATCH_COUNT + 1):
+        s1, s2 = pairing_for_match(ids, game.match1_side1, i)
+        for p, v in _match_live(
+                _bets_for_match(game, net, s1, s2, i,
+                                [pr for pr in manual if pr.match_index == i]),
+                s1, s2, ids, amount).items():
+            live[p] += v
+    rank = {p: i for i, p in enumerate(ids)}
+    money = [{'player_id': p, 'name': names[p], 'side': side_of.get(p),
+              'amount': round(live[p], 2)}
+             for p in sorted(ids, key=lambda p: (-live[p], rank[p]))]
+
+    thru = sum(1 for h in upto
+               if all(net.get(p, {}).get(h) is not None for p in ids))
+    round_over = next_hole is None and complete
+
+    if next_hole is None:
+        next_label = None
+    elif match_of_hole(next_hole) != idx:
+        next_label = f'Match {match_of_hole(next_hole)} · hole {next_hole}'
+    else:
+        next_label = f'Hole {next_hole}'
+
+    return {
+        'hole'         : hole,
+        'par'          : hole_info.get('par'),
+        'stroke_index' : hole_info.get('stroke_index'),
+        'match'        : {'index': idx, 'start_hole': lo, 'end_hole': hi,
+                          'hole_of': hole - lo + 1, 'holes': hi - lo + 1},
+        'stake'        : amount,
+        'stake_label'  : _stake_label(amount),
+        'label'        : f'Hole {hole} · Match {idx}',
+        'players'      : players,
+        'sides'        : sides,
+        'scored'       : sum(1 for p in ids if p in gross),
+        'hole_complete': complete,
+        'result'       : result,
+        'bets'         : chips,
+        'standing'     : standing,
+        'press'        : press,
+        'next_match'   : next_match,
+        'money'        : money,
+        'thru'         : thru,
+        'round_over'   : round_over,
+        'next_hole'    : next_hole,
+        'next_label'   : next_label,
     }
 
 

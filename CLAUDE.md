@@ -11499,3 +11499,95 @@ and a `multi_skins` fixture in `DetailShapeTests` — which calls every
 registered formatter DIRECTLY, because `_detail_sections` swallows a
 formatter's exception by design and a regression there is otherwise silent.
 Every guard mutation-checked.
+
+## Sequoya 3s score entry — the round AS OF the hole
+
+`~/Downloads/handoff-sequoya-score-entry`. The keypad and dark tray carried
+to Sequoya 3s, on its own play screen (`sequoya_threes_screen.dart`) — the
+Wolf / Rabbit / Survivor shape, because that screen already carries the
+combo-tee chip, Spots capture, the sync merge and the press controls.
+
+### `services.sequoya_threes.sequoya_hole_card(foursome, hole)`
+
+**It runs the engine over a net table cut off at this hole.** `_bets_for_match`
+and `_match_live` already answer everything the tray draws — each bet's
+state, the close-out, each golfer's money — so the card hands them a table
+truncated to the holes played up to this one (in play order) rather than
+composing anything. A truncated table is the engine's own answer to "what if
+the round stopped here", which is what makes a hole reopened on the 15th
+report the money as of THAT hole (the Points tray's bug) with no second copy
+of a rule.
+
+Three small extractions so there is one writer of each:
+
+- **`press_offer()`** is the rule `call_press` enforces, and the card asks it
+  whether to draw a Press button. The client never works out who is down.
+- **`_match_live()`** is the summary's `live_money` arithmetic, shared with
+  the tray's `Each · now`. A test pins the latest card against the board.
+- **`press_start_hole` walks past EVERY played hole**, not one. It skipped a
+  single hole, so a press asked for from the 7th with the 8th in the book
+  would have covered the 8th — a result everybody had seen. The old screen
+  could send exactly that.
+
+Returned WITH the save as `sequoya_hole`, WITH the press POST (calling one is
+the other thing that changes the tray), and by
+`GET /api/foursomes/{id}/sequoya-threes/hole/{hole}/`.
+
+### Where the engine overrules the handoff
+
+- **Phone 3 draws a Press button the engine refuses.** After the 7th is won
+  and the 8th halved, the auto press is LEVEL with exactly the 9th left — so
+  a called press over the 9th is the twin of a bet already running, and two
+  identical bets are a double. That rule predates this packet and stands; the
+  card shows no button and a test says why.
+- **A closed match can still be pressed.** The handoff says never "once the
+  match is closed"; the engine allows the last hole to be pressed two down,
+  because the match bet is over and the auto press is dormie, so a fresh bet
+  repeats neither.
+- **A press can also be called on the TEE**, covering the hole about to be
+  played. The tray only exists after a hole is scored, so `_PressOffer` stays
+  in the body for that — and for `Take it back`, which the tray has no room
+  for. It stands down once the tray is up and no press is called, so there is
+  one control for one decision.
+- **The handoff's open question is answered:** a closed match with no live
+  press reads `match 4 over · nothing riding on 12`.
+
+### Not taken from the handoff
+
+- **The rows do not regroup by side.** The handoff groups the golfer card
+  under a header per side, re-sorting every three holes; the screen's own
+  recorded decision is that the rows never move and the side COLOUR does,
+  because re-sorting means hunting for your own name on every fourth green.
+  Kept, and worth a design answer rather than a silent flip.
+- **Blue and orange, not pine and clay** (`side_colour.dart`), as on every
+  other 2v2 tray and on the rows above this one.
+- **The hole card is not restyled** — `HoleHeader` is shared by eleven
+  screens, and the app bar's standing ribbon already carries `M3 · 1 UP`.
+
+### `TrayLabel` put its trailing figure beside the label, on every tray
+
+Both children are loose `Flexible`s, which hug their text, so `$5 A BET` drew
+immediately after `HOLE 7 · MATCH 3` rather than across from it — on Wolf,
+Las Vegas, Fourball, Nassau and Skins too. Invisible in a widget test (the
+test font is wide enough to fill the row) and found by rendering the tray
+with a real font. `mainAxisAlignment: spaceBetween`.
+
+Same render pass: the header's result chip beside four names. Two
+`Flexible`s split the row evenly whatever either needs, so the names are
+`Expanded` and the chip is CAPPED at 55% instead.
+
+Tests: `scoring/tests/test_sequoya_hole_card.py` (26, seven of them fixture
+writers — `REGEN_SEQUOYA_FIXTURES=1`), `api/test_sequoya_hole_card.py` (5),
+`mobile/test/sequoya_entry_test.dart` (30), and Sequoya added to the shared
+tray guards. Five engine mutations checked, each killed by exactly one test.
+
+**Not seen on a device.** The tray was rendered to images and compared with
+the handoff's screenshots; the screen wiring is covered by source guards
+only.
+
+**Known and untouched:** `MATCH_HOLES` is by hole NUMBER and `_settle_bet`
+walks a match's holes in number order, stopping at the first unscored one —
+so off a shotgun start inside a match (say the 2nd) that match reads as
+unplayed until its lowest-numbered hole comes in at the end of the round.
+Pre-existing, and a format question (what are the six matches off a
+shotgun?) rather than an off-by-one.

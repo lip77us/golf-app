@@ -8047,6 +8047,272 @@ class SequoyaThreesSummary {
 }
 
 // ===========================================================================
+// Sequoya 3s — the score-entry card
+// ===========================================================================
+
+/// Everything the score-entry screen draws for ONE hole
+/// (`services.sequoya_threes.sequoya_hole_card`).
+///
+/// **Every sentence and every figure is the server's.** The bets are the
+/// engine's, settled over a net table cut off at this hole, so the tray on a
+/// reopened hole reports the round as of THAT hole — and nothing here knows
+/// what an auto press is, when a match closes or who may call a press.
+class SequoyaHoleCard {
+  final int hole;
+  final int? par;
+  final int matchIndex;
+
+  /// `Hole 8 · Match 3`.
+  final String label;
+
+  /// `$5 a bet`.
+  final String stakeLabel;
+
+  final List<SequoyaHolePlayer> players;
+
+  /// The two sides of THIS hole's match, side 1 first.
+  final List<SequoyaHoleSide> sides;
+
+  final int scored;
+  final bool holeComplete;
+
+  /// Null until the hole is scored.
+  final SequoyaHoleResult? result;
+
+  /// One chip per bet in this match.
+  final List<SequoyaBetChip> bets;
+
+  final String standing;
+  final int? standingLeader;
+  final String standingTail;
+
+  /// A hand-called press the ENGINE will accept, or null.
+  final SequoyaPressOffer? press;
+
+  /// The next match's sides, on the last hole of matches 1–5.
+  final SequoyaNextMatch? nextMatch;
+
+  /// Each golfer's money as of this hole, highest first.
+  final List<SequoyaMoneyRow> money;
+  final int thru;
+
+  final bool roundOver;
+  final int? nextHole;
+
+  /// `Hole 9` or `Match 4 · hole 10`; null on the last hole.
+  final String? nextLabel;
+
+  const SequoyaHoleCard({
+    required this.hole, required this.par, required this.matchIndex,
+    required this.label, required this.stakeLabel, required this.players,
+    required this.sides, required this.scored, required this.holeComplete,
+    required this.result, required this.bets, required this.standing,
+    required this.standingLeader, required this.standingTail,
+    required this.press, required this.nextMatch, required this.money,
+    required this.thru, required this.roundOver, required this.nextHole,
+    required this.nextLabel,
+  });
+
+  SequoyaHolePlayer? playerById(int id) {
+    for (final p in players) {
+      if (p.playerId == id) return p;
+    }
+    return null;
+  }
+
+  static List<T> _list<T>(dynamic v, T Function(Map<String, dynamic>) f) =>
+      ((v as List?) ?? const [])
+          .map((e) => f((e as Map).cast<String, dynamic>()))
+          .toList();
+
+  factory SequoyaHoleCard.fromJson(Map<String, dynamic> j) {
+    final match = ((j['match'] as Map?) ?? const {}).cast<String, dynamic>();
+    final st = ((j['standing'] as Map?) ?? const {}).cast<String, dynamic>();
+    Map<String, dynamic>? sub(String k) =>
+        (j[k] as Map?)?.cast<String, dynamic>();
+    return SequoyaHoleCard(
+      hole: (j['hole'] as num?)?.toInt() ?? 0,
+      par: (j['par'] as num?)?.toInt(),
+      matchIndex: (match['index'] as num?)?.toInt() ?? 0,
+      label: j['label'] as String? ?? '',
+      stakeLabel: j['stake_label'] as String? ?? '',
+      players: _list(j['players'], SequoyaHolePlayer.fromJson),
+      sides: _list(j['sides'], SequoyaHoleSide.fromJson),
+      scored: (j['scored'] as num?)?.toInt() ?? 0,
+      holeComplete: j['hole_complete'] as bool? ?? false,
+      result: sub('result') == null
+          ? null : SequoyaHoleResult.fromJson(sub('result')!),
+      bets: _list(j['bets'], SequoyaBetChip.fromJson),
+      standing: st['text'] as String? ?? '',
+      standingLeader: (st['leader'] as num?)?.toInt(),
+      standingTail: st['tail'] as String? ?? '',
+      press: sub('press') == null
+          ? null : SequoyaPressOffer.fromJson(sub('press')!),
+      nextMatch: sub('next_match') == null
+          ? null : SequoyaNextMatch.fromJson(sub('next_match')!),
+      money: _list(j['money'], SequoyaMoneyRow.fromJson),
+      thru: (j['thru'] as num?)?.toInt() ?? 0,
+      roundOver: j['round_over'] as bool? ?? false,
+      nextHole: (j['next_hole'] as num?)?.toInt(),
+      nextLabel: j['next_label'] as String?,
+    );
+  }
+}
+
+class SequoyaHolePlayer {
+  final int playerId;
+  final String name;
+  final int? side;
+
+  /// The strokes SEQUOYA gives him on this hole — off the low man, by the
+  /// card's stroke index — which is not the round's stored allocation.
+  final int strokes;
+
+  const SequoyaHolePlayer({
+    required this.playerId, required this.name, required this.side,
+    required this.strokes,
+  });
+
+  factory SequoyaHolePlayer.fromJson(Map<String, dynamic> j) =>
+      SequoyaHolePlayer(
+        playerId: (j['player_id'] as num?)?.toInt() ?? 0,
+        name: j['name'] as String? ?? '',
+        side: (j['side'] as num?)?.toInt(),
+        strokes: (j['strokes'] as num?)?.toInt() ?? 0,
+      );
+}
+
+class SequoyaHoleSide {
+  final int side;
+
+  /// `Paul + Mike` — first names, because the tray talks in sentences.
+  final String label;
+  final int? best;
+
+  const SequoyaHoleSide({
+    required this.side, required this.label, required this.best});
+
+  factory SequoyaHoleSide.fromJson(Map<String, dynamic> j) => SequoyaHoleSide(
+        side: (j['side'] as num?)?.toInt() ?? 1,
+        label: j['label'] as String? ?? '',
+        best: (j['best'] as num?)?.toInt(),
+      );
+}
+
+class SequoyaHoleResult {
+  /// 1 or 2; null when the hole was halved.
+  final int? winner;
+
+  /// `Won hole 8` or `Halved`.
+  final String text;
+
+  /// `net 4 v 5`.
+  final String nets;
+
+  const SequoyaHoleResult({
+    required this.winner, required this.text, required this.nets});
+
+  factory SequoyaHoleResult.fromJson(Map<String, dynamic> j) =>
+      SequoyaHoleResult(
+        winner: (j['winner'] as num?)?.toInt(),
+        text: j['text'] as String? ?? '',
+        nets: j['nets'] as String? ?? '',
+      );
+}
+
+class SequoyaBetChip {
+  /// `Match`, `Auto press`, `Press · Paul + Mike`, or the whole of a promise:
+  /// `Auto press starts 8`.
+  final String text;
+
+  /// `1 UP`, `AS`, `2&1`, `Halved`; empty on a promise.
+  final String state;
+  final int? leader;
+
+  /// `live` · `pending` (called, not started) · `final`.
+  final String status;
+
+  const SequoyaBetChip({
+    required this.text, required this.state, required this.leader,
+    required this.status,
+  });
+
+  bool get isPending => status == 'pending';
+  bool get isFinal => status == 'final';
+
+  factory SequoyaBetChip.fromJson(Map<String, dynamic> j) => SequoyaBetChip(
+        text: j['text'] as String? ?? '',
+        state: j['state'] as String? ?? '',
+        leader: (j['leader'] as num?)?.toInt(),
+        status: j['status'] as String? ?? 'live',
+      );
+}
+
+class SequoyaPressOffer {
+  /// The side that is down — the only one that may call it.
+  final int side;
+
+  /// `Press opens a $5 bet for Paul + Mike on 9. Only Paul + Mike can call
+  /// it, once a match.`
+  final String note;
+
+  const SequoyaPressOffer({required this.side, required this.note});
+
+  factory SequoyaPressOffer.fromJson(Map<String, dynamic> j) =>
+      SequoyaPressOffer(
+        side: (j['side'] as num?)?.toInt() ?? 1,
+        note: j['note'] as String? ?? '',
+      );
+}
+
+class SequoyaNextMatch {
+  final int index;
+  final int startHole;
+  final String side1;
+  final String side2;
+
+  /// `repeats match 1` from match 4 on, else empty.
+  final String repeats;
+  final String note;
+
+  const SequoyaNextMatch({
+    required this.index, required this.startHole, required this.side1,
+    required this.side2, required this.repeats, required this.note,
+  });
+
+  factory SequoyaNextMatch.fromJson(Map<String, dynamic> j) =>
+      SequoyaNextMatch(
+        index: (j['index'] as num?)?.toInt() ?? 0,
+        startHole: (j['start_hole'] as num?)?.toInt() ?? 0,
+        side1: j['side1'] as String? ?? '',
+        side2: j['side2'] as String? ?? '',
+        repeats: j['repeats'] as String? ?? '',
+        note: j['note'] as String? ?? '',
+      );
+}
+
+class SequoyaMoneyRow {
+  final int playerId;
+  final String name;
+
+  /// His side in THIS hole's match — partners change, so the swatch does.
+  final int? side;
+  final double amount;
+
+  const SequoyaMoneyRow({
+    required this.playerId, required this.name, required this.side,
+    required this.amount,
+  });
+
+  factory SequoyaMoneyRow.fromJson(Map<String, dynamic> j) => SequoyaMoneyRow(
+        playerId: (j['player_id'] as num?)?.toInt() ?? 0,
+        name: j['name'] as String? ?? '',
+        side: (j['side'] as num?)?.toInt(),
+        amount: (j['amount'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+// ===========================================================================
 // Sequoya 3s — settling up
 // ===========================================================================
 

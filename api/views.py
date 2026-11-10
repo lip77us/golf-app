@@ -6248,7 +6248,8 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
         active.add(scored_on)
     wants = {'annandale_friday', 'sixes', 'rabbit', 'survivor',
              'low_net_round', 'points_531', 'wolf', 'vegas',
-             'fourball', 'match_18', 'nassau', 'skins'} & active
+             'fourball', 'match_18', 'nassau', 'skins',
+             'sequoya_threes'} & active
     if not wants:
         return {}
     from services.skins import skins_summary
@@ -6335,6 +6336,13 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
                 card = nassau_hole_card(foursome, hole_number)
                 if card:
                     out['nassau_hole'] = card
+            # …and Sequoya 3s', which reports the hole, every bet in its
+            # match and each golfer's money AS OF that hole.
+            if 'sequoya_threes' in wants and hole_number:
+                from services.sequoya_threes import sequoya_hole_card
+                card = sequoya_hole_card(foursome, hole_number)
+                if card:
+                    out['sequoya_hole'] = card
             if 'skins' in active:
                 out['skins'] = skins_summary(foursome)
     except Exception:
@@ -9636,8 +9644,27 @@ class SequoyaThreesPressView(APIView):
         except ObjectDoesNotExist:
             return Response({'detail': 'No Sequoya 3s game set up.'},
                             status=status.HTTP_404_NOT_FOUND)
-        return Response(sequoya_threes_summary(foursome),
+        # The card rides back with the summary: calling a press is the other
+        # thing that changes what this hole's tray reads, and a second
+        # request for it is a button that stays up after it was pressed.
+        from services.sequoya_threes import sequoya_hole_card
+        return Response({**sequoya_threes_summary(foursome),
+                         'sequoya_hole': sequoya_hole_card(
+                             foursome, d['current_hole'])},
                         status=status.HTTP_201_CREATED)
+
+
+class SequoyaThreesHoleCardView(APIView):
+    """GET /api/foursomes/{id}/sequoya-threes/hole/{hole}/
+
+    One hole's score-entry card. The POST that saves a score returns the same
+    shape under `sequoya_hole`, and so does the one that calls a press, so
+    this is only for a hole the screen opens without posting either.
+    """
+    def get(self, request, pk, hole):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.sequoya_threes import sequoya_hole_card
+        return Response(sequoya_hole_card(foursome, int(hole)))
 
 
 class SequoyaThreesSettlementView(APIView):

@@ -21,6 +21,7 @@ void main() {
     'survivor': 'lib/screens/survivor_screen.dart',
     'points 5-3-1': 'lib/screens/points_531_screen.dart',
     'wolf': 'lib/screens/wolf_screen.dart',
+    'sequoya 3s': 'lib/screens/sequoya_threes_screen.dart',
   };
 
   group('only Edit scores starts an edit session', () {
@@ -139,6 +140,7 @@ void main() {
       'survivor': 'lib/screens/survivor_screen.dart',
       'points 5-3-1': 'lib/screens/points_531_screen.dart',
       'wolf': 'lib/screens/wolf_screen.dart',
+      'sequoya 3s': 'lib/screens/sequoya_threes_screen.dart',
     };
     for (final e in dedicated.entries) {
       test('${e.key} returns before auto-advance when it holds a card', () {

@@ -1,0 +1,142 @@
+{
+ "hole": 11,
+ "par": 4,
+ "stroke_index": 2,
+ "match": {
+  "index": 4,
+  "start_hole": 10,
+  "end_hole": 12,
+  "hole_of": 2,
+  "holes": 3
+ },
+ "stake": 5.0,
+ "stake_label": "$5 a bet",
+ "label": "Hole 11 \u00b7 Match 4",
+ "players": [
+  {
+   "player_id": 33,
+   "name": "Paul Lipkin",
+   "first": "Paul",
+   "side": 1,
+   "course_handicap": 12,
+   "gross": 4,
+   "net": 3,
+   "strokes": 1
+  },
+  {
+   "player_id": 34,
+   "name": "Dave Kim",
+   "first": "Dave",
+   "side": 1,
+   "course_handicap": 9,
+   "gross": 4,
+   "net": 4,
+   "strokes": 0
+  },
+  {
+   "player_id": 35,
+   "name": "Sam Reid",
+   "first": "Sam",
+   "side": 2,
+   "course_handicap": 15,
+   "gross": 5,
+   "net": 4,
+   "strokes": 1
+  },
+  {
+   "player_id": 36,
+   "name": "Mike Alvarez",
+   "first": "Mike",
+   "side": 2,
+   "course_handicap": 18,
+   "gross": 5,
+   "net": 4,
+   "strokes": 1
+  }
+ ],
+ "sides": [
+  {
+   "side": 1,
+   "label": "Paul + Dave",
+   "player_ids": [
+    33,
+    34
+   ],
+   "best": 3
+  },
+  {
+   "side": 2,
+   "label": "Sam + Mike",
+   "player_ids": [
+    35,
+    36
+   ],
+   "best": 4
+  }
+ ],
+ "scored": 4,
+ "hole_complete": true,
+ "result": {
+  "winner": 1,
+  "text": "Won hole 11",
+  "nets": "net 3 v 4"
+ },
+ "bets": [
+  {
+   "kind": "match",
+   "text": "Match",
+   "state": "2&1",
+   "leader": 1,
+   "status": "final"
+  },
+  {
+   "kind": "auto_press",
+   "text": "Auto press",
+   "state": "1 UP",
+   "leader": 1,
+   "status": "live"
+  }
+ ],
+ "standing": {
+  "text": "Paul + Dave win 2&1",
+  "leader": 1,
+  "tail": "match 4 over \u00b7 press live on 12"
+ },
+ "press": {
+  "side": 2,
+  "names": "Sam + Mike",
+  "start_hole": 12,
+  "note": "Press opens a $5 bet for Sam + Mike on 12. Only Sam + Mike can call it, once a match."
+ },
+ "next_match": null,
+ "money": [
+  {
+   "player_id": 33,
+   "name": "Paul Lipkin",
+   "side": 1,
+   "amount": 10.0
+  },
+  {
+   "player_id": 34,
+   "name": "Dave Kim",
+   "side": 1,
+   "amount": 10.0
+  },
+  {
+   "player_id": 35,
+   "name": "Sam Reid",
+   "side": 2,
+   "amount": -10.0
+  },
+  {
+   "player_id": 36,
+   "name": "Mike Alvarez",
+   "side": 2,
+   "amount": -10.0
+  }
+ ],
+ "thru": 11,
+ "round_over": false,
+ "next_hole": 12,
+ "next_label": "Hole 12"
+}

@@ -138,6 +138,7 @@ class RoundProvider extends ChangeNotifier {
   final Map<int, RabbitHoleCard> _rabbitHoles = {};
   final Map<int, PointsHoleCard> _pointsHoles = {};
   final Map<int, WolfHoleCard> _wolfHoles = {};
+  final Map<int, SequoyaHoleCard> _sequoyaHoles = {};
   final Map<int, VegasHoleCard> _vegasHoles = {};
   final Map<int, FourballHoleCard> _fourballHoles = {};
   final Map<int, FourballHoleCard> _singlesHoles = {};
@@ -216,6 +217,7 @@ class RoundProvider extends ChangeNotifier {
   RabbitHoleCard?   rabbitHole(int hole)   => _rabbitHoles[hole];
   PointsHoleCard?   pointsHole(int hole)   => _pointsHoles[hole];
   WolfHoleCard?     wolfHole(int hole)     => _wolfHoles[hole];
+  SequoyaHoleCard?  sequoyaHole(int hole)  => _sequoyaHoles[hole];
   VegasHoleCard?    vegasHole(int hole)    => _vegasHoles[hole];
   FourballHoleCard? fourballHole(int hole) => _fourballHoles[hole];
   FourballHoleCard? singlesHole(int hole)  => _singlesHoles[hole];
@@ -301,6 +303,7 @@ class RoundProvider extends ChangeNotifier {
     _rabbitHoles.clear();
     _pointsHoles.clear();
     _wolfHoles.clear();
+    _sequoyaHoles.clear();
     _vegasHoles.clear();
     _fourballHoles.clear();
     _nassauHoles.clear();
@@ -448,6 +451,7 @@ class RoundProvider extends ChangeNotifier {
       _rabbitHoles.clear();
       _pointsHoles.clear();
       _wolfHoles.clear();
+      _sequoyaHoles.clear();
       _vegasHoles.clear();
       _fourballHoles.clear();
     _nassauHoles.clear();
@@ -521,6 +525,7 @@ class RoundProvider extends ChangeNotifier {
           (_annandaleFridaySummary != null
            || _sixesHoles.isNotEmpty || _rabbitHoles.isNotEmpty
            || _pointsHoles.isNotEmpty || _wolfHoles.isNotEmpty
+           || _sequoyaHoles.isNotEmpty
            || _vegasHoles.isNotEmpty || _fourballHoles.isNotEmpty
            || _nassauHoles.isNotEmpty || _skinsHoles.isNotEmpty
            || _singlesHoles.isNotEmpty
@@ -1209,6 +1214,32 @@ class RoundProvider extends ChangeNotifier {
     }
   }
 
+  /// Apply the card a press POST returned. Every other hole's card is
+  /// dropped, the staleness rule the save follows: a press changes what is
+  /// riding on every later hole of the match.
+  void setSequoyaHole(SequoyaHoleCard card) {
+    _sequoyaHoles
+      ..clear()
+      ..[card.hole] = card;
+    notifyListeners();
+  }
+
+  /// Fetch one hole's Sequoya 3s card. Silent on failure, like Rabbit's: a
+  /// card that cannot be fetched must not stop a group entering scores.
+  Future<void> loadSequoyaHole(int foursomeId, int hole) async {
+    try {
+      final card = await _client.getSequoyaHoleCard(foursomeId, hole);
+      if (card != null) {
+        _sequoyaHoles[hole] = card;
+        notifyListeners();
+      }
+    } on NetworkException {
+      // Offline — keep whatever is on screen.
+    } catch (e) {
+      debugPrint('loadSequoyaHole error: $e');
+    }
+  }
+
   /// Fetch one hole's Wolf card. Silent on failure, like Rabbit's: a card
   /// that cannot be fetched must not stop a group entering scores.
   Future<void> loadWolfHole(int foursomeId, int hole) async {
@@ -1673,6 +1704,16 @@ class RoundProvider extends ChangeNotifier {
       // a total that is one hole behind.
       _wolfHoles.clear();
       _wolfHoles[holeNumber] = WolfHoleCard.fromJson(wolf);
+      _annandaleResults.answer(holeNumber);
+      notifyListeners();
+    }
+
+    final seq = response['sequoya_hole'];
+    if (seq is Map<String, dynamic>) {
+      // Same staleness as the others: a posted hole moves every bet in its
+      // match and every golfer's money on each later card we hold.
+      _sequoyaHoles.clear();
+      _sequoyaHoles[holeNumber] = SequoyaHoleCard.fromJson(seq);
       _annandaleResults.answer(holeNumber);
       notifyListeners();
     }

@@ -875,20 +875,45 @@ class ApiClient {
           }) as Map));
 
   /// Call a press by hand. It opens on the hole AFTER the call.
-  Future<SequoyaThreesSummary> postSequoyaThreesPress(
+  ///
+  /// The hole's card comes back beside the summary: calling a press is the
+  /// other thing that changes what that hole's tray reads, so a second
+  /// request for it would leave the button up after it was pressed.
+  Future<({SequoyaThreesSummary summary, SequoyaHoleCard? hole})>
+      postSequoyaThreesPress(
     int foursomeId, {
     required int matchIndex,
     required int side,
     required int currentHole,
     int? calledById,
-  }) async =>
-      SequoyaThreesSummary.fromJson(Map<String, dynamic>.from(
-          await _post('/foursomes/$foursomeId/sequoya-threes/press/', {
-            'match_index' : matchIndex,
-            'side'        : side,
-            'current_hole': currentHole,
-            if (calledById != null) 'called_by_id': calledById,
-          }) as Map));
+  }) async {
+    final map = Map<String, dynamic>.from(
+        await _post('/foursomes/$foursomeId/sequoya-threes/press/', {
+          'match_index' : matchIndex,
+          'side'        : side,
+          'current_hole': currentHole,
+          if (calledById != null) 'called_by_id': calledById,
+        }) as Map);
+    final card = map['sequoya_hole'];
+    return (
+      summary: SequoyaThreesSummary.fromJson(map),
+      hole: card is Map && card.isNotEmpty
+          ? SequoyaHoleCard.fromJson(card.cast<String, dynamic>())
+          : null,
+    );
+  }
+
+  /// GET /api/foursomes/{id}/sequoya-threes/hole/{hole}/
+  ///
+  /// Only for a hole the screen opens WITHOUT posting — a save returns the
+  /// same shape under `sequoya_hole`, and so does calling a press.
+  Future<SequoyaHoleCard?> getSequoyaHoleCard(int foursomeId, int hole) async {
+    final data =
+        await _get('/foursomes/$foursomeId/sequoya-threes/hole/$hole/');
+    final map = (data as Map).cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    return SequoyaHoleCard.fromJson(map);
+  }
 
   /// Take back a hand-called press. A POST, not a DELETE, because the caller
   /// needs the recomputed summary back.

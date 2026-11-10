@@ -1,0 +1,144 @@
+{
+ "hole": 9,
+ "par": 5,
+ "stroke_index": 11,
+ "match": {
+  "index": 3,
+  "start_hole": 7,
+  "end_hole": 9,
+  "hole_of": 3,
+  "holes": 3
+ },
+ "stake": 5.0,
+ "stake_label": "$5 a bet",
+ "label": "Hole 9 \u00b7 Match 3",
+ "players": [
+  {
+   "player_id": 89,
+   "name": "Paul Lipkin",
+   "first": "Paul",
+   "side": 1,
+   "course_handicap": 12,
+   "gross": 4,
+   "net": 4,
+   "strokes": 0
+  },
+  {
+   "player_id": 90,
+   "name": "Dave Kim",
+   "first": "Dave",
+   "side": 2,
+   "course_handicap": 9,
+   "gross": 5,
+   "net": 5,
+   "strokes": 0
+  },
+  {
+   "player_id": 91,
+   "name": "Sam Reid",
+   "first": "Sam",
+   "side": 2,
+   "course_handicap": 15,
+   "gross": 6,
+   "net": 6,
+   "strokes": 0
+  },
+  {
+   "player_id": 92,
+   "name": "Mike Alvarez",
+   "first": "Mike",
+   "side": 1,
+   "course_handicap": 18,
+   "gross": 6,
+   "net": 6,
+   "strokes": 0
+  }
+ ],
+ "sides": [
+  {
+   "side": 1,
+   "label": "Paul + Mike",
+   "player_ids": [
+    89,
+    92
+   ],
+   "best": 4
+  },
+  {
+   "side": 2,
+   "label": "Dave + Sam",
+   "player_ids": [
+    90,
+    91
+   ],
+   "best": 5
+  }
+ ],
+ "scored": 4,
+ "hole_complete": true,
+ "result": {
+  "winner": 1,
+  "text": "Won hole 9",
+  "nets": "net 4 v 5"
+ },
+ "bets": [
+  {
+   "kind": "match",
+   "text": "Match",
+   "state": "Halved",
+   "leader": null,
+   "status": "final"
+  },
+  {
+   "kind": "auto_press",
+   "text": "Auto press",
+   "state": "1 UP",
+   "leader": 1,
+   "status": "final"
+  }
+ ],
+ "standing": {
+  "text": "Match 3 halved",
+  "leader": null,
+  "tail": "no carry"
+ },
+ "press": null,
+ "next_match": {
+  "index": 4,
+  "start_hole": 10,
+  "side1": "Paul + Dave",
+  "side2": "Sam + Mike",
+  "repeats": "repeats match 1",
+  "note": "Holes 10\u201312. Win 10 and the auto press opens on 11\u201312."
+ },
+ "money": [
+  {
+   "player_id": 89,
+   "name": "Paul Lipkin",
+   "side": 1,
+   "amount": 5.0
+  },
+  {
+   "player_id": 92,
+   "name": "Mike Alvarez",
+   "side": 1,
+   "amount": 5.0
+  },
+  {
+   "player_id": 90,
+   "name": "Dave Kim",
+   "side": 2,
+   "amount": -5.0
+  },
+  {
+   "player_id": 91,
+   "name": "Sam Reid",
+   "side": 2,
+   "amount": -5.0
+  }
+ ],
+ "thru": 9,
+ "round_over": false,
+ "next_hole": 10,
+ "next_label": "Match 4 \u00b7 hole 10"
+}

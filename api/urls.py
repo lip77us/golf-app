@@ -206,6 +206,7 @@ urlpatterns = [
     path('foursomes/<int:pk>/sequoya-threes/',       views.SequoyaThreesResultView.as_view(), name='api-sequoya-threes'),
     path('foursomes/<int:pk>/sequoya-threes/setup/', views.SequoyaThreesSetupView.as_view(),  name='api-sequoya-threes-setup'),
     path('foursomes/<int:pk>/sequoya-threes/press/', views.SequoyaThreesPressView.as_view(),  name='api-sequoya-threes-press'),
+    path('foursomes/<int:pk>/sequoya-threes/hole/<int:hole>/', views.SequoyaThreesHoleCardView.as_view(), name='api-sequoya-threes-hole'),
     path('foursomes/<int:pk>/sequoya-threes/press/remove/', views.SequoyaThreesPressRemoveView.as_view(), name='api-sequoya-threes-press-remove'),
     path('foursomes/<int:pk>/sequoya-threes/settlement/', views.SequoyaThreesSettlementView.as_view(), name='api-sequoya-threes-settlement'),
 

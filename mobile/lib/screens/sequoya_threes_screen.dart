@@ -23,6 +23,8 @@ import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/error_view.dart' show friendlyError;
+import '../widgets/forty_balls_keypad.dart';
+import '../widgets/sequoya_entry.dart';
 import '../widgets/hole_header.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/hole_grid_scorecard.dart';
@@ -89,6 +91,13 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
   bool _initialJumpDone = false;
   int? _editingPlayerId;
   bool _pressing = false;
+
+  /// `Edit scores` was pressed: the keypad stays, golfer to golfer, until
+  /// Done. A TAP on a row is a one-shot and never sets this.
+  bool _trayEditing = false;
+
+  /// The hole a card was last asked for, so a missing one is asked for once.
+  int? _cardAsked;
 
   @override
   void initState() {
@@ -198,10 +207,17 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
     _selectScore(m, score, hole);
     if (sc == null || score <= 0) return;
     if (wasAllScored) {
-      setState(() => _editingPlayerId = null);
+      // **A session keeps its cursor.** Clearing it unconditionally leaves
+      // `_trayEditing` true with no golfer being edited — a state neither
+      // the tray nor the keypad draws (reported on Rabbit, 30 Oct 2026).
+      if (!_trayEditing) setState(() => _editingPlayerId = null);
       _saveHole(ctx, hole, players);
       return;
     }
+    // **A tray game saves and STAYS.** The tray IS the end of the hole and
+    // its forward button is the advance; auto-advance would carry the scorer
+    // straight past it. The keypad posts the hole itself.
+    if (_card(context.read<RoundProvider>()) != null) return;
     if (!context.read<SettingsProvider>().autoAdvanceHole) return;
     if (!_allScored(players, _effectiveScores(sc, hole))) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -240,7 +256,8 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
     final next = nextInOrder(
         _playOrder(context.read<RoundProvider>()), _selectedHole);
     if (next != null) {
-      setState(() { _selectedHole = next; _editingPlayerId = null; });
+      setState(() { _selectedHole = next; _editingPlayerId = null;
+                    _trayEditing = false; });
     }
   }
 
@@ -248,8 +265,45 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
     final prev = prevInOrder(
         _playOrder(context.read<RoundProvider>()), _selectedHole);
     if (prev != null) {
-      setState(() { _selectedHole = prev; _editingPlayerId = null; });
+      setState(() { _selectedHole = prev; _editingPlayerId = null;
+                    _trayEditing = false; });
     }
+  }
+
+  // --- the hole card behind the keypad and the tray -----------------------
+
+  SequoyaHoleCard? _card(RoundProvider rp) {
+    final c = rp.sequoyaHole(_selectedHole);
+    return (c != null && c.hole == _selectedHole) ? c : null;
+  }
+
+  /// **Make sure the hole on screen has a card**, because without one the
+  /// keypad is not drawn at all. A save drops every other hole's card, and
+  /// that races the fetch the forward button started — so whenever the hole
+  /// on screen has none, one is asked for, once. (Rabbit's lesson.)
+  void _ensureCard(RoundProvider rp) {
+    if (_card(rp) != null) { _cardAsked = null; return; }
+    if (_cardAsked == _selectedHole) return;
+    _cardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<RoundProvider>()
+          .loadSequoyaHole(widget.foursomeId, _selectedHole);
+    });
+  }
+
+  /// Who the keypad is on: the golfer being edited, else the first without
+  /// a score, in the order the rows are drawn.
+  Membership? _keypadMember(List<Membership> players, Map<int, int> scores) {
+    if (_editingPlayerId != null) {
+      for (final m in players) {
+        if (m.player.id == _editingPlayerId) return m;
+      }
+    }
+    for (final m in players) {
+      if (!scores.containsKey(m.player.id)) return m;
+    }
+    return null;
   }
 
   // --- saving ------------------------------------------------------------
@@ -354,7 +408,7 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
       final onThatSide = me != null &&
           (side == 1 ? match.side1 : match.side2)
               .any((p) => p.playerId == me);
-      final s = await client.postSequoyaThreesPress(
+      final r = await client.postSequoyaThreesPress(
         widget.foursomeId,
         matchIndex : match.index,
         side       : side,
@@ -362,7 +416,11 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
         calledById : onThatSide ? me : null,
       );
       if (!mounted) return;
+      final s = r.summary;
       rp.setSequoyaThreesSummary(s);
+      // The card rode back with the summary, so the tray's Press button is
+      // gone the moment the press exists rather than a request later.
+      if (r.hole != null) rp.setSequoyaHole(r.hole!);
       // The SERVER decides which holes the press covers, so the confirmation
       // reads them back off the bet it just created rather than restating
       // what the client assumed.
@@ -394,6 +452,8 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
           widget.foursomeId, matchIndex: match.index);
       if (!mounted) return;
       rp.setSequoyaThreesSummary(s);
+      // A press taken back is an offer again, so the card is re-read.
+      rp.loadSequoyaHole(widget.foursomeId, _selectedHole);
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Press taken back.')));
     } catch (e) {
@@ -602,6 +662,9 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
     // the card must never disagree about who is who.
     final displayOrder = players.map((m) => m.player.id).toList();
     final hotSpotId = isComplete ? null : _hotSpotId(displayOrder, scores);
+    if (!isComplete) _ensureCard(rp);
+    final card = _card(rp);
+    final holeScored = _allScored(players, scores);
 
     return RefreshIndicator(
       onRefresh: _refresh,
@@ -621,15 +684,23 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
           // affordance left on this screen is the control that CALLS one —
           // what is riding on the presses already called reads on the
           // leaderboard's Matches pane.
-          if (match != null && (summary?.manualPresses ?? false) && !isComplete)
+          //
+          // **One control for one decision.** Once the hole is scored and the
+          // tray is up, the tray's Press button is the offer — so this card
+          // stands down unless a press is already called, where it is the
+          // only place that says so and the only way to take one back. On
+          // the tee, before a score, it is still the way to press the hole
+          // about to be played.
+          if (match != null && (summary?.manualPresses ?? false) && !isComplete
+              && !(card != null && holeScored &&
+                   !match.bets.any((b) => b.kind == 'manual_press')))
             _PressOffer(
               match: match,
               hole:  _selectedHole,
               busy:  _pressing,
               // Whether the hole in play is already in the book decides which
               // hole a press would cover — see _PressOffer.
-              holeScored: [...match.side1, ...match.side2]
-                  .every((p) => scores.containsKey(p.playerId)),
+              holeScored: holeScored,
               mySide: _mySide(match, context.read<AuthProvider>().player?.id),
               onCall: (side) => _callPress(match, side),
               onUndo: () => _removePress(match),
@@ -658,8 +729,15 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
               hotSpotId:  hotSpotId,
               editingPlayerId: _editingPlayerId,
               onScoreSelected: (m, s) => _handleScore(ctx, m, s, players),
+              // A TAP is a one-shot — it never starts an `Edit scores`
+              // session (`_trayEditing`), which only the tray's own button
+              // does.
               onEditTap: (m) => setState(() => _editingPlayerId =
                   _editingPlayerId == m.player.id ? null : m.player.id),
+              // The keypad is the picker once the hole has a card; two
+              // full-width score pickers on one screen is one too many. It
+              // stays as the fallback for a hole whose card has not arrived.
+              showPicker: card == null,
               spotsActive:   spotsActive(rp),
               spotsTypesFor: (pid) =>
                   spotsTypesFor(pid, _selectedHole, rp.spotsSummary),
@@ -727,40 +805,147 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
     final order   = _playOrder(rp);
     final prevHole = prevInOrder(order, _selectedHole);
     final nextHole = nextInOrder(order, _selectedHole);
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-        child: Row(children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: prevHole != null ? _retreat : null,
-              icon: const Icon(Icons.chevron_left, size: 20),
-              label: Text(prevHole != null ? 'Hole $prevHole' : 'Hole'),
+
+    // **The keypad, and the tray over the pager** — the same shape as Wolf,
+    // Points and Rabbit. While the tray is up it IS the bottom bar: its
+    // forward button names the next MATCH where the partners change, and
+    // finishes the round on the last hole, and a generic pager can say
+    // neither. The pager still draws whenever the tray is not up, including
+    // while a card is on its way, so a slow one never strands a group.
+    final card = _card(rp);
+    if (card != null && !isComplete) {
+      // **The cursor decides.** A session always has a golfer under the
+      // keypad, so asking `_trayEditing` here as well is redundant — and
+      // redundant plus reachable is how a state nothing draws becomes
+      // reachable (Rabbit, 30 Oct 2026).
+      if (allDone && _editingPlayerId == null) {
+        final match = rp.sequoyaThreesSummary?.matchForHole(_selectedHole);
+        return SafeArea(
+          child: SequoyaHoleTray(
+            card: card,
+            pressing: _pressing,
+            gettingResult: _pending[_selectedHole]?.isNotEmpty ?? false,
+            notSynced: rp.trayHoleUnsynced(_selectedHole),
+            picking: _trayEditing,
+            onEdit: () => setState(() {
+              _trayEditing = !_trayEditing;
+              _editingPlayerId = null;
+            }),
+            // The CARD decides whether a press is on offer; this only needs
+            // the match to post it against.
+            onPress: match == null
+                ? null : (side) => _callPress(match, side),
+            onPrev: prevHole == null ? null : _retreat,
+            // **On the last hole the tray IS the way out**, because it
+            // covers the pager (reported on Rabbit).
+            onNext: rp.submitting
+                ? null
+                : (nextHole == null
+                    ? () => _finishRound(ctx, players)
+                    : () => _saveAndAdvance(ctx, players)),
+          ),
+        );
+      }
+
+      final m = _keypadMember(players, scores);
+      if (m != null) {
+        return SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            FortyBallsKeypad(
+              playerName: m.player.name,
+              // HIS par, not the hole's — on mixed tees one golfer's 4 is
+              // another's 5.
+              par: sc.holeData(_selectedHole)
+                      ?.scoreFor(m.player.id)?.par ?? (card.par ?? 4),
+              // The strokes SEQUOYA issues — off the low man, by the card's
+              // stroke index — not the round's stored full-net allocation.
+              strokes: card.playerById(m.player.id)?.strokes ?? 0,
+              netStyle: ctx.watch<SettingsProvider>().netStyleEntry,
+              onDone: _trayEditing
+                  ? () => setState(() {
+                        _trayEditing = false;
+                        _editingPlayerId = null;
+                      })
+                  : null,
+              onScore: (n) {
+                _handleScore(ctx, m, n, players);
+                // A TAP is a one-shot; only `Edit scores` is a session.
+                if (!_trayEditing) {
+                  setState(() => _editingPlayerId = null);
+                }
+                // **The hole is POSTED on its last score.** The tray reports
+                // the SERVER's figures, so a hole left unsent raises a tray
+                // with nothing in it — the bug Annandale and then Sixes hit.
+                final now = _effectiveScores(sc, _selectedHole);
+                if (n > 0 && _allScored(players, now)) {
+                  final hole = _selectedHole;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted || _selectedHole != hole) return;
+                    final r = context.read<RoundProvider>();
+                    if (r.submitting || (_pending[hole]?.isEmpty ?? true)) {
+                      return;
+                    }
+                    _saveHole(ctx, hole, players);
+                  });
+                }
+              },
+              // **`-1` is the clear, not `0`** — 0 writes a gross of zero,
+              // which reads as scored and is refused by the server.
+              onClear: () => _selectScore(m, -1, _selectedHole),
             ),
+            _pager(ctx, rp, players, allDone, isComplete, prevHole, nextHole),
+          ]),
+        );
+      }
+    }
+
+    return SafeArea(
+      child: _pager(ctx, rp, players, allDone, isComplete,
+                    prevHole, nextHole),
+    );
+  }
+
+  Widget _pager(
+    BuildContext ctx,
+    RoundProvider rp,
+    List<Membership> players,
+    bool allDone,
+    bool isComplete,
+    int? prevHole,
+    int? nextHole,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: Row(children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: prevHole != null ? _retreat : null,
+            icon: const Icon(Icons.chevron_left, size: 20),
+            label: Text(prevHole != null ? 'Hole $prevHole' : 'Hole'),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: nextHole == null || isComplete
-                ? FilledButton.icon(
-                    onPressed: rp.submitting
-                        ? null : () => _finishRound(ctx, players),
-                    icon: const Icon(Icons.emoji_events, size: 20),
-                    label: const Text('Done'),
-                  )
-                : FilledButton.icon(
-                    onPressed: (allDone && !rp.submitting)
-                        ? () => _saveAndAdvance(ctx, players) : null,
-                    icon: rp.submitting
-                        ? const SizedBox(width: 16, height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.chevron_right, size: 20),
-                    label: Text(rp.submitting ? 'Saving…' : 'Hole $nextHole'),
-                    iconAlignment: IconAlignment.end,
-                  ),
-          ),
-        ]),
-      ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: nextHole == null || isComplete
+              ? FilledButton.icon(
+                  onPressed: rp.submitting
+                      ? null : () => _finishRound(ctx, players),
+                  icon: const Icon(Icons.emoji_events, size: 20),
+                  label: const Text('Done'),
+                )
+              : FilledButton.icon(
+                  onPressed: (allDone && !rp.submitting)
+                      ? () => _saveAndAdvance(ctx, players) : null,
+                  icon: rp.submitting
+                      ? const SizedBox(width: 16, height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.chevron_right, size: 20),
+                  label: Text(rp.submitting ? 'Saving…' : 'Hole $nextHole'),
+                  iconAlignment: IconAlignment.end,
+                ),
+        ),
+      ]),
     );
   }
 
@@ -1061,6 +1246,7 @@ class _HoleScoreCard extends StatelessWidget {
   final List<SpotTypeInfo> Function(int) spotsTypesFor;
   final void Function(int) onSpotsTap;
   final bool Function(int) spotsSheetOpen;
+  final bool showPicker;
 
   const _HoleScoreCard({
     required this.players, required this.sideOf, required this.holeData,
@@ -1069,6 +1255,7 @@ class _HoleScoreCard extends StatelessWidget {
     required this.onScoreSelected, required this.onEditTap,
     required this.spotsActive, required this.spotsTypesFor,
     required this.onSpotsTap, required this.spotsSheetOpen,
+    this.showPicker = true,
   });
 
   String get _mode       => summary?.handicapMode ?? 'net';
@@ -1164,7 +1351,10 @@ class _HoleScoreCard extends StatelessWidget {
           lowestPlayingHandicap: _lowPlaying),
       isHot:    isHot,
       colour:   colour,
-      onTap: (gross != null && !isHot) ? () => onEditTap(m) : null,
+      // With the keypad up any row can be tapped to score it next; with
+      // the inline picker only a scored row opens for a correction.
+      onTap: (!isHot && (gross != null || !showPicker))
+          ? () => onEditTap(m) : null,
       spotsActive:   spotsActive,
       spotsTypes:    spotsActive ? spotsTypesFor(pid) : const [],
       onSpotsTap:    spotsActive ? () => onSpotsTap(pid) : null,
@@ -1187,12 +1377,13 @@ class _HoleScoreCard extends StatelessWidget {
         child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           row,
-          InlineScorePicker(
-            par: par, strokes: strokes, currentScore: gross,
-            boxBorderColor: colour,
-            boxFillColor:   Colors.white,
-            onScoreSelected: (v) => onScoreSelected(m, v),
-          ),
+          if (showPicker)
+            InlineScorePicker(
+              par: par, strokes: strokes, currentScore: gross,
+              boxBorderColor: colour,
+              boxFillColor:   Colors.white,
+              onScoreSelected: (v) => onScoreSelected(m, v),
+            ),
         ]),
       ),
     ];

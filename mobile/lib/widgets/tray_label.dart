@@ -26,7 +26,14 @@ class TrayLabel extends StatelessWidget {
   static const Color secondary = Color(0xFFB9CCC3);
 
   @override
-  Widget build(BuildContext context) => Row(children: [
+  Widget build(BuildContext context) => Row(
+      // **The trailing figure sits on the RIGHT.** Both children are loose
+      // `Flexible`s, which hug their text — so without this the stake drew
+      // immediately after the label instead of across from it, on every
+      // tray (seen rendering Sequoya's with a real font, 9 Nov 2026; the
+      // test font is wide enough to hide it).
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
         Flexible(
           child: Text(text.toUpperCase(),
               maxLines: 1, overflow: TextOverflow.ellipsis,

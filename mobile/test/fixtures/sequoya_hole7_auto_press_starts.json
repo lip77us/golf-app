@@ -1,0 +1,137 @@
+{
+ "hole": 7,
+ "par": 3,
+ "stroke_index": 17,
+ "match": {
+  "index": 3,
+  "start_hole": 7,
+  "end_hole": 9,
+  "hole_of": 1,
+  "holes": 3
+ },
+ "stake": 5.0,
+ "stake_label": "$5 a bet",
+ "label": "Hole 7 \u00b7 Match 3",
+ "players": [
+  {
+   "player_id": 101,
+   "name": "Paul Lipkin",
+   "first": "Paul",
+   "side": 1,
+   "course_handicap": 12,
+   "gross": 3,
+   "net": 3,
+   "strokes": 0
+  },
+  {
+   "player_id": 102,
+   "name": "Dave Kim",
+   "first": "Dave",
+   "side": 2,
+   "course_handicap": 9,
+   "gross": 2,
+   "net": 2,
+   "strokes": 0
+  },
+  {
+   "player_id": 103,
+   "name": "Sam Reid",
+   "first": "Sam",
+   "side": 2,
+   "course_handicap": 15,
+   "gross": 4,
+   "net": 4,
+   "strokes": 0
+  },
+  {
+   "player_id": 104,
+   "name": "Mike Alvarez",
+   "first": "Mike",
+   "side": 1,
+   "course_handicap": 18,
+   "gross": 4,
+   "net": 4,
+   "strokes": 0
+  }
+ ],
+ "sides": [
+  {
+   "side": 1,
+   "label": "Paul + Mike",
+   "player_ids": [
+    101,
+    104
+   ],
+   "best": 3
+  },
+  {
+   "side": 2,
+   "label": "Dave + Sam",
+   "player_ids": [
+    102,
+    103
+   ],
+   "best": 2
+  }
+ ],
+ "scored": 4,
+ "hole_complete": true,
+ "result": {
+  "winner": 2,
+  "text": "Won hole 7",
+  "nets": "net 3 v 2"
+ },
+ "bets": [
+  {
+   "kind": "match",
+   "text": "Match",
+   "state": "1 UP",
+   "leader": 2,
+   "status": "live"
+  },
+  {
+   "kind": "auto_press",
+   "text": "Auto press starts 8",
+   "state": "",
+   "leader": null,
+   "status": "pending"
+  }
+ ],
+ "standing": {
+  "text": "Dave + Sam 1 UP",
+  "leader": 2,
+  "tail": "2 to play"
+ },
+ "press": null,
+ "next_match": null,
+ "money": [
+  {
+   "player_id": 102,
+   "name": "Dave Kim",
+   "side": 2,
+   "amount": 5.0
+  },
+  {
+   "player_id": 103,
+   "name": "Sam Reid",
+   "side": 2,
+   "amount": 5.0
+  },
+  {
+   "player_id": 101,
+   "name": "Paul Lipkin",
+   "side": 1,
+   "amount": -5.0
+  },
+  {
+   "player_id": 104,
+   "name": "Mike Alvarez",
+   "side": 1,
+   "amount": -5.0
+  }
+ ],
+ "thru": 7,
+ "round_over": false,
+ "next_hole": 8,
+ "next_label": "Hole 8"
+}

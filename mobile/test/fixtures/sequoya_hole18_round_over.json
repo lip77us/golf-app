@@ -1,0 +1,130 @@
+{
+ "hole": 18,
+ "par": 4,
+ "stroke_index": 10,
+ "match": {
+  "index": 6,
+  "start_hole": 16,
+  "end_hole": 18,
+  "hole_of": 3,
+  "holes": 3
+ },
+ "stake": 5.0,
+ "stake_label": "$5 a bet",
+ "label": "Hole 18 \u00b7 Match 6",
+ "players": [
+  {
+   "player_id": 65,
+   "name": "Paul Lipkin",
+   "first": "Paul",
+   "side": 1,
+   "course_handicap": 12,
+   "gross": 3,
+   "net": 3,
+   "strokes": 0
+  },
+  {
+   "player_id": 66,
+   "name": "Dave Kim",
+   "first": "Dave",
+   "side": 2,
+   "course_handicap": 9,
+   "gross": 4,
+   "net": 4,
+   "strokes": 0
+  },
+  {
+   "player_id": 67,
+   "name": "Sam Reid",
+   "first": "Sam",
+   "side": 2,
+   "course_handicap": 15,
+   "gross": 4,
+   "net": 4,
+   "strokes": 0
+  },
+  {
+   "player_id": 68,
+   "name": "Mike Alvarez",
+   "first": "Mike",
+   "side": 1,
+   "course_handicap": 18,
+   "gross": 4,
+   "net": 4,
+   "strokes": 0
+  }
+ ],
+ "sides": [
+  {
+   "side": 1,
+   "label": "Paul + Mike",
+   "player_ids": [
+    65,
+    68
+   ],
+   "best": 3
+  },
+  {
+   "side": 2,
+   "label": "Dave + Sam",
+   "player_ids": [
+    66,
+    67
+   ],
+   "best": 4
+  }
+ ],
+ "scored": 4,
+ "hole_complete": true,
+ "result": {
+  "winner": 1,
+  "text": "Won hole 18",
+  "nets": "net 3 v 4"
+ },
+ "bets": [
+  {
+   "kind": "match",
+   "text": "Match",
+   "state": "1 UP",
+   "leader": 1,
+   "status": "final"
+  }
+ ],
+ "standing": {
+  "text": "Paul + Mike win 1 UP",
+  "leader": 1,
+  "tail": "match 6 over"
+ },
+ "press": null,
+ "next_match": null,
+ "money": [
+  {
+   "player_id": 65,
+   "name": "Paul Lipkin",
+   "side": 1,
+   "amount": 5.0
+  },
+  {
+   "player_id": 68,
+   "name": "Mike Alvarez",
+   "side": 1,
+   "amount": 5.0
+  },
+  {
+   "player_id": 66,
+   "name": "Dave Kim",
+   "side": 2,
+   "amount": -5.0
+  },
+  {
+   "player_id": 67,
+   "name": "Sam Reid",
+   "side": 2,
+   "amount": -5.0
+  }
+ ],
+ "thru": 18,
+ "round_over": true,
+ "next_hole": null,
+ "next_label": null
+}
