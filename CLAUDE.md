@@ -11411,10 +11411,43 @@ the paper-card side (*"enter a pool member's card in full or not at all"*);
 side, with the same fixture passing both ways so the missing scores are
 demonstrably the cause.
 
+#### …and that was the wrong round — it was a LINKED round
+
+Paul, 9 Nov 2026: *"group 1 completed our round as a linked round. The
+primary was sixes."* Which overturns the paragraph above as the explanation
+of HIS round, and the two are worth keeping apart, because they are different
+failures that produce the same banner.
+
+Group 1 was not a group that failed to post. It was a **separate round**,
+primary Sixes, linked into the pool — and its golfers were also seated in the
+host round, where they never scored because they were playing in their own.
+
+**The pool handled that correctly.** `_resolve_participant_memberships` binds
+each participant to the source round where they have the most gross scores,
+and its docstring names this case verbatim: *"a login-less roster golfer
+parked in the host round who actually PLAYS in a linked Sixes round."* So the
+pool read the Sixes round's cards.
+
+**`_all_foursomes_done` does not.** It iterates `round_obj.foursomes` — the
+HOST round's own — and knows nothing about linked rounds, so a host-round seat
+for golfers playing elsewhere sits on thru 0 and blocks completion forever.
+`field_progress` reports it the same way, which is what the banner was saying.
+The round could not be finished by anybody short of the TD force.
+
+**And a cross-round pool still gets no receipt, deliberately.** `round_local`
+refuses it, and that part is load-bearing rather than cautious: the pool is
+zero-sum across ALL its participants, spanning two rounds and possibly two
+accounts, and `settle()` raises on a ledger that does not sum to zero — so a
+one-round slice cannot go through the existing machinery at all. That shape
+needs a POOL receipt, scoped to the participants rather than to a round, the
+way `services/receipt_field.py` is scoped to a tournament's field. It does
+not exist.
+
 **The round itself was never inspected.** A read-only production query was
-blocked by a built-in safety classifier and not worked around, so everything
-above is from the screenshot and the code. If it recurs, the round id (or
-permission for that read) settles it in one query.
+blocked by a built-in safety classifier and not worked around, so all of this
+is from the screenshot, Paul's description and the code. The probe that would
+settle it prints each pool's host round, its linked rounds, every host
+foursome's scored-hole count, and whether the summary's `net` sums to zero.
 
 ### `T1` four times beside a +23
 

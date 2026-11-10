@@ -140,6 +140,14 @@ class AGroupThatNeverPostedTakesTheWholePoolDownTests(_PoolBase):
     member's card in full or not at all"). This pins it from the
     settlement side, because it is the reason a receipt can still be
     missing after the wiring above is fixed.
+
+    **This is NOT what the reported round was.** That one's group 1 was a
+    separate LINKED round (primary Sixes) whose golfers were also seated,
+    unscored, in the host round — the pool read their real scores through
+    `_resolve_participant_memberships`, and what stuck was
+    `_all_foursomes_done`, which only ever looks at the host round's own
+    foursomes. Kept because the case below is real on its own and is the
+    one a single-round pool hits.
     """
 
     def _half(self):
