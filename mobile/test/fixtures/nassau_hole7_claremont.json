@@ -4,6 +4,8 @@
   "stroke_index": 17,
   "yards": null,
   "nine": "front nine",
+  "title": "Nassau",
+  "press_line": "overall",
   "thru": 7,
   "stake": 10.0,
   "press_stake": 0.0,
@@ -12,7 +14,7 @@
   "claremont": true,
   "players": [
     {
-      "player_id": 206797,
+      "player_id": 3642,
       "name": "Paul Lipkin",
       "short": "PL",
       "first": "Paul",
@@ -24,7 +26,7 @@
       "counted": true
     },
     {
-      "player_id": 206798,
+      "player_id": 3643,
       "name": "Dave Kim",
       "short": "DK",
       "first": "Dave",
@@ -36,7 +38,7 @@
       "counted": true
     },
     {
-      "player_id": 206799,
+      "player_id": 3644,
       "name": "Sam Reid",
       "short": "SR",
       "first": "Sam",
@@ -48,7 +50,7 @@
       "counted": true
     },
     {
-      "player_id": 206800,
+      "player_id": 3645,
       "name": "Mike Nash",
       "short": "MN",
       "first": "Mike",
@@ -65,8 +67,8 @@
       "side": 1,
       "label": "Paul + Dave",
       "player_ids": [
-        206797,
-        206798
+        3642,
+        3643
       ],
       "best": 4,
       "sub": "counts: Paul \u00b7 Dave",
@@ -76,8 +78,8 @@
       "side": 2,
       "label": "Sam + Mike",
       "player_ids": [
-        206799,
-        206800
+        3644,
+        3645
       ],
       "best": 4,
       "sub": "counts: Sam",

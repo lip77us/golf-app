@@ -329,4 +329,95 @@ void main() {
       expect(src, contains('if (nassauCard == null &&'));
     });
   });
+
+  /// `~/Downloads/handoff-nassau-nine-score-entry`: the Nassau card over ONE
+  /// match. Fixtures are real engine output, written by
+  /// `REGEN_NASSAU_FIXTURES=1 manage.py test
+  /// scoring.tests.test_nassau_nine_hole_card`.
+  group('Nassau Nine', () {
+    test('the card names the game, the span and its one line', () {
+      final c = _card('nassau_nine_hole7_press');
+      expect(c.title, 'Nassau Nine');
+      expect(c.pressLine, 'match');
+      expect(c.nine, 'holes 1–9');
+      expect(c.lines.map((l) => l.key), ['match']);
+      expect(c.lines.single.chips.map((x) => x.text),
+          ['Match 2 UP', 'P1 starts 8']);
+    });
+
+    test('a card from an older server is a full Nassau', () {
+      final c = _card('nassau_hole2_press',
+          over: {'title': null, 'press_line': null});
+      expect(c.title, 'Nassau');
+      expect(c.pressLine, 'overall');
+    });
+
+    testWidgets('the tray is labelled for the game and its holes', (t) async {
+      await _pump(t, _card('nassau_nine_hole7_press'));
+      expect(find.text('HOLE 7 · NASSAU NINE'), findsOneWidget);
+      expect(find.text('HOLES 1–9'), findsOneWidget);
+      expect(find.text('MATCH'), findsOneWidget);
+      for (final gone in ['FRONT', 'BACK', 'OVERALL']) {
+        expect(find.text(gone), findsNothing);
+      }
+      expect(find.text('Match 2 UP'), findsOneWidget);
+      expect(find.text('P1 starts 8'), findsOneWidget);
+    });
+
+    testWidgets('Press sits on the one line, when the engine offers it',
+        (t) async {
+      String? side;
+      await _pump(t, _card('nassau_nine_hole1_press_offered'),
+          onPress: (s) => side = s);
+      expect(find.text('Press'), findsOneWidget);
+      await t.tap(find.text('Press'));
+      expect(side, 'top');
+    });
+
+    testWidgets('no Press when it does not', (t) async {
+      await _pump(t, _card('nassau_nine_hole7_press'), onPress: (_) {});
+      expect(find.text('Press'), findsNothing);
+    });
+
+    testWidgets('the ninth is the end, and still says which holes',
+        (t) async {
+      await _pump(t, _card('nassau_nine_hole9_final'));
+      expect(find.text('ROUND OVER'), findsOneWidget);
+      expect(find.text('HOLES 1–9'), findsOneWidget);
+      expect(find.text('FINAL, EACH'), findsOneWidget);
+      expect(find.text('Complete Round ›'), findsOneWidget);
+      expect(find.text('+\$20'), findsOneWidget);
+    });
+
+    testWidgets('Claremont is one MATCH line a game', (t) async {
+      await _pump(t, _card('nassau_nine_claremont_hole7'));
+      expect(find.text('MATCH'), findsNWidgets(2));
+      expect(find.text('TOP'), findsOneWidget);
+      expect(find.text('BOTTOM'), findsOneWidget);
+      expect(t.takeException(), isNull);
+    });
+
+    test('the screen gives it the Nassau card, keypad and tray', () {
+      final src =
+          File('lib/screens/score_entry_screen.dart').readAsStringSync();
+      // The card: fetched for it, and handed over when it is the primary.
+      final ensure = src.indexOf('void _ensureNassauCard(');
+      expect(src.substring(ensure, src.indexOf('\n  }', ensure)),
+          contains('GameIds.nassauNine'));
+      final card = src.indexOf('NassauHoleCard? _nassauCard(');
+      expect(src.substring(card, src.indexOf('\n  }', card)),
+          contains('primary != GameIds.nassauNine'));
+      // The keypad.
+      final pad = src.indexOf('bool _keypadRound(');
+      expect(src.substring(pad, src.indexOf('\n  }', pad)),
+          contains('primary == GameIds.nassauNine'));
+    });
+
+    test('the tray takes the game and the press line from the card', () {
+      final src = File('lib/widgets/nassau_entry.dart').readAsStringSync();
+      expect(src, contains(r"'Hole ${card.hole} · ${card.title}'"));
+      expect(src, contains('line.key == card.pressLine'));
+      expect(src.contains("line.key == 'overall'"), isFalse);
+    });
+  });
 }

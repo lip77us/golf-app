@@ -121,3 +121,73 @@ class NassauHoleCardEndpointTests(_Base):
         client.force_authenticate(intruder)
         r = client.get(reverse('api-nassau-hole', args=[self.fs.id, 1]))
         self.assertEqual(r.status_code, 404)
+
+
+class NassauNineOnTheWireTests(TestCase):
+    """Nassau Nine rides the Nassau card's key, endpoint and press.
+
+    It had none of them: the save's tray gate, the press and the screen all
+    asked for `nassau` by name, so a Nassau Nine round got the old inline
+    picker and no tray at all.
+    """
+
+    def setUp(self):
+        self.acct = Account.objects.create(name="Paul's Golf")
+        self.user = User.objects.create_user(username='paul', account=self.acct)
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        course = Course.objects.create(account=self.acct, name='Tilden')
+        tee = Tee.objects.create(course=course, tee_name='White', slope=113,
+                                 course_rating=Decimal('72.0'), par=72,
+                                 holes=HOLES)
+        self.round = Round.objects.create(
+            account=self.acct, course=course, round_number=1,
+            status='in_progress', active_games=['nassau_nine'],
+            primary_game='nassau_nine', num_holes=9,
+            bet_unit=Decimal('10.00'))
+        self.fs = Foursome.objects.create(round=self.round, group_number=1)
+        self.pid = {}
+        for name in ('Ann Archer', 'Ben Bell', 'Cal Croft', 'Dee Dunn'):
+            p = Player.objects.create(account=self.acct, name=name,
+                                      handicap_index=Decimal('0'))
+            FoursomeMembership.objects.create(
+                foursome=self.fs, player=p, tee=tee,
+                course_handicap=0, playing_handicap=0)
+            self.pid[name.split()[0]] = p.id
+        from services.nassau import setup_nassau
+        setup_nassau(self.fs, [self.pid['Ann'], self.pid['Ben']],
+                     [self.pid['Cal'], self.pid['Dee']],
+                     handicap_mode='gross', press_mode='manual',
+                     single_match=True)
+
+    def _post_hole(self, hole, *gross):
+        r = self.client.post(
+            reverse('api-score-submit', args=[self.fs.id]),
+            {'hole_number': hole,
+             'scores': [{'player_id': self.pid[n], 'gross_score': g}
+                        for n, g in zip(('Ann', 'Ben', 'Cal', 'Dee'), gross)]},
+            format='json')
+        assert r.status_code in (200, 201), r.content
+        return r.json()
+
+    def test_the_save_returns_the_card(self):
+        card = self._post_hole(1, 4, 5, 5, 5)['nassau_hole']
+        self.assertEqual(card['kind'], 'nassau_nine')
+        self.assertEqual([l['key'] for l in card['lines']], ['match'])
+        self.assertEqual(card['lines'][0]['chips'][0]['text'], 'Match 1 UP')
+
+    def test_the_get_serves_it_too(self):
+        r = self.client.get(reverse('api-nassau-hole', args=[self.fs.id, 3]))
+        self.assertEqual(r.json()['title'], 'Nassau Nine')
+
+    def test_a_press_returns_the_card_for_the_hole_it_was_called_from(self):
+        self._post_hole(1, 5, 5, 4, 5)                 # Cal + Dee 1 up
+        r = self.client.post(
+            reverse('api-nassau-press', args=[self.fs.id]),
+            {'start_hole': 2}, format='json')
+        self.assertIn(r.status_code, (200, 201), r.content)
+        card = r.json()['nassau_hole']
+        self.assertEqual(card['hole'], 1)
+        self.assertEqual([c['text'] for c in card['lines'][0]['chips']],
+                         ['Match 1 UP', 'P1 manual starts 2'])
+        self.assertFalse(card['can_press'])

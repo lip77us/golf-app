@@ -464,7 +464,14 @@ def add_manual_press(foursome, start_hole: int,
     # (start 1) → front = holes 1-9 (end 9), back = 10-18 (end 18), unchanged.
     from services.hole_plan import play_order as _play_order
     _order = _play_order(foursome.round, foursome)
-    _half  = (len(_order) or 18) // 2
+    # **A Nassau Nine has no half-way.** It is one match over every hole
+    # played, so "the nine" is the whole round — the rule `calculate_nassau`
+    # follows. Kept in step with it here for the row this writes; the
+    # recalculation below rebuilds the press from its start hole, so the
+    # stored nine and end hole are the engine's either way (a mutation of
+    # this line passes the suite, which is why this says so).
+    _n     = len(_order) or 18
+    _half  = _n if game.single_match else _n // 2
     _pos   = _order.index(start_hole) if start_hole in _order else (start_hole - 1)
     nine     = 'front' if _pos < _half else 'back'
     _last    = (_half - 1) if nine == 'front' else (len(_order) - 1)
@@ -851,7 +858,13 @@ def calculate_nassau(foursome, game_type: str = None) -> NassauGame | None:
                             'nine': nine_key, 'press_type': 'manual', 'side': 'top',
                             'trigger_hole': hole_num - 1, 'start': hole_num,
                             'end': nine_end, 'end_pos': nine_last_pos, 'margin': delta,
-                            'is_active': True,
+                            # **A press over ONE hole closes on the hole it
+                            # starts.** Presses are only closed by the advance
+                            # loop above, which runs on a LATER hole of the
+                            # nine — so a press called on the 8th for the 9th
+                            # (or the 17th for the 18th) had no later hole,
+                            # stayed "in progress" for ever and never paid.
+                            'is_active': pos < nine_last_pos,
                         })
 
         # ── Trigger top auto-press ────────────────────────────────────────
@@ -947,7 +960,10 @@ def calculate_nassau(foursome, game_type: str = None) -> NassauGame | None:
                                 'side': 'bottom',
                                 'trigger_hole': hole_num - 1, 'start': hole_num,
                                 'end': nine_end, 'end_pos': nine_last_pos,
-                                'margin': bot_delta_val, 'is_active': True,
+                                # One hole long: closed where it starts. See
+                                # the top game's trigger above.
+                                'margin': bot_delta_val,
+                                'is_active': pos < nine_last_pos,
                             })
 
             # ── Trigger bottom auto-press ─────────────────────────────────
@@ -1338,7 +1354,13 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
     # contiguous hole-number range. Normal round (start 1) → identical.
     from services.hole_plan import play_order as _play_order
     _order  = _play_order(foursome.round, foursome)
-    _half   = (len(_order) or 18) // 2
+    # **The engine's half, not the round's.** `calculate_nassau` runs a
+    # Nassau Nine's one match over every hole (`half = n`); halving here
+    # anyway made that match read as CLOSED OUT at the turn — `1 UP` final on
+    # the 5th of a nine-hole round with four holes still to play — and
+    # stopped a manual press being offered for the rest of the round.
+    _half   = ((len(_order) or 18) if game.single_match
+               else (len(_order) or 18) // 2)
     _pos_of = {h: i for i, h in enumerate(_order)}
 
     def _rem_after(hole: int) -> int:
@@ -1539,18 +1561,35 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
     # score-entry card's `top +$20 · bottom +$20` note is the two halves.
     # Computing either separately would be a second opinion about what a
     # live bet is worth.
+    #
+    # **Only the bets this game PLAYS.** The hole rows carry a running
+    # margin for all three whether or not a bet is on, so summing them
+    # blind counted an Overall nobody was playing: a Nassau Nine two up in
+    # its one $10 match read `+$20 each · now`, and then settled at $10.
+    # The settled figures never had this, because an unplayed bet has no
+    # result to pay on.
+    def _on(flag, value):
+        return value if flag else 0.0
+
     live_top = (
-        _live(game.front9_result, front9_margin, holes_front, bet_unit)
-        + _live(game.back9_result, back9_margin, holes_back, bet_unit)
-        + _live(game.overall_result, overall_margin, len(holes_out), bet_unit)
+        _on(game.play_front,
+            _live(game.front9_result, front9_margin, holes_front, bet_unit))
+        + _on(game.play_back,
+              _live(game.back9_result, back9_margin, holes_back, bet_unit))
+        + _on(game.play_overall,
+              _live(game.overall_result, overall_margin, len(holes_out),
+                    bet_unit))
         + _live_press(top_presses_out))
     live_bot = (
-        _live(game.bottom_front9_result, bot_front9_margin, holes_front,
-              bet_unit)
-        + _live(game.bottom_back9_result, bot_back9_margin, holes_back,
-                bet_unit)
-        + _live(game.bottom_overall_result, bot_overall_margin, len(holes_out),
-                bet_unit)
+        _on(game.play_front,
+            _live(game.bottom_front9_result, bot_front9_margin, holes_front,
+                  bet_unit))
+        + _on(game.play_back,
+              _live(game.bottom_back9_result, bot_back9_margin, holes_back,
+                    bet_unit))
+        + _on(game.play_overall,
+              _live(game.bottom_overall_result, bot_overall_margin,
+                    len(holes_out), bet_unit))
         + _live_press(bot_presses_out)) if is_claremont else 0.0
 
     # ── Team display ──────────────────────────────────────────────────────
@@ -2139,7 +2178,11 @@ def nassau_hole_card(foursome, hole: int) -> dict:
     if hole not in order:
         return {}
     pos = order.index(hole)
-    half = len(order) // 2
+    # **Nassau Nine is ONE match over every hole played** — it rides the
+    # engine's `front9` slot, so there is no Back and no Overall and the
+    # "nine" is the whole round. Same engine, same presses, one line.
+    single = bool(summary.get('single_match'))
+    half = len(order) if single else len(order) // 2
 
     members = {m.player_id: m.player
                for m in foursome.memberships.select_related('player')
@@ -2292,6 +2335,17 @@ def nassau_hole_card(foursome, hole: int) -> dict:
         return out
 
     def _lines(prefix, points=False):
+        if single:
+            # One line, `MATCH`: the bet and every press riding on it. A
+            # match that has not teed off reads `Match AS` rather than
+            # `not started` — there is nothing else on the card to wait for.
+            bet = summary.get(f'{prefix}front9') or {}
+            chip = _bet_chip(bet, 'Match', points=points) or {
+                'text': 'Match E' if points else 'Match AS',
+                'state': 'live', 'leader': None, 'manual': False}
+            return [{'key': 'match', 'label': 'MATCH',
+                     'chips': [chip] + _press_chips('front', prefix=prefix,
+                                                    points=points)}]
         out = []
         for key, name, nine in (('front', 'Front', 'front'),
                                 ('back', 'Back', 'back'),
@@ -2380,17 +2434,29 @@ def nassau_hole_card(foursome, hole: int) -> dict:
     # visible while scores are being entered rather than only once the tray
     # is up. A second copy is a second thing to keep in step.
     this_nine = 'front' if pos < half else 'back'
+    if single:
+        # `holes 1–9`, or `holes 10–18` for a back-nine round. Lowest to
+        # highest rather than first to last played, so a shotgun start does
+        # not read `holes 4–3`.
+        span = f'holes {min(order)}–{max(order)}'
+    else:
+        span = 'front nine' if this_nine == 'front' else 'back nine'
 
     return {
         'hole'        : hole,
         'par'         : row.get('par'),
         'stroke_index': row.get('stroke_index'),
         'yards'       : None,
-        'nine'        : 'front nine' if this_nine == 'front' else 'back nine',
+        'nine'        : span,
+        # What the tray calls the game, and which line its Press button
+        # sits on — the last one, which is `OVERALL` on a Nassau and the
+        # only one on a Nassau Nine.
+        'title'       : 'Nassau Nine' if single else 'Nassau',
+        'press_line'  : 'match' if single else 'overall',
         'thru'        : pos + 1,
         'stake'       : bet_unit,
         'press_stake' : float(summary.get('press_unit') or 0),
-        'kind'        : 'nassau',
+        'kind'        : 'nassau_nine' if single else 'nassau',
         'singles'     : singles,
         'claremont'   : claremont,
         'players'     : rows,

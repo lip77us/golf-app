@@ -6248,7 +6248,7 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
         active.add(scored_on)
     wants = {'annandale_friday', 'sixes', 'rabbit', 'survivor',
              'low_net_round', 'points_531', 'wolf', 'vegas',
-             'fourball', 'match_18', 'nassau', 'skins',
+             'fourball', 'match_18', 'nassau', 'nassau_nine', 'skins',
              'sequoya_threes'} & active
     if not wants:
         return {}
@@ -6331,7 +6331,9 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
                     out['singles_hole'] = card
             # …and Nassau's, which carries every bet, every press and the
             # Claremont bottom game.
-            if 'nassau' in wants and hole_number:
+            # Nassau Nine is the same card over one match, so it rides the
+            # same key and the same tray.
+            if ({'nassau', 'nassau_nine'} & wants) and hole_number:
                 from services.nassau import nassau_hole_card
                 card = nassau_hole_card(foursome, hole_number)
                 if card:
@@ -8137,10 +8139,18 @@ class NassauPressView(APIView):
         # **The card comes back with the press**, because calling one changes
         # the bet lines the tray is showing — and the button has to vanish
         # from the same frame it was tapped in. Same bargain the save makes.
-        if game_type in (None, 'nassau'):
+        if game_type in (None, 'nassau', 'nassau_nine'):
             try:
                 from services.nassau import nassau_hole_card
-                card = nassau_hole_card(foursome, max(1, start_hole - 1))
+                # The hole the press was called FROM is the one before its
+                # start in the group's play order — not `start - 1`, which
+                # off a shotgun is a hole not yet played.
+                from services.hole_plan import play_order
+                _order = play_order(foursome.round, foursome) or []
+                _at = _order.index(start_hole) if start_hole in _order else 0
+                card = nassau_hole_card(
+                    foursome,
+                    _order[_at - 1] if _at > 0 else max(1, start_hole - 1))
                 if card:
                     payload = {**payload, 'nassau_hole': card}
             except Exception:    # pragma: no cover - a read-out must not

@@ -1,0 +1,127 @@
+{
+  "hole": 1,
+  "par": 4,
+  "stroke_index": 7,
+  "yards": null,
+  "nine": "holes 1\u20139",
+  "title": "Nassau Nine",
+  "press_line": "match",
+  "thru": 1,
+  "stake": 10.0,
+  "press_stake": 0.0,
+  "kind": "nassau_nine",
+  "singles": false,
+  "claremont": false,
+  "players": [
+    {
+      "player_id": 4253,
+      "name": "Paul Lipkin",
+      "short": "PL",
+      "first": "Paul",
+      "course_handicap": 0,
+      "strokes": 0,
+      "gross": 5,
+      "net": 5,
+      "side": 1,
+      "counted": true
+    },
+    {
+      "player_id": 4254,
+      "name": "Dave Kim",
+      "short": "DK",
+      "first": "Dave",
+      "course_handicap": 0,
+      "strokes": 0,
+      "gross": 5,
+      "net": 5,
+      "side": 1,
+      "counted": true
+    },
+    {
+      "player_id": 4255,
+      "name": "Sam Reid",
+      "short": "SR",
+      "first": "Sam",
+      "course_handicap": 0,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "side": 2,
+      "counted": true
+    },
+    {
+      "player_id": 4256,
+      "name": "Mike Nash",
+      "short": "MN",
+      "first": "Mike",
+      "course_handicap": 0,
+      "strokes": 0,
+      "gross": 5,
+      "net": 5,
+      "side": 2,
+      "counted": false
+    }
+  ],
+  "sides": [
+    {
+      "side": 1,
+      "label": "Paul + Dave",
+      "player_ids": [
+        4253,
+        4254
+      ],
+      "best": 5,
+      "sub": "counts: Paul \u00b7 Dave",
+      "result": "lost"
+    },
+    {
+      "side": 2,
+      "label": "Sam + Mike",
+      "player_ids": [
+        4255,
+        4256
+      ],
+      "best": 4,
+      "sub": "counts: Sam",
+      "result": "won"
+    }
+  ],
+  "winner": "team2",
+  "reason": "net 5 v 4",
+  "scored": 4,
+  "hole_complete": true,
+  "lines": [
+    {
+      "key": "match",
+      "label": "MATCH",
+      "chips": [
+        {
+          "text": "Match 1 UP",
+          "state": "live",
+          "leader": 2,
+          "manual": false
+        }
+      ]
+    }
+  ],
+  "bottom": null,
+  "can_press": true,
+  "press_nine": "front",
+  "can_press_bottom": false,
+  "press_nine_bottom": null,
+  "money": [
+    {
+      "side": 2,
+      "label": "Sam + Mike",
+      "amount": 10.0
+    },
+    {
+      "side": 1,
+      "label": "Paul + Dave",
+      "amount": -10.0
+    }
+  ],
+  "money_note": "",
+  "round_over": false,
+  "next_hole": 2
+}

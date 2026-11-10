@@ -1,0 +1,161 @@
+{
+  "hole": 7,
+  "par": 3,
+  "stroke_index": 17,
+  "yards": null,
+  "nine": "holes 1\u20139",
+  "title": "Nassau Nine",
+  "press_line": "match",
+  "thru": 7,
+  "stake": 10.0,
+  "press_stake": 0.0,
+  "kind": "nassau_nine",
+  "singles": false,
+  "claremont": true,
+  "players": [
+    {
+      "player_id": 3730,
+      "name": "Paul Lipkin",
+      "short": "PL",
+      "first": "Paul",
+      "course_handicap": 0,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "side": 1,
+      "counted": true
+    },
+    {
+      "player_id": 3731,
+      "name": "Dave Kim",
+      "short": "DK",
+      "first": "Dave",
+      "course_handicap": 0,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "side": 1,
+      "counted": true
+    },
+    {
+      "player_id": 3732,
+      "name": "Sam Reid",
+      "short": "SR",
+      "first": "Sam",
+      "course_handicap": 0,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "side": 2,
+      "counted": true
+    },
+    {
+      "player_id": 3733,
+      "name": "Mike Nash",
+      "short": "MN",
+      "first": "Mike",
+      "course_handicap": 0,
+      "strokes": 0,
+      "gross": 5,
+      "net": 5,
+      "side": 2,
+      "counted": false
+    }
+  ],
+  "sides": [
+    {
+      "side": 1,
+      "label": "Paul + Dave",
+      "player_ids": [
+        3730,
+        3731
+      ],
+      "best": 4,
+      "sub": "counts: Paul \u00b7 Dave",
+      "result": "halved"
+    },
+    {
+      "side": 2,
+      "label": "Sam + Mike",
+      "player_ids": [
+        3732,
+        3733
+      ],
+      "best": 4,
+      "sub": "counts: Sam",
+      "result": "halved"
+    }
+  ],
+  "winner": "halved",
+  "reason": "net 4 v 4",
+  "scored": 4,
+  "hole_complete": true,
+  "lines": [
+    {
+      "key": "match",
+      "label": "MATCH",
+      "chips": [
+        {
+          "text": "Match AS",
+          "state": "live",
+          "leader": null,
+          "manual": false
+        }
+      ]
+    }
+  ],
+  "bottom": {
+    "balls": [
+      {
+        "side": 1,
+        "label": "Paul + Dave",
+        "low": 4,
+        "high": 4,
+        "low_won": false,
+        "high_won": true
+      },
+      {
+        "side": 2,
+        "label": "Sam + Mike",
+        "low": 4,
+        "high": 5,
+        "low_won": false,
+        "high_won": false
+      }
+    ],
+    "points": 1,
+    "lines": [
+      {
+        "key": "match",
+        "label": "MATCH",
+        "chips": [
+          {
+            "text": "Match +1",
+            "state": "live",
+            "leader": 1,
+            "manual": false
+          }
+        ]
+      }
+    ]
+  },
+  "can_press": false,
+  "press_nine": null,
+  "can_press_bottom": false,
+  "press_nine_bottom": null,
+  "money": [
+    {
+      "side": 1,
+      "label": "Paul + Dave",
+      "amount": 10.0
+    },
+    {
+      "side": 2,
+      "label": "Sam + Mike",
+      "amount": -10.0
+    }
+  ],
+  "money_note": "top $0 \u00b7 bottom +$10, for Paul + Dave",
+  "round_over": false,
+  "next_hole": 8
+}

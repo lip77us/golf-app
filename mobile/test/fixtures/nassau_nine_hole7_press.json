@@ -1,0 +1,133 @@
+{
+  "hole": 7,
+  "par": 3,
+  "stroke_index": 17,
+  "yards": null,
+  "nine": "holes 1\u20139",
+  "title": "Nassau Nine",
+  "press_line": "match",
+  "thru": 7,
+  "stake": 10.0,
+  "press_stake": 0.0,
+  "kind": "nassau_nine",
+  "singles": false,
+  "claremont": false,
+  "players": [
+    {
+      "player_id": 4261,
+      "name": "Paul Lipkin",
+      "short": "PL",
+      "first": "Paul",
+      "course_handicap": 0,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "side": 1,
+      "counted": true
+    },
+    {
+      "player_id": 4262,
+      "name": "Dave Kim",
+      "short": "DK",
+      "first": "Dave",
+      "course_handicap": 0,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "side": 1,
+      "counted": true
+    },
+    {
+      "player_id": 4263,
+      "name": "Sam Reid",
+      "short": "SR",
+      "first": "Sam",
+      "course_handicap": 0,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "side": 2,
+      "counted": true
+    },
+    {
+      "player_id": 4264,
+      "name": "Mike Nash",
+      "short": "MN",
+      "first": "Mike",
+      "course_handicap": 0,
+      "strokes": 0,
+      "gross": 5,
+      "net": 5,
+      "side": 2,
+      "counted": false
+    }
+  ],
+  "sides": [
+    {
+      "side": 1,
+      "label": "Paul + Dave",
+      "player_ids": [
+        4261,
+        4262
+      ],
+      "best": 4,
+      "sub": "counts: Paul \u00b7 Dave",
+      "result": "won"
+    },
+    {
+      "side": 2,
+      "label": "Sam + Mike",
+      "player_ids": [
+        4263,
+        4264
+      ],
+      "best": 4,
+      "sub": "counts: Sam",
+      "result": "lost"
+    }
+  ],
+  "winner": "team1",
+  "reason": "2nd ball 4 v 5",
+  "scored": 4,
+  "hole_complete": true,
+  "lines": [
+    {
+      "key": "match",
+      "label": "MATCH",
+      "chips": [
+        {
+          "text": "Match 2 UP",
+          "state": "live",
+          "leader": 1,
+          "manual": false
+        },
+        {
+          "text": "P1 starts 8",
+          "state": "pending",
+          "leader": null,
+          "manual": false
+        }
+      ]
+    }
+  ],
+  "bottom": null,
+  "can_press": false,
+  "press_nine": null,
+  "can_press_bottom": false,
+  "press_nine_bottom": null,
+  "money": [
+    {
+      "side": 1,
+      "label": "Paul + Dave",
+      "amount": 10.0
+    },
+    {
+      "side": 2,
+      "label": "Sam + Mike",
+      "amount": -10.0
+    }
+  ],
+  "money_note": "",
+  "round_over": false,
+  "next_hole": 8
+}

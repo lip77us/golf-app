@@ -104,8 +104,11 @@ class NassauHoleTray extends StatelessWidget {
                     TrayLabel(
                       card.roundOver
                           ? 'Round over'
-                          : 'Hole ${card.hole} · Nassau',
-                      trailing: card.roundOver ? null : card.nine,
+                          : 'Hole ${card.hole} · ${card.title}',
+                      // A Nassau Nine keeps its span (`holes 1–9`) on the last
+                      // hole too; a Nassau's `back nine` there says nothing.
+                      trailing: card.roundOver && card.pressLine == 'overall'
+                          ? null : card.nine,
                     ),
                     const SizedBox(height: 6),
                     _MatchCard(
@@ -285,13 +288,15 @@ class _Line extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // **The Press button sits at the end of its own block's Overall line**,
+    // **The Press button sits at the end of its own block's LAST line** —
+    // `OVERALL` on a Nassau, the one `MATCH` line on a Nassau Nine; the
+    // server names it (`pressLine`) —
     // which is the design's placement and reads as the end of that list
     // rather than as part of any one nine. On Claremont there are two
     // buttons, one a game, because the two press at different bands — and
     // which nine either joins is the engine's answer, not this widget's.
     final showPress =
-        onPress != null && line.key == 'overall' && canPress;
+        onPress != null && line.key == card.pressLine && canPress;
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       // **Top-aligned.** A nine with a press can wrap to two chip rows, and

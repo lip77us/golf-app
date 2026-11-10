@@ -1581,6 +1581,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         // (`docs/parallel-games.md`), and a side bet must not change how the
         // round's own game is entered.
         primary == GameIds.nassau ||
+        // Nassau Nine — the Nassau card and tray over one match.
+        primary == GameIds.nassauNine ||
         // Skins, per `~/Downloads/handoff-skins-score-entry`. Primary again,
         // and it matters most here: Skins is the commonest SIDE game in the
         // app, and a side game must not take over the entry of the round's
@@ -1904,7 +1906,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// moves every bet in the nine), which races the fetch the forward button
   /// started.
   void _ensureNassauCard(RoundProvider rp) {
-    if (!_activeGames(rp.round).contains(GameIds.nassau)) return;
+    final games = _activeGames(rp.round);
+    if (!games.contains(GameIds.nassau) &&
+        !games.contains(GameIds.nassauNine)) {
+      return;
+    }
     if (rp.nassauHole(_selectedHole) != null) {
       _nassauCardAsked = null;
       return;
@@ -1925,7 +1931,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// side bet must not take over the screen's entry.
   NassauHoleCard? _nassauCard(RoundProvider rp) {
     final games = _activeGames(rp.round);
-    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.nassau) {
+    // **Nassau Nine is the same card over one match**
+    // (`~/Downloads/handoff-nassau-nine-score-entry`), so it is the same
+    // gate. It had been asked for `nassau` by name and got the old inline
+    // picker with no tray at all.
+    final primary = resolvePrimary(rp.round?.primaryGame, games);
+    if (primary != GameIds.nassau && primary != GameIds.nassauNine) {
       return null;
     }
     return rp.nassauHole(_selectedHole);

@@ -12009,6 +12009,13 @@ class NassauHoleCard {
   final String nine;
   final int thru;
 
+  /// `Nassau` or `Nassau Nine` — the same card over three bets or one.
+  final String title;
+
+  /// The key of the line the Press button sits on: `overall` on a Nassau,
+  /// `match` on a Nassau Nine, which has only the one.
+  final String pressLine;
+
   /// Per bet. 0 means no stakes.
   final double stake;
   final double pressStake;
@@ -12062,6 +12069,8 @@ class NassauHoleCard {
     required this.strokeIndex,
     required this.nine,
     required this.thru,
+    this.title = 'Nassau',
+    this.pressLine = 'overall',
     required this.stake,
     required this.pressStake,
     required this.singles,
@@ -12090,6 +12099,9 @@ class NassauHoleCard {
         strokeIndex: (j['stroke_index'] as num?)?.toInt(),
         nine: j['nine'] as String? ?? '',
         thru: (j['thru'] as num?)?.toInt() ?? 0,
+        // An older server sends neither, and is always a full Nassau.
+        title: j['title'] as String? ?? 'Nassau',
+        pressLine: j['press_line'] as String? ?? 'overall',
         stake: (j['stake'] as num?)?.toDouble() ?? 0,
         pressStake: (j['press_stake'] as num?)?.toDouble() ?? 0,
         singles: j['singles'] as bool? ?? false,

@@ -11683,3 +11683,79 @@ Also worth not repeating: the first debugging pass piped the test through
 Tests: `TheBoardFollowsThemIntoTheLinkedRoundTests`
 (`api/test_pool_parked_seat.py`, 6). Every guard mutation-checked; reverting
 the borrow fails two and dropping the dedupe fails two.
+
+## Nassau Nine score entry — the Nassau card over one match
+
+`~/Downloads/handoff-nassau-nine-score-entry`, whose instruction is the whole
+build: *"Build it as the Nassau score entry over one nine."* Nassau Nine is
+the Nassau engine with `single_match` (one bet over every hole played, riding
+the engine's `front9` slot), so it is the SAME card, model and tray.
+
+**It had none of them.** The save's tray gate, the press response and three
+gates on `score_entry_screen` (`_ensureNassauCard`, `_nassauCard`,
+`_keypadRound`) all asked for `nassau` by name, so a Nassau Nine round got the
+old inline picker and no tray at all.
+
+What `nassau_hole_card` does differently when `single_match`:
+
+- **One line, `MATCH`**, where a Nassau has Front / Back / Overall — the bet
+  and every press on it. A match not yet teed off reads `Match AS`, not
+  `not started`: there is nothing else on the card to wait for.
+- **`title`** (`Nassau Nine`) and **`press_line`** (`match`; `overall` on a
+  Nassau) ship on the card, so the tray's label and the line its Press button
+  sits on are the server's. Both default to a full Nassau in `fromJson`, for
+  an older server.
+- **`nine` is the span**, `holes 1–9` — lowest to highest rather than first
+  to last played, so a shotgun does not read `holes 4–3`. This answers the
+  handoff's open question: a back-nine round reads `holes 10–18` and presses
+  stop at 17, both from the play order (`BackNineTests`).
+- The press POST returns the card for the hole BEFORE the press's start **in
+  play order**, not `start - 1`.
+
+### Three engine bugs, none of them in the packet
+
+All in `services/nassau.py`, all pre-existing, all found by playing the
+handoff's examples through the engine rather than asserting chips.
+
+- **A Nassau Nine match read as CLOSED OUT at the turn.** `calculate_nassau`
+  runs a single match over every hole (`half = n`); `nassau_summary` halved
+  the round anyway, so `_rem_in_front` hit zero at the midpoint: `1 UP` final
+  on the 5th of a nine-hole round, on the board as well as the card. The same
+  halving stopped a manual press being offered for the rest of the round.
+- **`Each · now` counted bets the game does not play.** The hole rows carry a
+  running margin for all three bets whether or not they are on, and the live
+  sum added them blind — a Nassau Nine two up in its one $10 match read
+  `+$20`, then settled at $10. The settled figures never had it (an unplayed
+  bet has no result). The live terms are gated on `play_front` / `play_back`
+  / `play_overall` now. **Worth a look at Singles Match**, which is
+  Overall-only and went through the same sum; its tests pass either way.
+- **A manual press over ONE hole never settled.** Presses are closed by the
+  advance loop, which runs on a LATER hole of the nine — so a press called on
+  the 8th for the 9th (or the 17th for the 18th) had no later hole, stayed
+  "in progress" after the round and paid nothing. True of every Nassau, top
+  and bottom game. It closes on the hole it starts.
+
+### Where the engine overrules the handoff
+
+**Phone 5 draws `Match 3 UP` final.** It cannot be: two up with one to play
+is closed out, so the chip reads `2&1` — and the 9th is still played, because
+the press is riding on it.
+
+### Not taken
+
+The hole card's `Match 1 UP` pill and the app bar's `Thru N · $10 a bet`:
+`HoleHeader` is shared by eleven screens and the standing ribbon already
+carries the match, the same call the Nassau packet got. The forward button on
+the last hole stays `Complete Round ›`, as on the Nassau tray.
+
+Tests: `scoring/tests/test_nassau_nine_hole_card.py` (19, four of them
+fixture writers under `REGEN_NASSAU_FIXTURES=1`), `NassauNineOnTheWireTests`
+in `api/test_nassau_hole_card.py` (3) and the `Nassau Nine` group in
+`mobile/test/nassau_entry_test.dart` (9). Six engine mutations checked; five
+are killed. **The sixth passes and is documented where it sits**:
+`add_manual_press`'s own half-way is kept in step with the engine, but the
+recalculation rebuilds the press from its start hole, so the suite cannot
+tell the two apart.
+
+**Not seen on a device.** The tray was rendered to images with a real font
+and compared with the handoff's screenshots.
