@@ -11759,3 +11759,59 @@ tell the two apart.
 
 **Not seen on a device.** The tray was rendered to images with a real font
 and compared with the handoff's screenshots.
+
+## The Stroke Play progress grid moved to the leaderboard
+
+Paul, 10 Nov 2026: *"I do not like the look of the stroke play progress table
+peaking out from behind the new stroke entry design on Stroke play casual
+round. Let's move the Stroke Play table to the leaderboard."* The same move
+Rabbit's grid, Survivor's rail and Sixes' card each made, for the same reason:
+a board read after the hole has room for it and a screen under a keypad and a
+tray does not.
+
+**Score entry.** The `primaryGame == 'low_net_round'` grid block is gone from
+`score_entry_screen`. **It was also half of a duplicate**: on an
+individual-play stroke tournament `scoring_game` makes Stroke Play the primary
+AND the field standing makes `tournamentCard` true, so both blocks drew the
+same `StrokePlayProgressGrid`, one under the other. One call is left and a
+source test counts it.
+
+**The `tournamentCard` block STAYS, deliberately**, so a tournament stroke
+round still draws the grid under the tray. Removing it there would take the
+group's card away with no portrait replacement (the board's card is one-group
+only, below), and a tournament STABLEFORD round has no stroke-play tray at all
+and its own grid is points. Flagged to Paul rather than decided.
+
+**The board.** `StrokePlayBoard` closes with the shared `HoleGridScorecard`
+— **with `showStrokes: false`**, see below — **only when every row shares one
+`foursome_id`** — `StrokePlayBoardData.soleFoursomeId`. The tab was rewritten
+from a stacked grid into a ranked table precisely because a stacked grid does
+not scale to a field, so the card comes back only for the shape it was always
+right for. A row with no `foursome_id` answers null rather than guessing. The
+footer's rotate hint draws only where there is no card.
+
+**The card is transposed CLIENT-side from the rows the board is ranking**
+(`cardHoles` / `cardPlayers`), and the mode selector is why: each mode's rows
+carry their own strokes, so the dots follow Gross / Net / Strokes-off for
+free, where a server-sent scorecard block would be fixed to the configured
+mode. Every golfer gets a cell on every hole in play, with an unplayed hole's
+strokes read from `stroke_plan`, so the dots look AHEAD. Rows are in board
+order; columns in play order.
+
+**No strokes table on this card** (Paul, the same day, on seeing it: *"I
+don't need the strokes table now that I have the scorecard with the strokes
+right there"*). That is the one board opting out of the 8 Nov default, and
+the reason is specific to it: this card carries the dots on unplayed holes
+too, so the table under it restated the card. The other boards keep theirs.
+
+`low_net_round` rows gained **`short_name`** (the card's label column is 78pt).
+
+Rendered to an image with a real font before trusting it (`FontLoader` +
+`matchesGoldenFile`, then delete the shot test). **Read the font with
+`readAsBytesSync`** — `File.readAsBytes()` inside `testWidgets` never
+completes under the fake-async zone, and the test hangs with no output.
+
+Tests: the `the group card` / `the rotate hint` / `score entry draws it no
+more` groups in `mobile/test/stroke_play_board_test.dart` (12) and
+`TheWireRowCarriesTheShortNameTests` (`api/test_low_net_modes.py`, 3). Ten
+client mutations and three server ones, all killed.

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/utils/stroke_play_board_model.dart';
 import 'package:golf_mobile/widgets/stroke_play_board.dart';
+import 'package:golf_mobile/widgets/strokes_table.dart';
 
 /// `~/Downloads/handoff-stroke-play-leaderboard` — one widget for every
 /// stroke play leaderboard, casual and tournament.
@@ -18,11 +19,18 @@ StrokePlayRow _row({
   int? prizeRank,
   String hcap = '8.2',
   List<Map<String, dynamic>> holes = const [],
+  // Null by DEFAULT, so every test above this change keeps a board with no
+  // group card — which is also what an older payload sends.
+  int? foursome,
+  String short = '',
+  Map<int, int> plan = const {},
 }) =>
     StrokePlayRow(
       playerId: rank * 10,
       rank: rank,
       name: name,
+      shortName: short,
+      foursomeId: foursome,
       handicapLabel: hcap,
       toPar: toPar,
       grossTotal: gross,
@@ -30,6 +38,7 @@ StrokePlayRow _row({
       holes: holes,
       payout: payout,
       prizeRank: prizeRank,
+      strokePlan: plan,
     );
 
 StrokePlayBoardData _board({
@@ -450,5 +459,220 @@ void main() {
       expect(find.text('Round 1'), findsNothing);
     });
   });
-}
 
+  // =========================================================================
+  // The group's card
+  // =========================================================================
+  //
+  // It came off score entry, where it sat half-visible behind the hole tray
+  // (Paul, 10 Nov 2026). The ranked table answers who is winning and the
+  // open card answers one golfer; neither puts the group side by side, so
+  // when it left the hole it had to land somewhere.
+  group('the group card', () {
+    List<Map<String, dynamic>> _holes(
+            {int from = 1, int to = 18, int gross = 4, int strokes = 0,
+             int? capped}) =>
+        [
+          for (var h = from; h <= to; h++)
+            {
+              'hole': h,
+              'par': 4,
+              'gross': gross,
+              'strokes': strokes,
+              'net': gross - strokes,
+              'capped': capped ?? gross - strokes,
+              'stroke_index': h,
+            },
+        ];
+
+    StrokePlayBoardData oneGroup({List<int>? order}) => StrokePlayBoardData(
+          rows: [
+            _row(rank: 1, name: 'Paul Lipkin', short: 'Paul', foursome: 7,
+                toPar: -2, holes: _holes(gross: 4, strokes: 1)),
+            _row(rank: 2, name: 'Dave Moran', short: 'Dave', foursome: 7,
+                toPar: 3, holes: _holes(gross: 5)),
+          ],
+          basisLabel: 'Net',
+          holePars: {for (var h = 1; h <= 18; h++) h: 4},
+          holeStrokeIndex: {for (var h = 1; h <= 18; h++) h: h},
+          holesInPlay: order ?? [for (var h = 1; h <= 18; h++) h],
+        );
+
+    testWidgets('draws on a one-group board', (t) async {
+      await _pump(t, oneGroup());
+      expect(find.text('Scorecard'), findsOneWidget);
+      // The label column labels a row with the SHORT name — it is 78pt wide,
+      // and the table above already carries the full one.
+      expect(find.textContaining('Paul'), findsWidgets);
+    });
+
+    testWidgets('draws NO strokes table under it', (t) async {
+      // The dots are on the card's own cells, unplayed holes included, so
+      // a table under it said the same thing twice (Paul, 10 Nov 2026).
+      // `oneGroup` gives Paul a stroke on every hole, so the table would
+      // draw if it were left on — its own gate is "does anybody stroke".
+      await _pump(t, oneGroup());
+      expect(find.text('Scorecard'), findsOneWidget);
+      expect(find.byType(StrokesTable), findsNothing);
+    });
+
+    testWidgets('a field board draws none', (t) async {
+      // Two groups: whose card would it be? Rotating the phone answers that
+      // and the footer says so.
+      final d = StrokePlayBoardData(
+        rows: [
+          _row(rank: 1, name: 'Paul', short: 'Paul', foursome: 7,
+              holes: _holes()),
+          _row(rank: 2, name: 'Sam', short: 'Sam', foursome: 8,
+              holes: _holes()),
+        ],
+        basisLabel: 'Net',
+        holesInPlay: [for (var h = 1; h <= 18; h++) h],
+      );
+      expect(d.soleFoursomeId, isNull);
+      await _pump(t, d);
+      expect(find.text('Scorecard'), findsNothing);
+    });
+
+    testWidgets('an older payload with no group id draws none', (t) async {
+      // `foursome_id` is what says whether this is a foursome or a field.
+      // Without it a card would be four strangers under the leader's name,
+      // so the answer is null rather than a guess.
+      final d = _board(rows: [
+        _row(rank: 1, name: 'Paul', short: 'Paul', holes: _holes()),
+      ]);
+      expect(d.soleFoursomeId, isNull);
+      await _pump(t, d);
+      expect(find.text('Scorecard'), findsNothing);
+    });
+
+    test('the rows read in BOARD order', () {
+      // So a golfer reads straight down from his line in the table to his
+      // line in the card.
+      expect(
+        [for (final p in oneGroup().cardPlayers) p['short_name']],
+        ['Paul', 'Dave'],
+      );
+    });
+
+    test('every golfer has a cell on every hole in play', () {
+      final holes = oneGroup().cardHoles;
+      expect(holes.length, 18);
+      for (final h in holes) {
+        expect((h['scores'] as List).length, 2, reason: 'hole ${h['hole']}');
+      }
+    });
+
+    test('an UNPLAYED hole still carries the strokes, from the plan', () {
+      // The card's stroke dots look AHEAD — a reader asking where he
+      // strokes is asking about holes with no score on them yet. Without
+      // this the dots could only ever mark the holes already in.
+      final d = StrokePlayBoardData(
+        rows: [
+          _row(rank: 1, name: 'Paul', short: 'Paul', foursome: 7,
+              holes: _holes(to: 3, strokes: 1),
+              plan: {for (var h = 1; h <= 6; h++) h: 1}),
+        ],
+        basisLabel: 'Net',
+        holesInPlay: [for (var h = 1; h <= 18; h++) h],
+      );
+      int strokesOn(int hole) {
+        final h = d.cardHoles.firstWhere((x) => x['hole'] == hole);
+        return ((h['scores'] as List).first as Map)['strokes'] as int;
+      }
+      expect(strokesOn(2), 1, reason: 'played — what the score was made with');
+      expect(strokesOn(5), 1, reason: 'not played yet — the plan');
+      expect(strokesOn(9), 0, reason: 'no stroke there either way');
+    });
+
+    test('a GROSS board carries no strokes at all', () {
+      // Which is the mode selector reaching the card for free: gross rows
+      // carry no strokes and no plan, so the dots go. A server-sent
+      // scorecard block would be fixed to the
+      // configured mode and would contradict the selector.
+      final d = StrokePlayBoardData(
+        rows: [
+          _row(rank: 1, name: 'Paul', short: 'Paul', foursome: 7,
+              holes: _holes(strokes: 0)),
+        ],
+        basisLabel: 'Gross',
+        showNet: false,
+        holesInPlay: [for (var h = 1; h <= 18; h++) h],
+      );
+      final every = [
+        for (final h in d.cardHoles)
+          for (final s in (h['scores'] as List)) (s as Map)['strokes'],
+      ];
+      expect(every.every((v) => v == 0), isTrue);
+    });
+
+    test('a capped hole is marked', () {
+      final d = StrokePlayBoardData(
+        rows: [
+          _row(rank: 1, name: 'Paul', short: 'Paul', foursome: 7, holes: [
+            {'hole': 1, 'par': 4, 'gross': 9, 'strokes': 1,
+             'net': 8, 'capped': 6},
+            {'hole': 2, 'par': 4, 'gross': 4, 'strokes': 0,
+             'net': 4, 'capped': 4},
+          ]),
+        ],
+        basisLabel: 'Net',
+        holesInPlay: [1, 2],
+      );
+      bool cappedOn(int hole) {
+        final h = d.cardHoles.firstWhere((x) => x['hole'] == hole);
+        return ((h['scores'] as List).first as Map)['capped'] as bool;
+      }
+      expect(cappedOn(1), isTrue);
+      expect(cappedOn(2), isFalse);
+    });
+
+    test('the columns follow PLAY order, not the hole numbers', () {
+      // A shotgun off the 7th: the 1st is this round's thirteenth hole, and
+      // a card that re-sorted would put the 1st first.
+      final order = [for (var h = 7; h <= 18; h++) h, 1, 2, 3, 4, 5, 6];
+      final d = oneGroup(order: order);
+      expect([for (final h in d.cardHoles) h['hole']], order);
+    });
+  });
+
+  group('the rotate hint', () {
+    // It only earns its line where rotating shows something the tab does
+    // not. On a one-group board the card is drawn below, and landscape is
+    // the same card larger.
+    test('the leaderboard gates it on the group card', () {
+      final src =
+          File('lib/screens/leaderboard_screen.dart').readAsStringSync();
+      final at = src.indexOf("Rotate your phone to see the whole field");
+      expect(at, greaterThan(0));
+      final before = src.substring(0, at);
+      expect(before.lastIndexOf('boardData.soleFoursomeId == null'),
+          greaterThan(before.lastIndexOf('footer: Column')),
+          reason: 'the hint sits inside the no-group-card branch');
+    });
+  });
+
+  group('score entry draws it no more', () {
+    test('exactly one grid call is left, and it is the tournament card', () {
+      // TWO drew before: the Stroke Play primary and `tournamentCard`, and
+      // on an individual-play stroke tournament BOTH conditions are true —
+      // `scoring_game` makes Stroke Play the primary and the field standing
+      // makes `tournamentCard` true — so the same table drew twice, one
+      // under the other.
+      //
+      // The one that stays is the tournament's: a tournament STABLEFORD
+      // round has no stroke-play tray to hide behind and its own grid is
+      // points, so the gross card under the hole is the only one it has.
+      final src = File('lib/screens/score_entry_screen.dart')
+          .readAsStringSync();
+      final calls = 'StrokePlayProgressGrid('.allMatches(src).length;
+      expect(calls, 1, reason: 'one grid, drawn for the tournament card');
+      final at = src.indexOf('StrokePlayProgressGrid(');
+      // The nearest `if` above it is the tournament gate, not a primary one.
+      final before = src.substring(0, at);
+      expect(before.lastIndexOf('if (tournamentCard)'),
+          greaterThan(before.lastIndexOf("primaryGame == 'low_net_round'")),
+          reason: 'the surviving grid belongs to the tournament card');
+    });
+  });
+}

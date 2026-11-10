@@ -258,3 +258,46 @@ class ANoScoreGolferIsNotTiedWithTheLeaderTests(TestCase):
         idle = [r for r in self._standings() if r['holes_played'] == 0]
         self.assertEqual(len({r['rank'] for r in idle}), 1,
                          'they are all on nothing, so they share a place')
+
+
+class TheWireRowCarriesTheShortNameTests(_LowNetBase):
+    """The board's group card labels a row with `short_name`.
+
+    Its label column is 78pt wide, so `Wendell Doman` does not fit — and
+    every other card in the app labels a golfer the same way. The SERVER
+    sends it because the server owns names everywhere else here; a client
+    abbreviating one would be a second naming rule.
+    """
+
+    def test_the_row_carries_it(self):
+        # Forced APART from the full name, which is the only state that can
+        # tell them apart: a fixture where the two coincide would pass
+        # against a row echoing `name`.
+        p = next(m.player for m in self.fs.memberships.all()
+                 if m.player.name == 'Bea')
+        p.short_name = 'B-Dog'
+        p.save(update_fields=['short_name'])
+
+        row = self._by_name(low_net_round_summary(self.round)['results'])['Bea']
+        self.assertEqual(row['short_name'], 'B-Dog')
+        self.assertEqual(row['name'], 'Bea')
+
+    def test_every_mode_carries_it(self):
+        # The card is built from whichever mode the selector is showing, so
+        # a mode missing the key would draw a card with no names in it.
+        for mode in low_net_round_summary(self.round)['modes'].values():
+            for row in mode['results']:
+                self.assertIn('short_name', row)
+                self.assertTrue(row['short_name'])
+
+    def test_a_golfer_who_has_not_teed_off_still_has_one(self):
+        # The seeded row and the scored row are two different dicts in
+        # `_build_ln_player_totals`; only the seeded one answers for a
+        # golfer with no scores, and the card draws him from the first tee.
+        fs2 = make_foursome(self.round, [('Cal', 9)], tee=self.tee,
+                            group_number=2)
+        self.assertTrue(fs2.memberships.exists())
+        row = self._by_name(
+            low_net_round_summary(self.round)['results'])['Cal']
+        self.assertEqual(row['holes_played'], 0)
+        self.assertTrue(row['short_name'])

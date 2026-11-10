@@ -4,6 +4,7 @@ import '../theme/halved_brand.dart';
 import '../utils/nine_totals.dart';
 import '../utils/stroke_play_board_model.dart';
 import 'forty_balls_keypad.dart' show ScoreNotation;
+import 'hole_grid_scorecard.dart';
 
 /// The Stroke Play board — ONE widget for every stroke play leaderboard.
 ///
@@ -84,6 +85,46 @@ class _StrokePlayBoardState extends State<StrokePlayBoard> {
         if (d.hasPot && d.paidRows.isNotEmpty) ...[
           const SizedBox(height: 12),
           _Ledger(data: d),
+        ],
+        // **The group's card** — the shared [HoleGridScorecard], gross hole
+        // by hole with the stroke dots.
+        //
+        // It came off score entry, where it sat half-visible behind the hole
+        // tray (Paul, 10 Nov 2026: *"I do not like the look of the stroke
+        // play progress table peaking out from behind the new stroke entry
+        // design"*). The ranked table above answers who is winning and the
+        // open card answers one golfer in detail; neither puts the group
+        // side by side, which is what a scorecard is for — so when it left
+        // the hole it had to land somewhere, and this is the same move
+        // Rabbit's grid made.
+        //
+        // One group only; see [StrokePlayBoardData.soleFoursomeId].
+        if (d.soleFoursomeId != null && d.cardPlayers.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: Halved.card,
+              border: Border.all(color: Halved.cardBorder, width: 1.5),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+            child: HoleGridScorecard(
+              holes: d.cardHoles,
+              participants: d.cardPlayers,
+              holesInPlay: d.cardHolesInPlay,
+              // No legend: stroke play has no hole winner, so there is no
+              // green cell to explain. The cap mark explains itself in the
+              // open card's own key above.
+              legend: null,
+              // **No strokes table.** The dots are on the card's own cells,
+              // on unplayed holes too (every golfer has a cell on every
+              // hole, carrying his `stroke_plan`), so a second table under
+              // it said the same thing twice (Paul, 10 Nov 2026: *"I don't
+              // need the strokes table now that I have the scorecard with
+              // the strokes right there"*).
+              showStrokes: false,
+            ),
+          ),
         ],
         if (widget.footer != null) ...[
           const SizedBox(height: 12),

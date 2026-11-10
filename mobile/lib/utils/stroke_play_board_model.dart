@@ -174,6 +174,107 @@ class StrokePlayBoardData {
           if ((r.payout ?? 0) > 0) r.rank,
       };
 
+  /// The one group every row belongs to, or null when this board holds a
+  /// FIELD.
+  ///
+  /// It decides whether the group card at the bottom draws. The board's own
+  /// history is the argument: the Stroke Play tab used to BE a stacked grid
+  /// and was rewritten into a ranked table precisely because a stacked grid
+  /// does not scale to a field — so the card comes back only for the shape
+  /// it was always right for, one foursome. On a multi-group board whose
+  /// card to draw has no good answer in portrait, and rotating the phone
+  /// already answers it.
+  ///
+  /// A row with no `foursome_id` (an older payload) makes the answer null
+  /// rather than guessing: a card drawn over a field would be four strangers
+  /// under the leader's name.
+  int? get soleFoursomeId {
+    int? only;
+    for (final r in rows) {
+      final f = r.foursomeId;
+      if (f == null) return null;
+      if (only == null) {
+        only = f;
+      } else if (only != f) {
+        return null;
+      }
+    }
+    return only;
+  }
+
+  /// The hole columns the card draws, in play order.
+  List<int> get cardHolesInPlay => holesInPlay.isNotEmpty
+      ? holesInPlay
+      : List.generate(18, (i) => i + 1);
+
+  /// The card's rows, in BOARD order — so a golfer can read straight down
+  /// from his line in the table above to his line in the card.
+  List<Map<String, dynamic>> get cardPlayers => [
+        for (final r in rows)
+          if (r.playerId != null)
+            {
+              'player_id': r.playerId,
+              'short_name': r.shortName,
+              'name': r.name,
+            },
+      ];
+
+  /// The card's per-hole payload, transposed out of the rows.
+  ///
+  /// **Built here rather than sent by the server, and the mode selector is
+  /// why.** Each mode's rows carry their own strokes — none in Gross — so a
+  /// card built from the rows the board is CURRENTLY ranking follows the
+  /// selector for free and cannot disagree with the table above it. A
+  /// server-sent scorecard block would be fixed to the configured mode and
+  /// would contradict the selector the moment it moved.
+  ///
+  /// Every golfer gets an entry on every hole in play, scored or not, so the
+  /// card's stroke dots look AHEAD: a reader asking where he strokes is
+  /// asking about holes with no score on them yet, and the prospective
+  /// figure is `stroke_plan`, which the server sends for exactly this. A
+  /// played hole reports what its score was actually made with. (That is
+  /// also why this board draws no separate strokes table — the dots on the
+  /// card already cover the whole round.)
+  List<Map<String, dynamic>> get cardHoles {
+    final byHole = <int, Map<int, Map<String, dynamic>>>{};
+    for (final r in rows) {
+      final pid = r.playerId;
+      if (pid == null) continue;
+      for (final h in r.holes) {
+        final n = (h['hole'] as num?)?.toInt();
+        if (n == null) continue;
+        byHole.putIfAbsent(n, () => {})[pid] = h;
+      }
+    }
+
+    return [
+      for (final h in cardHolesInPlay)
+        {
+          'hole': h,
+          // One par and one index for the whole row, which is all a single
+          // Par band can carry: the server's representative figures, which
+          // it computes for this. A golfer's own tee can differ on a mixed
+          // card and his own `holes` entry keeps that — the band cannot.
+          'par': holePars[h] ?? (byHole[h]?.values.first['par'] as int?),
+          'stroke_index': holeStrokeIndex[h],
+          'scores': [
+            for (final r in rows)
+              if (r.playerId != null)
+                {
+                  'player_id': r.playerId,
+                  'gross': byHole[h]?[r.playerId]?['gross'],
+                  'strokes': (byHole[h]?[r.playerId]?['strokes'] as num?)
+                          ?.toInt() ??
+                      r.strokePlan[h] ??
+                      0,
+                  'capped': byHole[h]?[r.playerId] != null &&
+                      strokeHoleCapped(byHole[h]![r.playerId]!),
+                },
+          ],
+        },
+    ];
+  }
+
   /// Tinted rows: the paid places, or the leader when nothing is paid.
   ///
   /// Both of Design's boards agree on this — the one with a pot tints its
@@ -188,6 +289,8 @@ class StrokePlayRow {
     required this.rank,
     required this.name,
     required this.handicapLabel,
+    this.shortName = '',
+    this.foursomeId,
     required this.toPar,
     required this.grossTotal,
     required this.thru,
@@ -204,6 +307,19 @@ class StrokePlayRow {
   final int? playerId;
   final int rank;
   final String name;
+
+  /// What the group card labels this row with — its label column is 78pt
+  /// wide, so `Wendell Doman` does not fit. The SERVER's `short_name`,
+  /// which auto-fills to initials, because the server owns names
+  /// everywhere else in the app and a client abbreviating one would be a
+  /// second naming rule.
+  final String shortName;
+
+  /// Which group this golfer played in — the one fact that says whether
+  /// this board holds a foursome or a field. See
+  /// [StrokePlayBoardData.soleFoursomeId].
+  final int? foursomeId;
+
   /// The index where we have one, the playing handicap where we do not.
   final String handicapLabel;
 

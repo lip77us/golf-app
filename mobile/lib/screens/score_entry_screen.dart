@@ -7414,20 +7414,26 @@ class _GameStatusSection extends StatelessWidget {
           const SizedBox(height: 12),
         ],
 
-        // Stroke Play — per-player net scores grid (no winner row).
-        // Only when it's the primary (a side game shows on the leaderboard).
-        if (primaryGame == 'low_net_round') ...[
-          StrokePlayProgressGrid(
-            players:      players,
-            scorecard:    scorecard,
-            currentHole:  currentHole,
-            onTapHole:    onTapHole,
-            handicapMode: strokePlayHandicapMode,
-            netPercent:   strokePlayNetPercent,
-            holesInPlay:  holesInPlay,
-          ),
-          const SizedBox(height: 12),
-        ],
+        // **Stroke Play draws no grid here — it is the leaderboard's.**
+        //
+        // When Stroke Play is the primary this card already carries the hole
+        // tray, and the grid sat half-visible behind it (Paul, 10 Nov 2026:
+        // *"I do not like the look of the stroke play progress table peaking
+        // out from behind the new stroke entry design"*). The group's card
+        // moved to the bottom of `StrokePlayBoard`, which is the move
+        // Rabbit's grid, Survivor's rail and Sixes' card each made for the
+        // same reason: a board read after the hole has room for it and a
+        // screen under a keypad does not.
+        //
+        // It also removed a DUPLICATE. On an individual-play stroke
+        // tournament `scoring_game` makes Stroke Play the primary AND the
+        // field standing makes `tournamentCard` true, so both blocks drew
+        // the same table one under the other.
+        //
+        // The `tournamentCard` block above stays, because a tournament
+        // STABLEFORD round has no stroke-play tray to hide behind and its
+        // own grid is points: the gross card under the hole is the only one
+        // it has.
 
         // Stableford — per-player per-hole points grid + running total.
         // Only when it's the primary (a side game shows on the leaderboard).

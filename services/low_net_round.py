@@ -159,6 +159,10 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
                 player__is_phantom=False)
         .exclude(gross_score=None)
         .values('foursome_id', 'player_id', 'player__name',
+                # The SHORT name as well: the board's group card has a 78pt
+                # label column, and every other card in the app labels a
+                # golfer with `short_name` (which auto-fills to initials).
+                'player__short_name',
                 'hole_number', 'gross_score', 'net_score')
     )
 
@@ -197,6 +201,7 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
                         plan[hole] = s
             totals[m.player_id] = {
                 'name'         : m.player.name,
+                'short_name'   : m.player.short_name,
                 'total'        : 0,
                 'holes_played' : 0,
                 'par_played'   : 0,
@@ -258,6 +263,7 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
 
         entry = totals.setdefault(pid, {
             'name'        : hs['player__name'],
+            'short_name'  : hs['player__short_name'],
             'total'       : 0,
             'holes_played': 0,
             'par_played'  : 0,
@@ -375,6 +381,7 @@ def _rank_standings(player_totals, payouts_cfg, excluded_ids) -> list:
             'prize_rank'  : prize_rank_map.get(pid),
             'player_id'   : pid,
             'player_name' : data['name'],
+            'short_name'  : data.get('short_name', ''),
             'net_total'   : data['total'],
             'net_to_par'  : ntp,
             'holes_played': hp,
@@ -404,6 +411,9 @@ def _serialize_results(standings) -> list:
             'rank'        : s['rank'],
             'player_id'   : s['player_id'],
             'name'        : s['player_name'],
+            # What the board's group card labels a row with — see
+            # `HoleGridScorecard`, whose label column is 78pt wide.
+            'short_name'  : s.get('short_name', ''),
             'total_net'   : s['net_total'],
             'net_to_par'  : s['net_to_par'],
             'holes_played': s['holes_played'],

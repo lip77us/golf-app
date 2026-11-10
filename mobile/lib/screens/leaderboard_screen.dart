@@ -1715,9 +1715,7 @@ class _LowNetViewState extends State<_LowNetView> {
     // with the whole field in a local array; we have an engine that already
     // decides all of it, and a client that recomputes money is a second
     // opinion about money.
-    return StrokePlayBoard(
-      selector: available.length > 1 ? selector : null,
-      data: StrokePlayBoardData(
+    final boardData = StrokePlayBoardData(
         rows: [
           for (final r in results)
             _strokeRow(r as Map<String, dynamic>, showNet: showNet),
@@ -1735,24 +1733,33 @@ class _LowNetViewState extends State<_LowNetView> {
             if (h is int) h,
         ],
         showNet: showNet,
-      ),
+    );
+
+    return StrokePlayBoard(
+      selector: available.length > 1 ? selector : null,
+      data: boardData,
       footer: Column(children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.screen_rotation_outlined,
-                size: 14, color: theme.colorScheme.onSurfaceVariant),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                "Rotate your phone to see the whole field's scorecard.",
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        // The rotate hint only where rotating shows something this tab does
+        // not: on a one-group board the group's card is now drawn below,
+        // and landscape is the same card larger.
+        if (boardData.soleFoursomeId == null) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.screen_rotation_outlined,
+                  size: 14, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  "Rotate your phone to see the whole field's scorecard.",
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
+            ],
+          ),
+          const SizedBox(height: 4),
+        ],
         Text(
           'Tap a player for their hole-by-hole scores. One at a time.',
           textAlign: TextAlign.center,
@@ -1810,6 +1817,13 @@ class _LowNetViewState extends State<_LowNetView> {
       playerId: r['player_id'] as int?,
       rank: r['rank'] as int? ?? 0,
       name: r['name']?.toString() ?? '—',
+      // The group card's label column is 78pt wide, so it labels a row with
+      // the server's `short_name` rather than the full name the table above
+      // it draws.
+      shortName: r['short_name']?.toString() ?? '',
+      // Which group this golfer played in — what says whether this board
+      // holds a foursome or a field, and so whether the group card draws.
+      foursomeId: (r['foursome_id'] as num?)?.toInt(),
       // Both, because they answer different questions — see
       // `utils/handicap_label.dart`, which every board composes through.
       // `course_handicap` is the true CH; `handicap` is the playing
