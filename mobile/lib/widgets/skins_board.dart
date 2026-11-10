@@ -445,20 +445,18 @@ class _LedgerRow extends StatelessWidget {
                         maxLines: 1, overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             fontSize: 15, fontWeight: FontWeight.w600)),
-                    // **One under-line, not two.** The handicap and the
-                    // thru answer different questions but neither is worth
-                    // its own row in a four-name card, so they share one —
-                    // `16.2 · CH 16 · thru 9`.
-                    if (golfer.handicapLabel.isNotEmpty || golfer.thru != null)
+                    // **No index and no CH here** (Paul, 10 Nov 2026:
+                    // "remove the index and CH from the player skin and
+                    // dollar count"). This row is skins and money; what a
+                    // golfer GETS is on the scorecard below, beside his
+                    // name (`Gil gets 10`), which is the figure a skin is
+                    // actually won with. The under-line is the pool's
+                    // `thru` alone, and absent in a single foursome.
+                    if (golfer.thru != null)
                       Text(
-                          [
-                            if (golfer.handicapLabel.isNotEmpty)
-                              golfer.handicapLabel,
-                            if (golfer.thru != null)
-                              golfer.thru == 0
-                                  ? 'not started'
-                                  : 'thru ${golfer.thru}',
-                          ].join(' · '),
+                          golfer.thru == 0
+                              ? 'not started'
+                              : 'thru ${golfer.thru}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(

@@ -5,6 +5,7 @@ import '../theme/halved_brand.dart';
 import 'side_colour.dart';
 import 'tray_edit_header.dart';
 import 'tray_label.dart';
+import 'tray_result_row.dart';
 
 // Fourball score entry — `~/Downloads/handoff-fourball-score-entry`, and
 // **Singles Match**, which its own handoff asks for as "the Fourball score
@@ -22,28 +23,17 @@ import 'tray_label.dart';
 const Color _secondary = Color(0xFFB9CCC3);
 const Color _trayMuted = Color(0xFF7F968C);
 
-/// `PAUL + LARRY`, and for Fourball `BEST` with the side's best net.
+/// `PAUL + LARRY` — a name for the side, over its golfers.
 ///
-/// **Hidden after a close-out**, which the caller decides: past that hole
-/// there is no team score for a ball to be the best of, and a tag that kept
-/// filling in would be reporting a match that is over.
+/// It carried `BEST` and the side's best net as the scores landed. Nassau
+/// and Nassau Nine dropped the tag first and Fourball an hour later (Paul,
+/// 10 Nov 2026: *"remove the best number"*), so there is no caller left that
+/// wants it: the tray reports both best balls the moment the hole is
+/// complete, and each golfer's own row marks the ball that counted. Las
+/// Vegas' header lost its number for the same reason.
 class FourballSideHeader extends StatelessWidget {
   final FourballHoleSide side;
-
-  /// Draw `BEST` and the side's best net beside the names.
-  ///
-  /// Fourball's whole game is that one ball, so it is on there. **Nassau
-  /// and Nassau Nine pass false** (Paul, 10 Nov 2026: *"remove the Best –
-  /// from the top of the team names"*): there the header is a name for the
-  /// side, and the tray reports the hole — with the 2nd ball or Claremont's
-  /// bottom game in play, the best ball alone is not even the whole of it.
-  final bool showBest;
-
-  const FourballSideHeader({
-    super.key,
-    required this.side,
-    this.showBest = true,
-  });
+  const FourballSideHeader({super.key, required this.side});
 
   @override
   Widget build(BuildContext context) {
@@ -64,25 +54,6 @@ class FourballSideHeader extends StatelessWidget {
                   fontSize: 11.5, fontWeight: FontWeight.w800,
                   letterSpacing: 0.5, color: colour)),
         ),
-        if (showBest) ...[
-          const SizedBox(width: 8),
-          const Text('BEST',
-              style: TextStyle(
-                  fontSize: 10, fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5, color: Halved.muted)),
-          const SizedBox(width: 5),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-            decoration: BoxDecoration(
-              color: colour,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(side.best?.toString() ?? '–',
-                style: const TextStyle(
-                    color: Colors.white, fontSize: 12.5,
-                    fontWeight: FontWeight.w800)),
-          ),
-        ],
       ]),
     );
   }
@@ -172,82 +143,77 @@ class FourballHoleTray extends StatelessWidget {
   }
 }
 
-/// `HOLE 5 · BEST BALL` — one row a side, with whose ball counted.
+/// `HOLE 5 · BEST BALL` — the hole's result, and whose ball counted.
+///
+/// **The same row the Nassau and Sixes trays draw** ([TrayResultRow]):
+/// the names, then `net 4 v 5` with each figure in its side's colour, then
+/// the badge (Paul, 10 Nov 2026). It was a row a side — swatch, names, a
+/// `won` / `lost` word and a 28pt net — which said one hole's result in two
+/// rows and four sizes of type.
+///
+/// What the row has no slot for is each side's `sub`: whose ball counted in
+/// a Fourball, or the golfer's course handicap and strokes in a Singles
+/// Match. That stays, as one muted line a side underneath, in the side's
+/// own colour — it is the only place on the tray either fact appears.
 class _BestBall extends StatelessWidget {
   final FourballHoleCard card;
   const _BestBall({required this.card});
 
   @override
   Widget build(BuildContext context) {
+    final s1 = card.sides.isNotEmpty ? card.sides[0] : null;
+    final s2 = card.sides.length > 1 ? card.sides[1] : null;
+    final decided = s1?.result != null;
+    final winner = s1?.result == 'won'
+        ? 1
+        : (s2?.result == 'won' ? 2 : null);
+    final subs = [
+      for (final s in card.sides)
+        if (s.sub.isNotEmpty) s,
+    ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       TrayLabel('Hole ${card.hole} · ${card.kind}',
           trailing: card.staked ? _stake(card.stake) : 'no stakes'),
       const SizedBox(height: 6),
       Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Column(children: [for (final s in card.sides) _row(s)]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TrayResultRow(
+              name1: s1?.label ?? '',
+              name2: s2?.label ?? '',
+              colour1: sideColour(1, onDark: true),
+              colour2: sideColour(2, onDark: true),
+              decided: decided,
+              winner: winner,
+              // A side with no score yet has no figure; the row then draws
+              // the badge alone rather than half a comparison.
+              reasonLabel:
+                  (s1?.best == null || s2?.best == null) ? null : 'net',
+              figure1: s1?.best,
+              figure2: s2?.best,
+            ),
+            for (final s in subs)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(s.sub,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: sideColour(s.side, onDark: true)
+                            .withValues(alpha: 0.85),
+                        fontSize: 11.5, fontWeight: FontWeight.w600)),
+              ),
+          ],
+        ),
       ),
     ]);
-  }
-
-  Widget _row(FourballHoleSide s) {
-    final colour = sideColour(s.side, onDark: true);
-    return Opacity(
-      opacity: s.result == 'lost' ? 0.62 : 1.0,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
-        child: Row(children: [
-          Container(
-            width: 10, height: 10,
-            decoration: BoxDecoration(
-                color: colour, borderRadius: BorderRadius.circular(3)),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(s.label,
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 14,
-                        fontWeight: FontWeight.w700)),
-                if (s.sub.isNotEmpty)
-                  Text(s.sub,
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          color: _secondary, fontSize: 11.5,
-                          fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          if (s.result != null)
-            Text(s.result!,
-                style: TextStyle(
-                    color: s.result == 'won' ? colour : _trayMuted,
-                    fontSize: s.result == 'won' ? 15 : 13,
-                    fontWeight: FontWeight.w700)),
-          const SizedBox(width: 10),
-          if (s.best != null)
-            Text.rich(TextSpan(children: [
-              const TextSpan(text: 'net '),
-              TextSpan(text: '${s.best}',
-                  style: TextStyle(color: colour, fontSize: 28, height: 1.0,
-                      fontWeight: FontWeight.w700)),
-            ]), style: const TextStyle(color: _secondary, fontSize: 12,
-                    fontWeight: FontWeight.w600))
-          else
-            const Text('–',
-                style: TextStyle(color: _trayMuted, fontSize: 28,
-                    height: 1.0, fontWeight: FontWeight.w700)),
-        ]),
-      ),
-    );
   }
 }
 

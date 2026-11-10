@@ -89,6 +89,20 @@ class HoleGridScorecard extends StatefulWidget {
   /// Rows under the golfers, inside the same grid — see [HoleGridFooterRow].
   final List<HoleGridFooterRow> footerRows;
 
+  /// Rows ABOVE the golfers, under the course's own (Par, Index).
+  ///
+  /// Wolf's is the one: who held the Wolf on each hole. It sits above the
+  /// scores because reading a hole means knowing whose tee shot the bet was
+  /// built on — the one thing the gross card cannot say for itself. Same
+  /// class as the footer rows, for the same reason: the grid owns the box.
+  final List<HoleGridFooterRow> headerRows;
+
+  /// A key for the tints, drawn where [legend] goes: a swatch and a word
+  /// each. A card whose cells wear TWO colours has to name both — with one
+  /// keyed, the other reads as a second unexplained state rather than as
+  /// the other side. Empty everywhere but Wolf.
+  final List<({Color fill, Color line, String label})> legendSwatches;
+
   /// Tint for the Par row and for the golfers' rows.
   ///
   /// Solo is the only card where par is an OPPONENT rather than a reference,
@@ -131,6 +145,8 @@ class HoleGridScorecard extends StatefulWidget {
     this.legend = 'green = skin winner',
     this.holesInPlay = const [],
     this.footerRows = const [],
+    this.headerRows = const [],
+    this.legendSwatches = const [],
     this.parColor,
     this.playerColor,
   });
@@ -140,7 +156,10 @@ class HoleGridScorecard extends StatefulWidget {
 }
 
 class _HoleGridScorecardState extends State<HoleGridScorecard> {
-  static const double _labelColW = 78.0;
+  // Wide enough for `Larry gets 10` on one line — a five-letter short
+  // name and a two-digit allowance — where 78 was sized for the name
+  // alone and ellipsised the figure it had just been given.
+  static const double _labelColW = 92.0;
   static const double _cellW     = 32.0;
   static const double _rowH      = 26.0;
   static const double _summaryW  = 34.0;
@@ -291,6 +310,43 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
         if (p['player_id'] is int && p['team'] is int)
           p['player_id'] as int: p['team'] as int,
     };
+    /// How many strokes a golfer GETS in this game — the figure beside his
+    /// name (Paul, 10 Nov 2026: *"add the gets 1, gets 10, or leave it blank
+    /// if they are low golfer and they get 0"*). It replaced a bare `(10)`,
+    /// which did not say what the number was, and the strokes table's total
+    /// column, which came off the boards the same day.
+    ///
+    /// **The server's `phcp_in_play` where the game states one** — eight
+    /// games do, and it is that game's own answer after its allowance.
+    /// **Otherwise the card's own dots, added up** over the holes in play:
+    /// the same strokes the cells draw, so `gets 10` and ten dots cannot
+    /// disagree. That covers Fourball, Las Vegas, Sixes and the Stroke Play
+    /// card, whose payloads carry the strokes per hole and no total.
+    int getsOf(Map<String, dynamic> p) {
+      final stated = p['phcp_in_play'];
+      if (stated is num) return stated.toInt();
+      //
+      // **Only when the card covers the WHOLE round for him.** Some cards
+      // carry a golfer's strokes on the holes he has played and nothing for
+      // the holes ahead; adding those up gives `gets 3` on the 5th and
+      // `gets 7` on the 12th, which is a figure that is wrong all day and
+      // right at the end. A hole in play with no entry for him means the
+      // card does not know the rest, and then it says nothing.
+      final pid = p['player_id'];
+      var n = 0;
+      for (final h in visibleHoles) {
+        var seen = false;
+        for (final sc in (holeMap[h]?['scores'] as List? ?? const [])) {
+          if (sc is Map && sc['player_id'] == pid) {
+            seen = true;
+            n += (sc['strokes'] as num?)?.toInt() ?? 0;
+          }
+        }
+        if (!seen) return 0;
+      }
+      return n;
+    }
+
     Widget siCell(int h) {
       final si = holeMap[h]?['stroke_index'] as int?;
       return SizedBox(
@@ -351,7 +407,14 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
       // rotates the pairing every third hole, so which side a golfer is on is
       // a fact about the hole, not about him. Every other game omits it.
       final myTeam     = (mine['team'] as int?) ?? teamOf[playerId];
-      final teamWin    = winnerTeam != null && myTeam != null && myTeam == winnerTeam;
+      // **`won` narrows the tint to the BALL that won the hole.** Fourball
+      // sends it: the side's best ball is one golfer's (or two who tied for
+      // it), and tinting his partner's 6 beside the 5 that won it said the
+      // 6 had done something. A payload that omits the flag tints the whole
+      // side, as it always did.
+      final ballWon    = mine['won'] as bool? ?? true;
+      final teamWin    = winnerTeam != null && myTeam != null &&
+          myTeam == winnerTeam && ballWon;
 
       Color? cellBg;
       Color? cellFg;
@@ -526,7 +589,31 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
             // Zombie, and an unbounded Text has no width to wrap into — it
             // just ran off the right edge on a 13 mini. Bounding it lets it
             // wrap to a second line instead.
-            if (widget.legend != null)
+            if (widget.legendSwatches.isNotEmpty)
+              Expanded(
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 10, runSpacing: 2,
+                  children: [
+                    for (final k in widget.legendSwatches)
+                      Row(mainAxisSize: MainAxisSize.min, children: [
+                        Container(
+                          width: 10, height: 10,
+                          decoration: BoxDecoration(
+                            color: k.fill,
+                            border: Border.all(color: k.line),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(k.label,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant)),
+                      ]),
+                  ],
+                ),
+              )
+            else if (widget.legend != null)
               Expanded(
                 child: Text(widget.legend!,
                     textAlign: TextAlign.right,
@@ -611,6 +698,22 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
               withTotals(siCell),
             );
           }
+          // Rows about the HOLE that are not the course's — Wolf's `Wolf`.
+          // Above the rule, so they read with the header and not as a golfer.
+          for (final r in widget.headerRows) {
+            labelCol.add(textLabel(r.label,
+                theme.textTheme.bodySmall
+                    ?.copyWith(fontStyle: FontStyle.italic)));
+            cellCol.add(Row(children: withTotals(
+              (h) => SizedBox(
+                width: _cellW, height: _rowH,
+                child: Center(child: _footerCell(theme, r, h)),
+              ),
+              summary: r.summary == null
+                  ? null
+                  : (holes) => summaryCell(r.summary!(holes) ?? ''),
+            )));
+          }
           rule();
 
           // One row per participant — name plus "(N)" net strokes in play so
@@ -633,9 +736,11 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
                         (p['short_name'] as String?)?.isNotEmpty == true
                             ? p['short_name'] as String
                             : (p['name'] as String? ?? '')),
-                      if (p['phcp_in_play'] != null)
+                      // `gets 10` — and nothing for a golfer who gets
+                      // none, which is the low man in a strokes-off game.
+                      if (getsOf(p) > 0)
                         TextSpan(
-                          text: ' (${p['phcp_in_play']})',
+                          text: ' gets ${getsOf(p)}',
                           style: theme.textTheme.labelSmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                               fontWeight: FontWeight.w400),

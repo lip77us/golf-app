@@ -118,8 +118,9 @@ void main() {
     testWidgets('names each golfer in his side\'s colour', (t) async {
       await _pump(t, _nassau(holes: _holes));
       Color? nameColour(String name) {
+        // `startsWith`: a golfer who strokes reads `Paul gets 2`.
         final rich = t.widgetList<RichText>(find.byType(RichText)).firstWhere(
-            (r) => r.text.toPlainText() == name);
+            (r) => r.text.toPlainText().startsWith(name));
         return (rich.text as TextSpan).style?.color;
       }
       expect(nameColour('Paul'), _blue);

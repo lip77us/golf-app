@@ -39,8 +39,6 @@ import '../widgets/round_chat_button.dart';
 import '../widgets/standing_ribbon.dart';
 import '../widgets/spots_capture.dart';
 import '../widgets/stroke_dots.dart';
-import '../utils/nine_totals.dart';
-import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
 import '../widgets/forty_balls_keypad.dart';
 import '../widgets/wolf_entry.dart';
@@ -49,21 +47,6 @@ import '../widgets/reveal_on_mount.dart';
 /// Team accent color for a player's role on a hole. Per the color standard the
 /// Wolf side (Wolf + partner) is team 1 (blue); the opponents are team 2
 /// (orange). Null = no team yet.
-/// Was a golfer in [role] on the side that WON a hole whose outcome is [side]?
-///
-/// **Wolf marks a side, not a score** — which is why the server sends
-/// `winner_id: None` for this game and the shared leaderboard card draws no
-/// green. Pointing at one cell would name a man who may have been carried.
-///
-/// A TIE marks nobody: both sides drew it, so tinting both would say two sides
-/// won and tinting neither is the truth. So does an undecided hole.
-bool wolfWonTheHole(String? side, String? role) {
-  if (side != 'wolf' && side != 'opponents') return false;
-  if (role == null) return false;
-  final onWolfSide = role == 'wolf' || role == 'partner';
-  return (side == 'wolf') == onWolfSide;
-}
-
 Color? _wolfTeamColor(String? role) {
   switch (role) {
     case 'wolf':
@@ -77,22 +60,6 @@ Color? _wolfTeamColor(String? role) {
 
 /// A legend swatch for the by-hole card — the same fill and edge a winning
 /// cell wears, so the key is the mark rather than a description of it.
-Widget _winSwatch(ThemeData theme, Color c, String label) =>
-    Row(mainAxisSize: MainAxisSize.min, children: [
-      Container(
-        width: 10, height: 10,
-        decoration: BoxDecoration(
-          color: c.withValues(alpha: 0.16),
-          border: Border.all(color: c.withValues(alpha: 0.55)),
-          borderRadius: BorderRadius.circular(2),
-        ),
-      ),
-      const SizedBox(width: 4),
-      Text(label,
-          style: theme.textTheme.labelSmall?.copyWith(
-              fontSize: 9.5, color: theme.colorScheme.onSurfaceVariant)),
-    ]);
-
 // ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
@@ -223,6 +190,20 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
     }
     return -1;
   }
+
+  /// The Wolf's call cannot be changed from the chips.
+  ///
+  /// **A hole with its four scores AND a call is settled**, and the tray for
+  /// it stays up until the group moves on — so this is the screen they are
+  /// looking at on the next tee, with the old hole's chips one thumb away.
+  /// `Edit scores` on the tray is what reopens it, the same deliberate step
+  /// that reopens a score.
+  ///
+  /// Not locked while the hole has NO call: four scores with none is the
+  /// state where the tray asks for it, and the chips answer too.
+  bool _callLocked(WolfHoleCard card, List<Membership> players,
+          Map<int, int> scores) =>
+      !_trayEditing && _allScored(players, scores) && card.isDecided;
 
   bool _allScored(List<Membership> players, Map<int, int> scores) =>
       players.every((m) => scores.containsKey(m.player.id));
@@ -892,6 +873,7 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
                 WolfCallCard(
                   card:  card,
                   busy:  _decisionBusy,
+                  locked: _callLocked(card, players, scores),
                   onCall: (decision, {int? partnerId}) => _setDecision(
                       decision, partnerId: partnerId, hole: _selectedHole),
                   onTeeOrder: (summary != null && holeInfo != null)
@@ -940,19 +922,11 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
               // directly above a tray whose two side rows say the same thing
               // with the nets that decided it. Survivor's `_OutcomeLine` came
               // off for the same reason.
-              const SizedBox(height: 12),
-
-              // ── Points grid ──
-              if (summary != null)
-                _WolfGrid(
-                  summary:     summary,
-                  players:     _realMembers(rp.round),
-                  scorecard:   sc,
-                  currentHole: _selectedHole,
-                  onTapHole:   (h) => setState(() {
-                    _selectedHole = h; _editingPlayerId = null;
-                  }),
-                ),
+              // **The scorecard was here and is the leaderboard's now**
+              // (Paul, 10 Nov 2026) — the move Rabbit's grid, Survivor's
+              // rail, and the Stroke Play, Nassau, Las Vegas, Fourball and
+              // Skins cards each made: a card read after the hole has room
+              // on the board and none under a keypad and a tray.
               const SizedBox(height: 16),
             ],
           ),
@@ -1711,278 +1685,6 @@ class _PlayerRow extends StatelessWidget {
 
     if (onTap == null) return inner;
     return InkWell(onTap: onTap, child: inner);
-  }
-}
-
-// ===========================================================================
-// 18-hole points grid
-// ===========================================================================
-
-class _WolfGrid extends StatelessWidget {
-  final WolfSummary      summary;
-  final List<Membership> players;
-  final Scorecard        scorecard;
-  final int              currentHole;
-  final void Function(int) onTapHole;
-
-  const _WolfGrid({
-    required this.summary,
-    required this.players,
-    required this.scorecard,
-    required this.currentHole,
-    required this.onTapHole,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    const double labelColW = 60.0;
-    const double cellW     = 34.0;
-    const double rowH      = 26.0;
-    // Only the holes in play, in the backend's play order — no blank 1-9 on a
-    // back-9 round.
-    final holeRange = summary.holes.isNotEmpty
-        ? summary.holes.map((h) => h.hole).toList()
-        : List.generate(18, (i) => i + 1);
-
-    final split    = NineSplit.of(holeRange);
-    const summaryW = 34.0;
-
-    final wolfByHole = {for (final h in summary.holes) h.hole: h.wolfId};
-
-    // Who WON each hole, and which side each golfer was on for it.
-    //
-    // **Wolf marks a SIDE, not a score**, which is why the server sends
-    // `winner_id: None` for this game and the shared leaderboard card draws no
-    // green. A hole here is won by the Wolf's side or by the opponents, and
-    // pointing at one cell would name a man who may have been carried.
-    final wonByHole  = {for (final h in summary.holes) h.hole: h.winningSide};
-    final roleByHole = <int, Map<int, String>>{};
-    for (final h in summary.holes) {
-      for (final e in h.entries) {
-        roleByHole.putIfAbsent(h.hole, () => {})[e.playerId] = e.role;
-      }
-    }
-    final totals = {for (final p in summary.players) p.playerId: p};
-    final lowPlaying = summary.handicapMode == 'strokes_off' && players.isNotEmpty
-        ? players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b)
-        : null;
-
-    Widget sumCell(String t, {double height = rowH}) => SizedBox(
-          width: summaryW, height: height,
-          child: Center(
-            child: Text(t,
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-          ),
-        );
-
-    /// A golfer's gross over a nine — **an em dash until it is complete**, the
-    /// rule every other card on this row uses: a subtotal appears once its
-    /// nine is whole and never as a misleading partial.
-    Widget grossTotal(Membership m, List<int> holes) {
-      var total = 0;
-      for (final h in holes) {
-        final g = scorecard.holeData(h)?.scoreFor(m.player.id)?.grossScore;
-        if (g == null) return sumCell('—');
-        total += g;
-      }
-      return sumCell('$total');
-    }
-
-    Widget cell(int h, Widget child) {
-      final isCur = h == currentHole;
-      return GestureDetector(
-        onTap: () => onTapHole(h),
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: cellW, height: rowH, alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isCur
-                ? theme.colorScheme.primaryContainer.withOpacity(0.35) : null,
-            border: isCur
-                ? Border.all(color: theme.colorScheme.primary.withOpacity(0.6),
-                    width: 1.2)
-                : null,
-          ),
-          child: child,
-        ),
-      );
-    }
-
-    /// Who held the Wolf. Kept above the scores because reading a hole means
-    /// knowing whose tee shot the bet was built on — it is the one thing the
-    /// gross card cannot say for itself.
-    Widget wolfCell(int h) => Text(
-        (totals[wolfByHole[h]]?.shortName ?? '').characters.take(3).toString(),
-        style: const TextStyle(fontSize: 9));
-
-    /// The team colour a golfer's cell wears on hole [h], or null.
-    ///
-    /// **Warm for the Wolf's side, cool for the opponents** — the same two
-    /// colours the player rows above are tinted with, six lines up the screen.
-    /// Green was the other candidate and is wrong here: on every other card in
-    /// the app it means *this ball won the hole*, and a Wolf hole is won by a
-    /// side. One colour cannot mean both on two cards a golfer reads in the
-    /// same round.
-    ///
-    /// A TIE marks nobody. Both sides drew it, so tinting both would say two
-    /// sides won and tinting neither is the truth.
-    Color? winColour(Membership m, int h) =>
-        wolfWonTheHole(wonByHole[h], roleByHole[h]?[m.player.id])
-            ? _wolfTeamColor(roleByHole[h]?[m.player.id])
-            : null;
-
-    /// A gross score with its stroke dots — **the grid's vertical run**, which
-    /// costs 7px of the cell's width where three horizontal dots would cost 14
-    /// and reach the digit.
-    Widget grossCell(Membership m, int h) {
-      final hole  = scorecard.holeData(h);
-      final gross = hole?.scoreFor(m.player.id)?.grossScore;
-      final strokes = wolfStrokesForHole(m, hole,
-          mode: summary.handicapMode, netPercent: summary.netPercent,
-          lowPlaying: lowPlaying);
-      final win = winColour(m, h);
-      return cell(
-        h,
-        Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [
-            Container(
-              width: cellW - 2, height: rowH - 4,
-              decoration: win == null
-                  ? null
-                  : BoxDecoration(
-                      color: win.withValues(alpha: 0.16),
-                      border: Border.all(color: win.withValues(alpha: 0.55)),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-            ),
-            SizedBox(
-              width: cellW, height: rowH,
-              child: Center(
-                child: Text(
-                  gross?.toString() ?? '',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      fontWeight:
-                          win == null ? FontWeight.w600 : FontWeight.bold),
-                ),
-              ),
-            ),
-            // Dots on an UNPLAYED hole too: the allocation is known up front,
-            // and it is the hole in front of you that the Wolf is choosing a
-            // partner for.
-            StrokeDotColumn(
-                strokes: strokes, color: theme.colorScheme.primary),
-          ],
-        ),
-      );
-    }
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Text('Scorecard',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary)),
-              const SizedBox(width: 8),
-              // A card that carries a mark has to name it. Both swatches, not
-              // one: with only the Wolf's colour keyed, the other tint reads as
-              // a second unexplained state rather than as the other side.
-              Expanded(
-                child: Wrap(spacing: 10, runSpacing: 2, children: [
-                  _winSwatch(theme, GameColors.team1, 'Wolf side won'),
-                  _winSwatch(theme, GameColors.team2, 'opponents won'),
-                ]),
-              ),
-            ]),
-            const SizedBox(height: 4),
-            PinnedHoleGrid(
-              labelWidth  : labelColW,
-              cellWidth   : cellW,
-              holeCount   : holeRange.length,
-              currentIndex: split.rightEdgeOf(
-                      currentHole, cellW, summaryW) == null ? -1 : 0,
-              currentRightEdge:
-                  split.rightEdgeOf(currentHole, cellW, summaryW),
-              contentWidth: split.contentWidth(cellW, summaryW),
-              bands: [
-                  // Hole-number header.
-                  HoleGridBand(
-                    SizedBox(width: labelColW, height: rowH,
-                      child: const Align(alignment: Alignment.centerLeft,
-                        child: Text('Hole',
-                            style: TextStyle(fontSize: 11,
-                                fontWeight: FontWeight.bold)))),
-                    [
-                    for (final h in split.front)
-                      cell(h, Text('$h',
-                          style: const TextStyle(fontSize: 11,
-                              fontWeight: FontWeight.bold))),
-                    if (split.showOut) sumCell('OUT'),
-                    for (final h in split.back)
-                      cell(h, Text('$h',
-                          style: const TextStyle(fontSize: 11,
-                              fontWeight: FontWeight.bold))),
-                    if (split.showIn) sumCell('IN'),
-                    if (split.showTot) sumCell('TOT'),
-                  ]),
-                  // Wolf row — who held the Wolf each hole.
-                  HoleGridBand(
-                    SizedBox(width: labelColW, height: rowH,
-                      child: Align(alignment: Alignment.centerLeft,
-                        child: Text('Wolf',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                                fontStyle: FontStyle.italic)))),
-                    [
-                    for (final h in split.front) cell(h, wolfCell(h)),
-                    // **Blank, not a total.** A nine has no Wolf, and the only
-                    // thing that could go here would be inventing one.
-                    if (split.showOut) sumCell(''),
-                    for (final h in split.back) cell(h, wolfCell(h)),
-                    if (split.showIn) sumCell(''),
-                    if (split.showTot) sumCell(''),
-                  ]),
-                  const HoleGridBand.rule(),
-                  // One row per player — per-hole points + running total.
-                  for (final m in players)
-                    HoleGridBand(
-                      SizedBox(width: labelColW, height: rowH,
-                        child: Align(alignment: Alignment.centerLeft,
-                          child: Row(children: [
-                            Flexible(child: Text(m.player.displayShort,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall
-                                    ?.copyWith(fontWeight: FontWeight.w600))),
-                          ]))),
-                      [
-                      for (final h in split.front) grossCell(m, h),
-                      if (split.showOut) grossTotal(m, split.front),
-                      for (final h in split.back) grossCell(m, h),
-                      if (split.showIn) grossTotal(m, split.back),
-                      if (split.showTot) grossTotal(m, split.all),
-                    ]),
-              ],
-            ),
-            // The per-player points totals were here. They are on the
-            // leaderboard's Wolf card — with the money beside them, which is
-            // what a points total is FOR — and the reader's own now rides in
-            // the standing row at the top of this screen.
-          ],
-        ),
-      ),
-    );
   }
 }
 

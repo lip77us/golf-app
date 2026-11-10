@@ -41,6 +41,26 @@ Future<void> _pump(WidgetTester t, SkinsHoleCard card,
 }
 
 void main() {
+  group('the round\'s card is the leaderboard\'s', () {
+    test('score entry draws no Skins scorecard', () {
+      // It sat under the hole, behind the tray; the Skins board draws the
+      // same card (Paul, 10 Nov 2026).
+      final se = File('lib/screens/score_entry_screen.dart').readAsStringSync();
+      expect(se.contains('skins!.scorecardHoles'), isFalse);
+    });
+
+    test('the Skins board still draws it', () {
+      // The other half of a move: without this the round's hole-by-hole
+      // card would exist on no screen at all, which is what happened to
+      // Rabbit's for a few hours.
+      final lb = File('lib/screens/leaderboard_screen.dart').readAsStringSync();
+      final at = lb.indexOf('class _SkinsGroupCard');
+      expect(at, greaterThan(0));
+      final end = lb.indexOf('\nclass ', at + 10);
+      expect(lb.substring(at, end).contains('HoleGridScorecard('), isTrue);
+    });
+  });
+
   group('the card parses what the server sends', () {
     test('an outright winner takes everything riding', () {
       final c = _card('skins_hole7_outright');
@@ -98,10 +118,77 @@ void main() {
       expect(find.text('Paul takes 2 skins with net 4'), findsOneWidget);
     });
 
-    testWidgets('a gross birdie is named under the score', (t) async {
+    testWidgets('a gross birdie is named beside the golfer', (t) async {
       await _pump(t, _card('skins_hole1_steal'));
       expect(find.text('gross 3 · birdie'), findsOneWidget);
       expect(find.text('gross 4'), findsOneWidget);
+    });
+
+    testWidgets('the gross is on the same line as the name', (t) async {
+      // It sat on a second line under the name, which made the nets box
+      // four two-line rows tall (Paul, 10 Nov 2026: "put it on the same
+      // line as the name and shrink that top box").
+      final card = _card('skins_hole1_steal');
+      await _pump(t, card);
+      for (final p in card.players) {
+        if (p.gross == null) continue;
+        final name = t.getRect(find.text(p.first).first);
+        final gross = t.getRect(find.text(
+            'gross ${p.gross}${p.birdie ? ' · birdie' : ''}').first);
+        expect((name.center.dy - gross.center.dy).abs(), lessThan(3),
+            reason: '${p.first}: one line');
+        expect(gross.left, greaterThan(name.right),
+            reason: '${p.first}: the name first');
+      }
+    });
+
+    testWidgets('a row is one line tall', (t) async {
+      // The point of the change, measured: a two-line row was ~40pt. The
+      // 19pt net is the tallest thing left on it.
+      final card = _card('skins_hole1_steal');
+      await _pump(t, card);
+      final p = card.players.firstWhere((x) => x.gross != null);
+      final name = t.getRect(find.text(p.first).first);
+      final net = t.getRect(find.text('${p.net}').first);
+      expect((name.center.dy - net.center.dy).abs(), lessThan(3));
+      final rows = [
+        for (final x in card.players) t.getRect(find.text(x.first).first)
+      ]..sort((a, b) => a.top.compareTo(b.top));
+      expect(rows[1].top - rows[0].top, lessThan(34),
+          reason: 'row pitch — it was about 42 with the gross underneath');
+    });
+
+    testWidgets('a long name on a narrow phone overflows nothing', (t) async {
+      // Nothing in the name-and-gross run is rigid: a fixed gross beside a
+      // flexible name overflowed by 80px here. Whether either CLIPS is not
+      // asserted — the test font is one square a glyph, so it would be
+      // measuring the font.
+      final j = _fixture('skins_hole1_steal');
+      final players = [
+        for (final p in (j['players'] as List))
+          {...(p as Map).cast<String, dynamic>(),
+           'first': 'Bartholomew-Maximilian'},
+      ];
+      await _pump(t, SkinsHoleCard.fromJson({...j, 'players': players}),
+          size: const Size(320, 900));
+      expect(t.takeException(), isNull);
+      expect(find.text('gross 3 · birdie'), findsOneWidget);
+    });
+
+    testWidgets('the name yields before the gross does', (t) async {
+      // `gross 3 · birdie` is what says why a net lost to a natural birdie;
+      // a clipped name is still a name.
+      final j = _fixture('skins_hole1_steal');
+      final players = [
+        for (final p in (j['players'] as List))
+          {...(p as Map).cast<String, dynamic>(),
+           'first': 'Bartholomew-Maximilian'},
+      ];
+      await _pump(t, SkinsHoleCard.fromJson({...j, 'players': players}),
+          size: const Size(320, 900));
+      final name = t.getSize(find.text('Bartholomew-Maximilian').first);
+      final gross = t.getSize(find.text('gross 3 · birdie'));
+      expect(gross.width, greaterThan(name.width));
     });
 
     testWidgets('a carry says what rides, in the orange slot', (t) async {
@@ -207,6 +294,36 @@ void main() {
     testWidgets('and a hole that won nothing outlines none', (t) async {
       await _pump(t, _card('skins_hole2_carry'));
       expect(outlined(t, Halved.brightMint), 0);
+    });
+  });
+
+  group('the ledger\'s money is one column', () {
+    // Found from the Wolf tray's wobble (10 Nov 2026): the ticks were a
+    // loose `Flexible` beside the `Expanded` name, so whatever they did not
+    // use was left at the END of the row and the money sat mid-row, further
+    // left the fewer skins a golfer held.
+    for (final name in ['skins_hole7_outright', 'skins_hole1_steal']) {
+      testWidgets('$name: every figure ends where the heading does',
+          (t) async {
+        final card = _card(name);
+        await _pump(t, card);
+        final col = find.byWidgetPredicate(
+            (w) => w is SizedBox && w.width == 76.0 && w.child != null);
+        expect(col, findsNWidgets(card.ledger.length + 1));
+        final edges = {
+          for (final e in col.evaluate())
+            t.getTopRight(find.byWidget(e.widget)).dx.round(),
+        };
+        expect(edges, hasLength(1), reason: 'the money drifts: $edges');
+      });
+    }
+
+    testWidgets('the fixture has golfers with different skin counts',
+        (t) async {
+      // Equal counts would line up under either layout.
+      final counts =
+          _card('skins_hole7_outright').ledger.map((e) => e.totalSkins).toSet();
+      expect(counts.length, greaterThan(1));
     });
   });
 

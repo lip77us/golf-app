@@ -878,9 +878,34 @@ def wolf_summary(foursome) -> dict:
     # Wolf has no scorecard of its own, so a strokes-off / net player couldn't
     # otherwise see which holes they get strokes on. Strokes are prospective
     # (all holes in play), so the whole plan shows before the holes are played.
+    #
+    # **It carries the SIDES** (Paul, 10 Nov 2026 — the card moved here from
+    # the play screen, "keep the colors"). A Wolf hole is won by a side, not
+    # a ball, which is why `winner_id` stays None; what the card tints is
+    # every golfer on the side that won, in that side's colour. So each
+    # score says which side its golfer was on for THAT hole (`team`: 1 the
+    # Wolf's, 2 the opponents') and the hole says which side won
+    # (`winner_team`) — the two keys the shared scorecard already reads for
+    # Nassau and Fourball. The sides change every hole, so `team` is on the
+    # score and never on the golfer.
+    #
+    # A TIE marks nobody: both sides drew it, so tinting both would say two
+    # sides won and tinting neither is the truth. So does a hole with no
+    # result yet. (`mobile` used to decide this, in `wolfWonTheHole`.)
+    _SIDE = {'wolf': 1, 'opponents': 2}
+    _ROLE = {'wolf': 1, 'partner': 1, 'opponent': 2}
+    side_of_hole = {h['hole']: _SIDE.get(h['winning_side'])
+                    for h in holes_out}
+    role_team = {h['hole']: {e['player_id']: _ROLE.get(e['role'])
+                             for e in h['entries']}
+                 for h in holes_out}
+    wolf_short_of = {h['hole']: h['wolf_short'] for h in holes_out}
+
     scorecard_players = [
         {'player_id': pid, 'name': by_pid[pid].name,
-         'short_name': by_pid[pid].short_name}
+         'short_name': by_pid[pid].short_name,
+         # What he GETS in this game — the `gets 10` beside his name.
+         'phcp_in_play': phcp_by_pid.get(pid)}
         for pid in real_ids
     ]
     scorecard_holes = [
@@ -889,10 +914,14 @@ def wolf_summary(foursome) -> dict:
             'par'          : par_by_hole.get(hole),
             'stroke_index' : si_by_hole.get(hole),
             'winner_id'    : None,
+            'winner_team'  : side_of_hole.get(hole),
+            # Who held the Wolf — the card's own row above the scores.
+            'wolf_short'   : wolf_short_of.get(hole),
             'scores'       : [
                 {'player_id': pid,
                  'gross'    : gross_index.get(pid, {}).get(hole),
                  'strokes'  : strokes_by.get(pid, {}).get(hole, 0),
+                 'team'     : role_team.get(hole, {}).get(pid),
                  'points'   : (float(points_by_hole[hole][pid])
                                if hole in points_by_hole
                                and pid in points_by_hole[hole] else None)}

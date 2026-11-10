@@ -2719,6 +2719,19 @@ class ApiClient {
     return SkinsHoleCard.fromJson(map);
   }
 
+  /// GET /api/foursomes/{id}/multi-skins/hole/{hole}/
+  ///
+  /// The skins POOL's card — the Skins card's shape over the whole field.
+  /// A save returns it under `multi_skins_hole` when the pool is the round's
+  /// primary; this is also how a card catches up with a hole another group
+  /// has settled since, because nothing pushes that.
+  Future<SkinsHoleCard?> getMultiSkinsHoleCard(int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/multi-skins/hole/$hole/');
+    final map = (data as Map).cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    return SkinsHoleCard.fromJson(map);
+  }
+
   /// GET /api/foursomes/{id}/nassau/hole/{hole}/
   ///
   /// Only for a hole the screen opens WITHOUT posting — a save returns the

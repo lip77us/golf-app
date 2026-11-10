@@ -85,7 +85,9 @@ class FourballHoleCardEndpointTests(_Base):
         r = self._card(3)
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.data['hole'], 3)
-        self.assertEqual(r.data['sides'][0]['sub'], 'counts: Ann')
+        counted = [p['first'] for p in r.data['players'] if p['counted']
+                   and p['side'] == 1]
+        self.assertEqual(counted, ['Ann'])
 
     def test_a_fresh_round_has_a_card_on_the_first_hole(self):
         """No card means no keypad.  The game's status is still `pending`

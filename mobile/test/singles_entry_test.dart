@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/widgets/fourball_entry.dart';
+import 'package:golf_mobile/widgets/tray_result_row.dart';
 
 /// Singles Match score entry —
 /// `~/Downloads/handoff-singles-match-score-entry`.
@@ -87,6 +88,27 @@ void main() {
       expect(find.text('CH 12 · 1 stroke'), findsOneWidget);
       expect(find.text('CH 8 · no stroke'), findsOneWidget);
       expect(find.textContaining('counts:'), findsNothing);
+    });
+
+    testWidgets('the hole\'s result is the shared row, one golfer a side',
+        (t) async {
+      await _pump(t, _card());
+      final row = t.widget<TrayResultRow>(find.byType(TrayResultRow));
+      expect(row.reasonLabel, 'net');
+      expect(row.winner, 1);
+      expect(find.text('Won'), findsOneWidget);
+      expect(find.text('won'), findsNothing);
+    });
+
+    testWidgets('a hole with one score in draws no result', (t) async {
+      // Names alone: half a comparison is not a result.
+      await _pump(t, _card(scored: 1, result1: null, result2: null));
+      final rows = t.widgetList<TrayResultRow>(find.byType(TrayResultRow));
+      for (final r in rows) {
+        expect(r.decided, isFalse);
+      }
+      expect(find.text('Won'), findsNothing);
+      expect(find.text('Halved'), findsNothing);
     });
 
     testWidgets('two golfers read Both scores in', (t) async {

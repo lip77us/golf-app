@@ -36,9 +36,13 @@ class SkinsHoleWorth extends StatelessWidget {
     final worth = card.isPool || card.holeValue <= 0
         ? '${card.riding} $s'
         : '${card.riding} $s · \$${_amt(card.holeValue)}';
-    final sub = card.carriedIn == 0
-        ? 'none carried'
-        : '${card.carriedIn} carried from ${card.carriedFrom ?? '?'}';
+    // A pool never carries, so its line says what a pool does instead —
+    // the server's words (`6 in the pool · a tie kills it`).
+    final sub = card.worthSub.isNotEmpty
+        ? card.worthSub
+        : card.carriedIn == 0
+            ? 'none carried'
+            : '${card.carriedIn} carried from ${card.carriedFrom ?? '?'}';
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 10, 4, 2),
       child: Row(children: [
@@ -154,10 +158,16 @@ class SkinsHoleTray extends StatelessWidget {
   String _title() {
     final n = card.players.length;
     if (card.scored < n) return '${card.scored} of $n scored';
+    // A pool golfer on a card of his own is the commonest pool card there
+    // is, and `All 1 scores in` is not a sentence.
+    if (n == 1) return 'Score in';
     return n == 2 ? 'Both scores in' : 'All $n scores in';
   }
 
   String _riding() {
+    // A pool states its own: nothing rides there, so `1 riding` would be
+    // said eighteen times, and the figure worth the slot is the pot.
+    if (card.trayTrailing.isNotEmpty) return card.trayTrailing;
     final s = card.riding == 1 ? 'skin' : 'skins';
     // **`a skin` is always singular**: the stake is the price of ONE,
     // however many are riding on this hole.
@@ -169,14 +179,21 @@ class SkinsHoleTray extends StatelessWidget {
   }
 }
 
-/// One row a golfer, nets low to high, the winner's row lightly filled.
+/// One LINE a golfer, nets low to high, the winner's row lightly filled.
+///
+/// `Paul  gross 5 · birdie   [2 skins]  4`. The gross sat on a second line
+/// under the name, which made this box four two-line rows tall — the
+/// tallest thing on the tray, for the smallest fact on it (Paul, 10 Nov
+/// 2026: *"put it on the same line as the name and shrink that top box"*).
+/// The name yields before the gross does: `gross 3 · birdie` is what says
+/// why a net lost to a natural birdie, and a clipped name is still a name.
 class _Nets extends StatelessWidget {
   final SkinsHoleCard card;
   const _Nets({required this.card});
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(12),
@@ -190,7 +207,7 @@ class _Nets extends StatelessWidget {
     final won = card.winnerId != null && p.playerId == card.winnerId;
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 1),
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: won
           ? BoxDecoration(
               color: Colors.white.withValues(alpha: 0.07),
@@ -204,27 +221,38 @@ class _Nets extends StatelessWidget {
               color: colour, borderRadius: BorderRadius.circular(3)),
         ),
         const SizedBox(width: 8),
+        // **Nothing in this run is rigid.** A fixed gross beside a flexible
+        // name overflowed the row at 320pt; both yield, the name first
+        // (flex 1 against the gross's 2), and the run takes whatever the
+        // tag and the net leave.
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(p.first,
+          child: Row(children: [
+            Flexible(
+              child: Text(p.first,
                   maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: Colors.white, fontSize: 14,
                       fontWeight: FontWeight.w700)),
-              Text(
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              flex: 2,
+              child: Text(
                   p.gross == null
                       ? 'no score'
-                      : 'gross ${p.gross}${p.birdie ? ' · birdie' : ''}',
+                      // On the card, not in the pool: he has a score and
+                      // no net, and the dash beside it needs a reason.
+                      : !p.inPool
+                          ? 'gross ${p.gross} · not in the pool'
+                          : 'gross ${p.gross}${p.birdie ? ' · birdie' : ''}',
                   maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                      color: _secondary, fontSize: 11.5,
+                      color: _secondary, fontSize: 12,
                       fontWeight: FontWeight.w600)),
-            ],
-          ),
+            ),
+          ]),
         ),
         if (won) ...[
+          const SizedBox(width: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
             decoration: BoxDecoration(
@@ -237,12 +265,12 @@ class _Nets extends StatelessWidget {
                     color: Halved.deepPine, fontSize: 11.5,
                     fontWeight: FontWeight.w800)),
           ),
-          const SizedBox(width: 10),
         ],
+        const SizedBox(width: 10),
         Text(p.net?.toString() ?? '–',
             style: TextStyle(
                 color: p.net == null ? _trayMuted : colour,
-                fontSize: 22, height: 1.0, fontWeight: FontWeight.w700)),
+                fontSize: 19, height: 1.0, fontWeight: FontWeight.w700)),
       ]),
     );
   }
@@ -283,6 +311,12 @@ class _Ledger extends StatelessWidget {
   final SkinsHoleCard card;
   const _Ledger({required this.card});
 
+  /// The money column, shared by the heading and every row.
+  static const double _moneyW = 76;
+  static const double _moneyGap = 10;
+  /// Seven ticks a line at 12pt a tick; the eighth wraps.
+  static const double _ticksW = 84;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -306,11 +340,13 @@ class _Ledger extends StatelessWidget {
                 style: TextStyle(
                     color: _secondary, fontSize: 10.5,
                     letterSpacing: 0.4, fontWeight: FontWeight.w700)),
-            const SizedBox(width: 12),
-            // The money column's heading yields before the two above it:
-            // `EACH · NOW` and `SKINS` name the columns, and this one is a
-            // price the tray has already stated.
-            Flexible(
+            const SizedBox(width: _moneyGap),
+            // A fixed column, the width the rows give their money — so the
+            // heading sits over the figures it names. It ellipsises before
+            // it widens: `EACH · NOW` and `SKINS` name the columns, and
+            // this one is a price the tray has already stated.
+            SizedBox(
+              width: _moneyW,
               child: Text(card.staked && !card.isPool
                       ? '\$${_amt(card.stake)} A SKIN'
                       : 'MONEY',
@@ -334,6 +370,9 @@ class _Ledger extends StatelessWidget {
 
   /// `Won 5 of 7 · 3 ride to 8` and `11 holes left`.
   String _footer() {
+    // A pool counts holes the FIELD has settled and says what is still
+    // waiting on other groups, which only the server can know.
+    if (card.footer.isNotEmpty) return card.footer;
     final bits = <String>['Won ${card.skinsWon} of ${card.holesPlayed}'];
     if (card.ridesTo.isNotEmpty && card.ridesTo != 'no skin') {
       bits.add(card.ridesTo);
@@ -365,9 +404,22 @@ class _Ledger extends StatelessWidget {
               style: const TextStyle(color: Colors.white, fontSize: 14,
                   fontWeight: FontWeight.w600)),
         ),
-        Flexible(child: _Ticks(row: e, colour: colour)),
-        const SizedBox(width: 10),
-        _money(e.money),
+        // **Bounded, not flexible.** The ticks were a loose `Flexible`
+        // beside the `Expanded` name, so the two split the row and whatever
+        // the ticks did not use was left over at the END of it — the money
+        // sat mid-row, further left the fewer skins a golfer held. Same
+        // fault as the Wolf tray's standing, found from it. A cap still
+        // gives the `Wrap` the bound it needs for a golfer many skins up.
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _ticksW),
+          child: _Ticks(row: e, colour: colour),
+        ),
+        const SizedBox(width: _moneyGap),
+        SizedBox(
+          width: _moneyW,
+          child: Align(
+              alignment: Alignment.centerRight, child: _money(e.money)),
+        ),
       ]),
     );
   }

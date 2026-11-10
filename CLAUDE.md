@@ -11931,3 +11931,434 @@ blue and orange score entry uses, so the grid matches the cards above it.
 
 Tests: `mobile/test/nassau_progress_card_test.dart` (11), eight mutations
 killed. Rendered to an image before trusting it.
+
+### `widgets/tray_result_row.dart` — the result row, on Nassau and Sixes
+
+Paul, 10 Nov 2026, from a Sixes hole: *"change the sixes scoring summary to
+match Nassau on the description of hole 1 result."* The Sixes tray drew its
+own chip — a filled lozenge reading `Won hole 1  net 5 v 4` in 13pt and 11pt —
+beside names in a single `Text.rich`.
+
+The Nassau tray's row was extracted rather than copied: `TrayResultRow` takes
+two names, two on-dark colours, the winner (1 / 2 / null for halved) and the
+reason either as parts (`label`, `figure1`, `figure2`) or flat. Nassau's
+`_Header` is now ten lines feeding it the card; Sixes feeds it `t1Net` /
+`t2Net` and its own side colours.
+
+**Fourball and the Singles Match took it next** (*"convert fourball, singles,
+not Las Vegas — that is very different hole result"*). `FourballHoleTray`'s
+`_BestBall` was a row a side — swatch, names, a `won` / `lost` word and a
+28pt net — and is now the one row, fed `sides[n].best` as the figures and
+`result == 'won'` as the winner. **Each side's `sub` stays**, as a muted line
+a side under the row in that side's colour: whose ball counted in a Fourball,
+the golfer's CH and strokes in a Singles Match. It is the only place on the
+tray either fact appears, and the row has no slot for it.
+
+**Las Vegas is deliberately NOT converted**: its hole result is two built
+numbers and a points difference, which is a different thing to report. The
+source guard lists the three files that draw the row and says why the fourth
+is absent.
+
+Fourball and Singles still name sides by FIRST names; only the Nassau card
+moved to short names. Both cards write sentences from the same label (`Paul
+wins 3&2`), where initials would not read, so that switch is its own
+question.
+
+Sixes' chip said `Won hole 10` so it could not be read as the match score.
+The bare `Won` is safe for the same reason it is on Nassau: the tray label
+above names the hole and the standing line underneath says `1 UP`.
+
+`'Halved'` still appears once in `sixes_entry.dart`, legitimately — the
+STANDING line says it of a match that finished all square, which is a
+different fact from a halved hole. The source guard forbids a tray spelling
+`'Won'`, not `'Halved'`, for that reason.
+
+Tests: `mobile/test/tray_result_row_test.dart` (5) and the two restated
+cases in `sixes_entry_test.dart`. Rendered with a real font.
+
+### Las Vegas: the card and the rules are the leaderboard's
+
+Paul, 10 Nov 2026, in one message.
+
+**Score entry lost three things.** The round's `HoleGridScorecard`, and
+`_VegasStatusCard` — the band reading `Las Vegas · Flip · Carryover` over a
+wrap of per-hole chips (`H3 45-57 +12`) — both sat under the hole tray, and
+both are on the board already (the card, and the `HOLE BY HOLE` grid). And
+`VegasSideHeader` no longer carries the side's number: the tray reports both
+numbers, with what the flip did to them, the moment the hole completes. That
+reverses the header's own note that "what a golfer watches in Vegas is the
+number forming"; the same call Nassau's `BEST` tag got.
+
+**The rule is a chip at the top of the board**: `game_settings._BIRDIE`,
+`Gross birdies flip` / `Gross birdies multiply`, in the fixed chip order
+after the press mode. The card's own header typed `Flip` and `Carryover`
+and no longer does — the strip already said `Carries on`.
+
+**`Gross`, because it is.** He asked in the same message: *"do I only flip on
+gross birdies?"* Yes — `services.vegas._best_under` compares a side's best
+GROSS ball with par, whatever the handicap mode; the two NUMBERS are built
+from nets, the birdie that flips them is a natural one. A chip reading
+`Flip` could not answer that and this one does, in skins' own wording
+(`Gross birdies steal`). A test reads `_best_under`'s source so the chip
+fails there if the engine ever takes a net.
+
+**The leaderboard card:** no `Group 1` on a one-group round (`_ByGroupView`
+already sets `_single_group`; this card had never read it), and no strokes
+table under the scorecard — the dots are on its cells.
+
+Tests: `LasVegasSaysWhichBirdiesTests` (`scoring/tests/test_game_settings.py`,
+5) and the restated header tests plus five source guards in
+`mobile/test/vegas_entry_test.dart`.
+
+### Fourball: the card is the leaderboard's, and it tints the ball that won
+
+Paul, 10 Nov 2026, from a Fourball board — seven things in one message.
+
+**Score entry.** The round's `HoleGridScorecard` under the hole is gone (the
+board draws it), and `FourballSideHeader` is a NAME for the side: `BEST` and
+the best net are removed for every caller, so `showBest` — added that morning
+when only Nassau wanted it off — is deleted with its last user. The Fourball
+tray lost its `counts: Paul · Larry` lines: `fourball_hole_card` sends
+`sub: ''`, because each golfer's own row already marks the ball that counted
+(`counted`), directly above the tray. **The Singles Match keeps its sub**
+(`CH 12 · 1 stroke`) — a different fact, from a different function.
+
+**The leaderboard card** (`_FourballGroupCard`, now stateless):
+
+- Line 1 is the two sides in full, unchanged. Line 2 is **`Larry & Jim 1 UP
+  thru 1`** — the standing and how far round on ONE line. They were a `Thru 1`
+  under the names and a headline under a rule. `thru` rides the standing only
+  while the match is live: a decided match has said how it ended (`3&2`).
+- The small best-ball / `Won by` strip is gone, with its scroll controller.
+- No strokes table under the scorecard.
+
+**The scorecard tints the BALL that won a hole, not the side.** It tinted both
+of the winning side's scores, so Larry's 6 beside Jim's winning 5 wore the
+same orange. `fourball_summary` marks each score `won` — on the winning side
+AND equal to `_team_best` over the engine's own net index, so partners who tie
+for the best ball both carry it — and `HoleGridScorecard` narrows its
+`winner_team` tint to scores whose `won` is not false. **A payload with no
+flag tints the whole side as before**, so every other card is unchanged; a
+flag on the LOSING side is ignored.
+
+`won` is decided on NET: Larry's 5 off a stroke beats Paul's gross 5, and a
+card marking the side's low gross would pick both.
+
+A built-in safety check refused one shell command during this work (a long
+inline script it could not parse; nothing was being removed). The same edit
+went in from a script file instead.
+
+Tests: `TheScorecardMarksTheBallThatWonTests`
+(`scoring/tests/test_fourball_hole_card.py`, 5),
+`mobile/test/scorecard_winning_ball_test.dart` (4) and the restated header
+and source guards in `mobile/test/fourball_entry_test.dart`. The leaderboard
+card is covered by source guards only — it was not rendered.
+
+### `gets 10` beside each golfer on a scorecard
+
+Paul, 10 Nov 2026: *"on all the scorecards on the leaderboard lets add the
+gets 1, gets 10, or leave it blank if they are low golfer and they get 0."*
+The strokes table's total column had been coming off the boards all day
+(Stroke Play, Nassau, Las Vegas, Fourball), and this is where that figure
+went.
+
+In `HoleGridScorecard`'s label column, so every card that draws through it
+has it: `Gil gets 10`, and a bare name for a golfer who gets none. It
+**replaced the bare `(10)`** eight games already drew there, which did not say
+what the number was.
+
+`getsOf(p)`:
+- **The server's `phcp_in_play` where the game states one** (Skins, Multi
+  Skins, Nassau, Points 5-3-1, Rabbit, Survivor, Wolf, Honors, Annandale
+  Friday) — that game's own answer after its allowance.
+- **Otherwise the card's own dots, added up** over the holes in play, so
+  `gets 10` and ten dots cannot disagree. That is Fourball, Las Vegas, Sixes
+  and the Stroke Play card, whose payloads carry strokes per hole and no
+  total.
+- **Only when the card covers the whole round for him.** A hole in play with
+  no entry for the golfer means the card does not know the holes ahead, and a
+  total of the rest would read `gets 3` on the 5th and `gets 7` on the 12th.
+  Then it says nothing.
+
+The label column went from 78pt to **92pt** for it — `Wend gets 12` on one
+line, checked by rendering with a real font. **That is not a unit test, on
+purpose**: the test font is one square a glyph, so thirteen characters measure
+154px and a fit test would be measuring the font.
+
+It is on the shared card, so any score-entry screen that still draws one
+shows it too (the tournament card is a different widget).
+This is a different thing from the `gets N` chip being retired from score
+entry ROWS: there it sat beside a live hole and invited subtracting it twice;
+here it labels a whole-round card.
+
+Tests: `mobile/test/scorecard_gets_test.dart` (6).
+
+### Skins: the card is the leaderboard's, one line a golfer, no index on the ledger
+
+Paul, 10 Nov 2026, in two messages.
+
+**Score entry.** The round's `HoleGridScorecard` under the hole is gone — the
+Skins board draws the same card with the skin-winner cells. `SkinsHoleWorth`
+above the rows still says what the hole in play is worth.
+
+**The tray's nets box is one LINE a golfer**: `Paul  gross 3 · birdie
+[1 skin]  3`. The gross sat on a second line under the name, which made the
+box four two-line rows — the tallest thing on the tray for the smallest fact
+on it. The net went 22pt → 19pt and the paddings tightened with it.
+
+**Nothing in the name-and-gross run is rigid.** The first cut had a flexible
+name beside a fixed gross and a `Spacer`, and overflowed by 80px at 320pt. It
+is `Expanded(Row[Flexible(name), Flexible(flex: 2, gross)])` now, so the name
+yields first: `gross 3 · birdie` is what says why a net lost to a natural
+birdie, and a clipped name is still a name.
+
+**The leaderboard ledger names no handicap.** `16.2 · CH 16` came off each
+golfer's row — this REVERSES the 31 Oct "all five boards name it" call for
+Skins, and the reason is the scorecard directly under the board, which now
+says `Gil gets 10` beside each name: the figure a skin is actually won with.
+`SkinsBoardGolfer.handicapLabel` is deleted rather than left unread, and
+`handicap_label_test`'s boards map no longer lists Skins — with a test saying
+it is out on purpose, so it does not read as an omission. The under-line is
+the pool's `thru` alone, and absent in a single foursome.
+
+**No strokes table** under the Skins board's scorecard (`showStrokes: false`),
+the call Stroke Play, Nassau, Las Vegas and Fourball each got that day.
+
+**The Multi-Group Skins pool card** lost its strokes table in the next
+message — see below. It never carried the index/CH line.
+
+Tests: `mobile/test/skins_entry_test.dart` (six new — the one-line row, the
+row pitch, the two 320pt cases, and both halves of the scorecard move) and
+`mobile/test/skins_board_test.dart` (three). Two mutations killed (the
+strokes table put back; the flex swapped). Tray rendered with a real font at
+390 and 320.
+
+## Multi-Group Skins score entry — the Skins card over the whole field
+
+Paul, 10 Nov 2026: *"Multi-group skins needs the new score entry model, yes
+remove the table from score entry, remove the strokes table from the
+leaderboard."* No handoff packet; built on the Skins tray.
+
+**There is no pool tray, no pool model and no pool keypad.**
+`services.multi_skins.multi_skins_hole_card(foursome, hole)` emits the dict
+`skins_hole_card` does, and the client reads it into the same `SkinsHoleCard`
+and draws it with `SkinsHoleTray` — the Singles-over-Fourball call. A test
+compares the two dicts' keys, so a key added to the Skins card fails there.
+It travels in the Skins SLOT on the screen (`_skinsCard` returns
+`rp.poolHole` when the pool is the primary), which is what gives it
+`_raisesTray`, the auto-post, the hidden pager and the keypad's strokes with
+no further wiring.
+
+**Only where the pool is the round's PRIMARY** — a casual pool round. On a
+tournament it rides beside Stroke Play, which owns the entry, and stays a
+leaderboard tab.
+
+### What a pool changes on the card
+
+- **A hole is not decided when this group finishes it.** It counts once every
+  participant in every group has a score on it, so the ORDINARY state on the
+  tray is `outcome: waiting` — `Leading so far: Paul, net 3` beside
+  `4 of 6 in`. `settled` says the field is complete; `hole_complete` stays
+  what the client already reads it as, this card's scores being in. The
+  provisional leader is asked of `skin_rules.decide` over the golfers who are
+  in, not compared by hand; a settled hole's winner is the engine's stored row.
+- **Nothing pushes a later result.** A card says `waiting` until it is fetched
+  again; a save drops every held card, so each new hole's is current as of
+  that save.
+- **Nothing carries**: `riding` is always 1, and the tray label carries
+  `$10 ante · $60 pool` (`tray_trailing`) where Skins says `1 riding`.
+- **The ledger is THIS CARD's golfers and nobody else's.** The first cut
+  also listed anybody in the field holding a skin, uncoloured; Paul on seeing
+  it, the same day: *"There could be a lot of players in the match. Lets just
+  show the status of the players in the group."* On a real pool that list
+  grows all day under a tray. The field is the leaderboard's; a winner from
+  another group is still NAMED, in the result line.
+- **The footer says where the other skins went** — `Won 2 of 2 settled ·
+  2 to other groups` — because four `$0` rows under `Won 2 of 2` otherwise
+  give no way to see that the two went somewhere. It is the server's
+  sentence, with `N waiting on other groups` beside it, since only the
+  server knows either.
+- **Colour is a place on THIS card.** The pool's own roster index would put a
+  second group's golfers at 4 and 5, wrapping onto the first group's colours.
+- **A golfer on the card who is not in the pool** still has a score to enter,
+  so he has a row — `gross 5 · not in the pool`, no net — and his score still
+  completes the card. He is never on the ledger and never decides a skin.
+- **A card of one** is where a casual pool starts (everybody on his own
+  card), so the title reads `Score in`, not `All 1 scores in`.
+
+### The wire
+
+`GET /api/foursomes/{id}/multi-skins/hole/{hole}/`, and `multi_skins_hole`
+WITH the save. **Its own key, never `skins_hole`**: a round can carry round
+Skins as a side game beside the pool, and one key could not say which.
+
+The save sends it only when `Round.primary_game == 'multi_skins'` (or a
+legacy round whose only game is the pool). On a sixty-player tournament the
+pool is a side game and its card would be a pool summary on every posted
+score for a tray nobody draws. The gate costs latency at worst: the provider
+drops its held pool cards on any save that brings none, and the screen
+fetches.
+
+### Names come back in a fixed order
+
+`Tied so far on net 3: Dave, Paul` on one hole and `Paul, Dave` on the next:
+the decider's dict follows the summary's skins-SORTED roster. `_names` puts
+this card's golfers first, in card order, then the rest by name — the
+unordered-collection trap again (`team.players`, the Sixes anchor), caught
+this time by the first two tests that named two golfers.
+
+### Removed
+
+- `_MultiSkinsStandingsCard` from score entry (the table), with the two
+  params that fed it.
+- The strokes table under the pool's leaderboard scorecard
+  (`showStrokes: false`) — in a pool it was a row per participant.
+
+The golfer ROWS take their stroke dots from the card too
+(`_strokesForHole`): strokes-off in a pool is off the POOL's low man, who is
+usually in another group, and the generic allocation anchors on this
+foursome's.
+
+**Known and untouched:** `_calculate_game` walks holes 1–18 by number and the
+summary's `thru` is the highest hole NUMBER scored — the shotgun shape. A pool
+has no carry, so the walk is order-independent; `thru` is wrong off a
+shotgun.
+
+Tests: `scoring/tests/test_multi_skins_hole_card.py` (35, four of them
+fixture writers under `REGEN_POOL_FIXTURES=1`),
+`api/test_multi_skins_hole_card.py` (10) and
+`mobile/test/pool_entry_test.dart`. Fifteen mutations, all killed. Tray
+rendered with a real font at 390 and 320; **not seen on a device.**
+
+## The Wolf scorecard moved to the leaderboard
+
+Paul, 10 Nov 2026: *"move the Wolf scorecard from the score entry board to
+the leaderboard. Remove the strokes table and the scorecard from the
+leaderboard. Keep the colors … and add the gets."* The move Rabbit's grid,
+Survivor's rail and the Stroke Play, Nassau, Las Vegas, Fourball and Skins
+cards each made.
+
+**`widgets/wolf_scorecard.dart` `WolfScorecard(summary:)`**, on
+`_WolfGroupCard`. It is drawn through `HoleGridScorecard`, not a grid of its
+own — what makes it Wolf's is what it is handed:
+
+- a **`Wolf` row above the golfers** (who held the Wolf, three characters a
+  cell), on unplayed holes too, since the rotation is known up front;
+- each gross **tinted in the colour of the SIDE that won the hole** — blue for
+  the Wolf's, orange for the opponents', the two the play screen's rows wear.
+  Never the win green: everywhere else that means *this ball won*, and a Wolf
+  hole is won by a side. A tie tints nobody;
+- both colours keyed beside the title (`Wolf side won` / `opponents won`);
+- `gets N` beside each name (the scorecard's players now carry
+  `phcp_in_play`), and `showStrokes: false`.
+
+It **replaced** the board's gross card and the strokes table. **The per-hole
+POINTS block came off with them and went straight back on**, at the bottom of
+this card (`showPoints: true` — Paul, the same afternoon: "add the points on
+the bottom of the table").
+
+**`Wolf by hole` is gone too** (*"remove the wolf by hole since it is in the
+scorecard now"*) — a chip a hole naming its Wolf, tinted by the side that
+won, which is the card's `Wolf` row and its tints said a second time. One
+thing it carried that the card does not: the CALL, as a letter (`P` / `L` /
+`B`). The tints and the points row imply it (a +3 against three −1s is a
+Lone Wolf); nothing states it.
+
+**`_WolfGrid` is deleted from `wolf_screen.dart`**, with `_winSwatch` and the
+two imports it alone used. Tapping a hole on that grid jumped the screen to
+it; the pager is the way to move now, as on every other tray screen.
+
+### Which side won is the SERVER's now
+
+`wolfWonTheHole` lived on the play screen while its grid did. The board draws
+from two keys the shared card already reads for Nassau and Fourball, so the
+rule moved to `wolf_summary`'s scorecard block: **`winner_team`** on the hole
+(1 the Wolf's side, 2 the opponents', None on a tie or no result) and
+**`team`** on each SCORE — never on the golfer, because the sides change
+every hole. Also `wolf_short` per hole. The old Dart truth table is
+`scoring/tests/test_wolf_scorecard_sides.py` now.
+
+**A shipped build tints from the same keys**: 2.14.0 draws this block through
+`HoleGridScorecard`, so once the backend deploys its Wolf card gains the side
+tints too. Harmless, and worth knowing before somebody reports it.
+
+### Two additions to the shared card
+
+`HoleGridScorecard.headerRows` — rows above the golfers, under Par and Index,
+the same `HoleGridFooterRow` class as the rows beneath (the grid owns the
+box) — and `legendSwatches`, a swatch-and-word key drawn where `legend` goes.
+Both empty everywhere but Wolf.
+
+Tests: `scoring/tests/test_wolf_scorecard_sides.py` (9, one a fixture writer
+under `REGEN_WOLF_FIXTURES=1`) and `mobile/test/wolf_scorecard_test.dart`
+(15). Nine mutations, all killed. Rendered with a real font at 390 and 320;
+**not seen on a device.**
+
+### A tray table whose columns moved with the name
+
+Reported from a Wolf hole, 10 Nov 2026: *"bottom table all wobbly."* The
+tray's `EACH · NOW` rows had three fixed-width figure columns that sat
+further LEFT the shorter the golfer's name — `Jim`'s row 50pt off
+`Gilbert`'s — under a heading that agreed with none of them.
+
+**A loose `Flexible` beside a `Spacer`.** Both are flex 1, so they split the
+free width evenly; the name took only what it needed of its half, and the
+rest was left over at the END of the row, after the fixed columns. The
+heading used `Expanded`, which is why it was the one thing in the right
+place. Fourth landing of *`Flexible` defaults to flex 1* in this repo (the
+Points ledger header, the Rabbit tray chip, the Sequoya tray header), and the
+first where it moved a whole table rather than one label.
+
+The rule that makes it impossible: **a row with fixed columns has exactly one
+flexible child, and it is `Expanded`.** The name and its `WOLF` tag are a
+`Row` inside it.
+
+**The Skins tray's ledger had the same fault and nobody had reported it** —
+the ticks were a loose `Flexible` beside the `Expanded` name, so the money
+sat mid-row, further left the fewer skins a golfer held. I had seen it in a
+render an hour earlier and written it off as "pre-existing". It is a bounded
+box (84pt, seven ticks a line) and a fixed 76pt money column now, shared by
+the heading. The pool tray is the same widget, so it is fixed there too.
+
+Checked and fine: Las Vegas, Points 5-3-1 and Banker already used `Expanded`.
+
+The tests measure it — every cell in a column shares one right edge with its
+heading — over names of very different lengths, because four names the same
+length line up under either layout.
+
+### The Wolf call locks once the hole is settled
+
+Paul, 10 Nov 2026: *"It is very easy to be on the previous hole still and if
+you set the wolf partner, you might be changing the previous hole. Lets lock
+the wolf choice unless you hit edit scores."*
+
+The cost of the call no longer being a gate. Once the four scores and the
+call are in, the tray rises and STAYS until the group moves on — so on the
+next tee the screen is still the old hole, with its call chips live directly
+above the tray. A tap meant for the new hole's partner re-decided the old
+one, and the chip that is ON is a toggle, so one tap could also CLEAR it.
+
+`WolfCallCard.locked`, decided by `_WolfScreenState._callLocked`:
+
+    !_trayEditing && _allScored(players, scores) && card.isDecided
+
+- **Four scores AND a call.** Four scores with NO call stays open — that is
+  the state where the tray asks for it, and the chips answer too. A lock
+  keyed on the scores alone would leave the chips dead while the tray begged.
+- **`Edit scores` is what reopens it**, the same deliberate step that reopens
+  a score. The tray's picking line says so on this tray alone
+  (`TrayEditHeader.pickingHint`: *Tap a score or the call above to change
+  it*); `Done` locks it again.
+- A one-shot tap on a golfer's row does NOT unlock it. That edits one score.
+
+Locked, every chip is inert, the unselected ones fade, and the card says why
+and how out: `Hole settled — Edit scores to change the call.` **The chip that
+is ON never fades** — it is the call, and on a locked card the only thing
+worth reading. (That applies while a call is in flight too, where it used to
+dim with the rest.)
+
+Client-only. The server still accepts a call on a scored hole, which is what
+`Edit scores` relies on.
+
+Tests: the `a settled hole locks the call` group in
+`mobile/test/wolf_entry_test.dart` (10). Seven mutations, all killed.

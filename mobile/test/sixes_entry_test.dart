@@ -7,6 +7,7 @@ import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/theme/halved_brand.dart';
 import 'package:golf_mobile/widgets/forty_balls_keypad.dart';
 import 'package:golf_mobile/widgets/sixes_entry.dart';
+import 'package:golf_mobile/widgets/tray_result_row.dart';
 import 'package:golf_mobile/widgets/stroke_dots.dart';
 
 /// The Sixes score-entry surfaces (`~/Downloads/handoff-sixes-score-entry`).
@@ -156,11 +157,22 @@ void main() {
       await _pump(t, SixesHoleTray(
           card: card, nextHole: 11, onEdit: () {}));
       final text = _allText(t);
-      // "Won hole 10" is worded so it cannot be read as the match score,
-      // which is the line directly underneath.
-      expect(text, contains('Won hole 10'));
+      // The same row the Nassau tray draws: names, why, then the badge.
+      // The standing is the line underneath, and the label above names the
+      // hole, so a bare `Won` is about this hole and nothing else.
+      expect(find.text('Won'), findsOneWidget);
+      expect(text, isNot(contains('Won hole')));
       expect(text, contains('net ${card.result!.t1Net} v ${card.result!.t2Net}'));
       expect(text, contains('2 to play'));
+      // The badge wears the WINNING side's colour, and each figure its own.
+      final row = t.widget<TrayResultRow>(find.byType(TrayResultRow));
+      expect(row.winner, card.result!.winningSide);
+      expect(row.colour1, kSixesSideADark);
+      expect(row.colour2, kSixesSideBDark);
+      final badge = t.widget<Container>(find.ancestor(
+          of: find.text('Won'), matching: find.byType(Container)).first);
+      expect((badge.decoration as BoxDecoration).color,
+          row.winner == 1 ? kSixesSideADark : kSixesSideBDark);
       expect(text, contains('Hole 11 ›'));
     });
 
@@ -215,8 +227,10 @@ void main() {
       await _pump(t, SixesHoleTray(
           card: card, nextHole: 11, onEdit: () {}));
       final text = _allText(t);
-      expect(text, contains('Hole 10 halved'));
-      expect(text, isNot(contains('Won hole')));
+      expect(find.text('Halved'), findsOneWidget);
+      expect(find.text('Won'), findsNothing);
+      expect(t.widget<TrayResultRow>(find.byType(TrayResultRow)).winner,
+          isNull);
       // A halve leaves the standing where it was.
       expect(text, contains('2 UP · 2 to play'));
     });

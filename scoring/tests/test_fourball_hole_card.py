@@ -82,8 +82,9 @@ class TheHandoffsWorkedExamplesTests(_CardBase):
         self._setup()
         self._score(HOLE, paul=4, larry=5, jim=5, ryan=5)
         card = self._card()
-        self.assertEqual(card['sides'][0]['sub'], 'counts: Paul · Larry')
-        self.assertEqual(card['sides'][1]['sub'], 'counts: Jim · Ryan')
+        # The tray no longer says it (`counts: Paul · Larry`): each golfer's
+        # own row marks his ball, directly above the tray.
+        self.assertEqual([s['sub'] for s in card['sides']], ['', ''])
         self.assertEqual(card['kind'], 'best ball')
         counted = {r['first'] for r in card['players'] if r['counted']}
         self.assertEqual(counted, {'Paul', 'Larry', 'Jim', 'Ryan'})
@@ -92,8 +93,9 @@ class TheHandoffsWorkedExamplesTests(_CardBase):
         self._setup()
         self._score(HOLE, paul=4, larry=6, jim=5, ryan=7)
         card = self._card()
-        self.assertEqual(card['sides'][0]['sub'], 'counts: Paul')
-        self.assertEqual(card['sides'][1]['sub'], 'counts: Jim')
+        counted = {r['first'] for r in card['players'] if r['counted']}
+        self.assertEqual(counted, {'Paul', 'Jim'})
+        self.assertEqual([s['sub'] for s in card['sides']], ['', ''])
 
     def test_a_halved_hole(self):
         # Paul 5, Larry 5 (net 4) v Jim 4, Ryan 5 → 4 v 4.
@@ -105,7 +107,9 @@ class TheHandoffsWorkedExamplesTests(_CardBase):
                          ['halved', 'halved'])
         self.assertEqual(card['match']['headline'], 'All square')
         self.assertEqual(card['match']['figure'], 'AS')
-        self.assertEqual(card['sides'][0]['sub'], 'counts: Larry')
+        counted = {r['first'] for r in card['players']
+                   if r['counted'] and r['side'] == 1}
+        self.assertEqual(counted, {'Larry'})
 
     def test_clay_wins_and_the_money_follows(self):
         self._setup(bet=Decimal('20'))
@@ -122,6 +126,48 @@ class TheHandoffsWorkedExamplesTests(_CardBase):
         self._score(HOLE, paul=5, larry=6, jim=4, ryan=6)
         self.assertEqual(self._card()['money'], [])
         self.assertEqual(self._card()['stake'], 0)
+
+
+class TheScorecardMarksTheBallThatWonTests(_CardBase):
+    """Paul, 10 Nov 2026: *"only highlight the winner or winners, not the
+    winning team."* The leaderboard's card tinted both of the winning side's
+    scores, so a 6 beside the 5 that won the hole wore the same colour.
+    """
+
+    def _won(self):
+        from services.fourball import fourball_summary
+        hole = next(h for h in fourball_summary(self.fs)['scorecard']
+                    if h['hole'] == HOLE)
+        first = {r['player_id']: r['first'] for r in self._card()['players']}
+        return {first[s['player_id']] for s in hole['scores'] if s['won']}
+
+    def test_only_the_ball_that_won_it(self):
+        self._setup()
+        self._score(HOLE, paul=4, larry=6, jim=5, ryan=7)
+        self.assertEqual(self._won(), {'Paul'})
+
+    def test_partners_who_tie_for_it_both_won_it(self):
+        # Paul's 4 and Larry's net 4 are both the side's best ball.
+        self._setup()
+        self._score(HOLE, paul=4, larry=5, jim=5, ryan=5)
+        self.assertEqual(self._won(), {'Paul', 'Larry'})
+
+    def test_it_is_the_NET_that_wins_not_the_low_gross(self):
+        # Larry's 5 is a net 4 and beats Paul's gross 5 — a card marking the
+        # side's low GROSS would pick both, or the wrong one.
+        self._setup()
+        self._score(HOLE, paul=5, larry=5, jim=5, ryan=6)
+        self.assertEqual(self._won(), {'Larry'})
+
+    def test_the_losing_side_marks_nobody(self):
+        self._setup()
+        self._score(HOLE, paul=5, larry=6, jim=4, ryan=6)
+        self.assertEqual(self._won(), {'Jim'})
+
+    def test_a_halved_hole_marks_nobody(self):
+        self._setup()
+        self._score(HOLE, paul=5, larry=5, jim=4, ryan=5)
+        self.assertEqual(self._won(), set())
 
 
 class TheCloseOutTests(_CardBase):

@@ -31,13 +31,14 @@ const Color _secondary = Color(0xFFB9CCC3);
 const Color _trayMuted = Color(0xFF7F968C);
 const Color _tag = Color(0xFFF2A86E);
 
-/// `PAUL + DAVE` with the side's number — the live half of this game, because
-/// what a golfer watches in Vegas is the number forming.
+/// `PAUL + DAVE` — a name for the side, over its two golfers.
 ///
-/// It shows the side's two nets as a number (`45`), which is what it is
-/// before any rule touches it; the tray shows what the flip made of it. The
-/// 9 cap IS in here, because capping is part of forming the number rather
-/// than a rule applied to it — which is also the order the engine works in.
+/// It carried the side's NUMBER as its two scores landed (`45`). The tray
+/// reports both numbers, with what the flip did to them, the moment the hole
+/// is complete, so the header was saying half of it early and the tray all
+/// of it a second later (Paul, 10 Nov 2026: *"remove the score from the name
+/// on the top of the score sheet because it is on the summary card"*). The
+/// same call Nassau's `BEST` tag got.
 class VegasSideHeader extends StatelessWidget {
   final VegasHoleSide side;
   const VegasSideHeader({super.key, required this.side});
@@ -60,20 +61,6 @@ class VegasSideHeader extends StatelessWidget {
               style: TextStyle(
                   fontSize: 11.5, fontWeight: FontWeight.w800,
                   letterSpacing: 0.5, color: colour)),
-        ),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-          decoration: BoxDecoration(
-            color: colour,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          // An em dash until both scores are in: a one-digit number would
-          // read as a very good hole rather than as half a hole.
-          child: Text(side.raw?.toString() ?? '–',
-              style: const TextStyle(
-                  color: Colors.white, fontSize: 12.5,
-                  fontWeight: FontWeight.w800)),
         ),
       ]),
     );

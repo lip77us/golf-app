@@ -119,7 +119,11 @@ Future<void> _pumpTray(WidgetTester t, VegasHoleCard card,
 
 void main() {
   group('the side header', () {
-    testWidgets('it carries the number as it builds', (t) async {
+    testWidgets('it names the side, and carries no number', (t) async {
+      // It showed the side's number as its two scores landed. The tray
+      // reports both numbers, with what the flip did to them, the moment the
+      // hole is complete (Paul, 10 Nov 2026: "remove the score from the name
+      // on the top of the score sheet because it is on the summary card").
       await t.binding.setSurfaceSize(const Size(390, 300));
       addTearDown(() => t.binding.setSurfaceSize(null));
       final card = _card();
@@ -132,12 +136,12 @@ void main() {
         ),
       ));
       expect(find.text('PAUL + DAVE'), findsOneWidget);
-      expect(find.text('45'), findsOneWidget);
-      expect(find.text('57'), findsOneWidget);
+      expect(find.text('SAM + LEE'), findsOneWidget);
+      expect(find.text('45'), findsNothing);
+      expect(find.text('57'), findsNothing);
     });
 
-    testWidgets('an unfinished side reads a dash, not half a number',
-        (t) async {
+    testWidgets('an unfinished side draws no dash either', (t) async {
       await t.binding.setSurfaceSize(const Size(390, 300));
       addTearDown(() => t.binding.setSurfaceSize(null));
       final card = _card(sides: const [
@@ -147,23 +151,44 @@ void main() {
       await t.pumpWidget(MaterialApp(
         home: Scaffold(body: VegasSideHeader(side: card.sides[0])),
       ));
-      expect(find.text('–'), findsOneWidget);
+      expect(find.text('–'), findsNothing);
+    });
+  });
+
+  group('the round\'s card and its rules are the leaderboard\'s', () {
+    final se = File('lib/screens/score_entry_screen.dart').readAsStringSync();
+    final lb = File('lib/screens/leaderboard_screen.dart').readAsStringSync();
+
+    test('score entry draws no Las Vegas scorecard and no status band', () {
+      expect(se.contains('_VegasStatusCard'), isFalse);
+      // The scorecard was the one `HoleGridScorecard` fed from the Vegas
+      // summary.
+      expect(se.contains('vegasSummary!.scorecardHoles'), isFalse);
     });
 
-    testWidgets('it shows the number BEFORE the flip', (t) async {
-      // The tray is where the flip is explained; the header is what the two
-      // nets beside it add up to.
-      await t.binding.setSurfaceSize(const Size(390, 300));
-      addTearDown(() => t.binding.setSurfaceSize(null));
-      final card = _card(sides: const [
-        [1, 'Paul + Dave', [3, 5], 35, 35, false, false, 'won'],
-        [2, 'Sam + Lee', [5, 6], 56, 65, true, false, 'lost'],
-      ]);
-      await t.pumpWidget(MaterialApp(
-        home: Scaffold(body: VegasSideHeader(side: card.sides[1])),
-      ));
-      expect(find.text('56'), findsOneWidget);
-      expect(find.text('65'), findsNothing);
+    /// The Vegas leaderboard card's own source, bounded by the next class.
+    String card() {
+      final at = lb.indexOf('class _VegasGroupCard');
+      return lb.substring(at, lb.indexOf('\nclass ', at + 10));
+    }
+
+    test('the board states the rule once, in the strip', () {
+      // `Flip` and `Carryover` were typed into the card's header; the
+      // settings strip above it says `Gross birdies flip · Carries on`.
+      expect(card().contains("'Flip'"), isFalse);
+      expect(card().contains("'Carryover'"), isFalse);
+    });
+
+    test('a one-group round draws no group name', () {
+      expect(card().contains("group['_single_group'] != true"), isTrue);
+    });
+
+    test('the scorecard draws no strokes table', () {
+      final c = card();
+      final at = c.indexOf('HoleGridScorecard(');
+      expect(at, greaterThan(0));
+      expect(c.substring(at, c.indexOf(');', at)),
+          contains('showStrokes: false'));
     });
   });
 

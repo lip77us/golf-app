@@ -12342,6 +12342,29 @@ class SkinsHoleCard {
   final bool roundOver;
   final int? nextHole;
 
+  // ── A skins POOL (`multi_skins_hole_card`) ────────────────────────────
+  // The same card over the whole field. Everything below is absent on a
+  // round-skins card, and each default is what round skins means.
+
+  /// This card is a pool across groups: a hole is decided by the FIELD.
+  final bool acrossGroups;
+
+  /// Every golfer in the pool has a score on this hole. Always true on a
+  /// round-skins card once the hole is complete; on a pool the usual state
+  /// is the opposite — this group in, the field not (`outcome: waiting`).
+  final bool settled;
+
+  /// The tray label's right-hand text, when the server writes it
+  /// (`$10 ante · $60 pool`). Empty ⇒ the tray composes `N riding · …`.
+  final String trayTrailing;
+
+  /// The ledger's footer, when the server writes it. Empty ⇒ composed.
+  final String footer;
+
+  /// The line beside the hole's worth (`6 in the pool · a tie kills it`).
+  /// Empty ⇒ the carry line.
+  final String worthSub;
+
   const SkinsHoleCard({
     required this.hole,
     required this.par,
@@ -12372,6 +12395,11 @@ class SkinsHoleCard {
     required this.holesLeft,
     required this.roundOver,
     required this.nextHole,
+    this.acrossGroups = false,
+    this.settled = true,
+    this.trayTrailing = '',
+    this.footer = '',
+    this.worthSub = '',
   });
 
   factory SkinsHoleCard.fromJson(Map<String, dynamic> j) => SkinsHoleCard(
@@ -12410,6 +12438,11 @@ class SkinsHoleCard {
         holesLeft: (j['holes_left'] as num?)?.toInt() ?? 0,
         roundOver: j['round_over'] as bool? ?? false,
         nextHole: (j['next_hole'] as num?)?.toInt(),
+        acrossGroups: j['across_groups'] as bool? ?? false,
+        settled: j['settled'] as bool? ?? true,
+        trayTrailing: j['tray_trailing'] as String? ?? '',
+        footer: j['footer'] as String? ?? '',
+        worthSub: j['worth_sub'] as String? ?? '',
       );
 
   bool get staked => stake > 0;
@@ -12431,6 +12464,10 @@ class SkinsHolePlayer {
   /// A NATURAL birdie — the thing the steal rule turns on.
   final bool birdie;
 
+  /// False for a golfer on the card who is not in the POOL: he has a score
+  /// to enter and no net. Always true in round skins.
+  final bool inPool;
+
   const SkinsHolePlayer({
     required this.playerId,
     required this.name,
@@ -12442,6 +12479,7 @@ class SkinsHolePlayer {
     required this.gross,
     required this.net,
     required this.birdie,
+    this.inPool = true,
   });
 
   factory SkinsHolePlayer.fromJson(Map<String, dynamic> j) => SkinsHolePlayer(
@@ -12455,6 +12493,7 @@ class SkinsHolePlayer {
         gross: (j['gross'] as num?)?.toInt(),
         net: (j['net'] as num?)?.toInt(),
         birdie: j['birdie'] as bool? ?? false,
+        inPool: j['in_pool'] as bool? ?? true,
       );
 }
 

@@ -668,6 +668,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     if (primary == 'skins' && rp.skinsSummary != null) {
       return (rp.skinsSummary!.handicapMode, rp.skinsSummary!.netPercent);
     }
+    // A skins POOL carries its own mode and allowance too. This is the
+    // fallback for a hole whose card has not arrived; with the card in hand
+    // the row reads the pool's own strokes outright (`_strokesForHole`).
+    if (primary == GameIds.multiSkins && rp.multiSkinsSummary != null) {
+      return (rp.multiSkinsSummary!.handicapMode,
+              rp.multiSkinsSummary!.netPercent);
+    }
     // Banker settles strokes-off INSIDE each one-on-one, so the screen must
     // not fall through to the round's full-net default — that is what made a
     // scratch golfer show "gets 6" and a stroke he never receives. The
@@ -1587,6 +1594,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         // app, and a side game must not take over the entry of the round's
         // own one.
         primary == GameIds.skins ||
+        // Multi-Group Skins — the Skins card and tray over the whole field
+        // (Paul, 10 Nov 2026). Only where the pool is the round's primary:
+        // on a tournament it rides beside Stroke Play, which owns the entry.
+        primary == GameIds.multiSkins ||
         // Banker, per `~/Downloads/handoff-banker-score-entry`, which folds
         // the betting into this screen: the max and the three bets on the
         // tee, the calls in the air, then the keypad and the tray.
@@ -1869,8 +1880,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// decides what CARRIES — and that races the fetch the forward button
   /// started.
   void _ensureSkinsCard(RoundProvider rp) {
-    if (!_activeGames(rp.round).contains(GameIds.skins)) return;
-    if (rp.skinsHole(_selectedHole) != null) {
+    // **A skins POOL travels in the same slot**: one card model, one tray,
+    // and which of the two a round plays is decided once, here and in
+    // `_skinsCard`.
+    final pool = _poolIsPrimary(rp);
+    if (!pool && !_activeGames(rp.round).contains(GameIds.skins)) return;
+    final held = pool
+        ? rp.poolHole(_selectedHole)
+        : rp.skinsHole(_selectedHole);
+    if (held != null) {
       _skinsCardAsked = null;
       return;
     }
@@ -1878,21 +1896,36 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     _skinsCardAsked = _selectedHole;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<RoundProvider>()
-          .loadSkinsHole(widget.foursomeId, _selectedHole);
+      final p = context.read<RoundProvider>();
+      if (pool) {
+        p.loadPoolHole(widget.foursomeId, _selectedHole);
+      } else {
+        p.loadSkinsHole(widget.foursomeId, _selectedHole);
+      }
     });
   }
+
+  /// Multi-Group Skins is the round's PRIMARY — the one case where the pool
+  /// owns this screen. On a tournament it rides beside the round's own game
+  /// and stays a leaderboard tab.
+  bool _poolIsPrimary(RoundProvider rp) =>
+      resolvePrimary(rp.round?.primaryGame, _activeGames(rp.round)) ==
+      GameIds.multiSkins;
 
   /// The Skins card for the hole on screen, when Skins is the PRIMARY.
   ///
   /// **The primary test matters more here than anywhere else**: Skins is
   /// the app's commonest side game, and as one it keeps its leaderboard tab
   /// and its junk sheet while the round's own game owns the entry.
+  ///
+  /// A skins POOL as the primary answers with its own card, which is the
+  /// same model over the whole field — so the keypad, the worth header and
+  /// the tray below all follow without knowing which they were handed.
   SkinsHoleCard? _skinsCard(RoundProvider rp) {
     final games = _activeGames(rp.round);
-    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.skins) {
-      return null;
-    }
+    final primary = resolvePrimary(rp.round?.primaryGame, games);
+    if (primary == GameIds.multiSkins) return rp.poolHole(_selectedHole);
+    if (primary != GameIds.skins) return null;
     return rp.skinsHole(_selectedHole);
   }
 
@@ -4641,7 +4674,6 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 primaryGame:             resolvePrimary(rp.round?.primaryGame, games),
                 nassau:                  nas,
                 skins:                   skins,
-                multiSkins:              games.contains('multi_skins')       ? rp.multiSkinsSummary         : null,
                 sixesSummary:            games.contains('sixes')             ? rp.sixesSummary              : null,
                 vegasSummary:            games.contains('vegas')             ? rp.vegasSummary              : null,
                 fourballSummary:         games.contains('fourball')          ? rp.fourballSummary           : null,
@@ -4661,7 +4693,6 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 currentHole:             _selectedHole,
                 loadingNassau:           rp.loadingNassau,
                 loadingSkins:            rp.loadingSkins,
-                loadingMultiSkins:       rp.loadingMultiSkins,
                 loadingSixes:            rp.loadingSixes,
                 loadingTripleCup:        rp.loadingTripleCup,
                 loadingPoints531:        rp.loadingPoints531,
@@ -5182,6 +5213,19 @@ class _HoleScoreCard extends StatelessWidget {
   }
 
   int _strokesForHole(Membership m, ScorecardHole? h) {
+    // **A skins POOL states the strokes for this hole outright.** Strokes-
+    // off there is off the low man in the POOL, who is usually in another
+    // group, so the allocation below — which anchors on this foursome's
+    // low — would show dots the pool does not give. The keypad already
+    // reads the card (`_keypadStrokes`); a row that disagreed with the
+    // keypad under it is the Sixes report again.
+    final pool = skinsCard;
+    if (pool != null && pool.acrossGroups && h != null &&
+        h.holeNumber == pool.hole) {
+      for (final p in pool.players) {
+        if (p.playerId == m.player.id) return p.strokes;
+      }
+    }
     if (h == null || handicapMode == 'gross') return 0;
     final entry = h.scoreFor(m.player.id);
     final mySi  = entry?.strokeIndex ?? h.strokeIndex;
@@ -5597,24 +5641,21 @@ class _HoleScoreCard extends StatelessWidget {
                    vegasHole!.sideOf(players[idx - 1].player.id)?.side !=
                        vegasHole!.sideOf(m.player.id)?.side))
                 VegasSideHeader(side: vegasHole!.sideOf(m.player.id)!),
-              // Fourball: the same slot, carrying the side's BEST BALL as
-              // its two scores land.
+              // Fourball: the same slot. A NAME for the side — the tray
+              // reports the best balls once the hole is complete.
               if (fourballHole?.sideOf(m.player.id) != null &&
                   (idx == 0 ||
                    fourballHole!.sideOf(players[idx - 1].player.id)?.side !=
                        fourballHole!.sideOf(m.player.id)?.side))
                 FourballSideHeader(
                     side: fourballHole!.sideOf(m.player.id)!),
-              // Nassau and Nassau Nine: the same slot and the same header,
-              // as a NAME for the side only — no `BEST` tag. The tray
-              // reports the hole; see `FourballSideHeader.showBest`.
+              // Nassau and Nassau Nine: the same slot and the same header.
               if (nassauCard?.sideOf(m.player.id) != null &&
                   (idx == 0 ||
                    nassauCard!.sideOf(players[idx - 1].player.id)?.side !=
                        nassauCard!.sideOf(m.player.id)?.side))
                 FourballSideHeader(
-                    side: nassauCard!.sideOf(m.player.id)!,
-                    showBest: false),
+                    side: nassauCard!.sideOf(m.player.id)!),
               // Skins has no sides, so this is ONE header over the card
               // rather than one a side: what the hole is worth.
               if (skinsCard != null && idx == 0)
@@ -7037,7 +7078,6 @@ class _GameStatusSection extends StatelessWidget {
   final List<String>          games;
   final NassauSummary?        nassau;
   final SkinsSummary?         skins;
-  final MultiSkinsSummary?    multiSkins;
   final SixesSummary?         sixesSummary;
   final VegasSummary?         vegasSummary;
   final FourballSummary?      fourballSummary;
@@ -7055,7 +7095,6 @@ class _GameStatusSection extends StatelessWidget {
   final int                         currentHole;
   final bool                        loadingNassau;
   final bool                        loadingSkins;
-  final bool                        loadingMultiSkins;
   final bool                        loadingSixes;
   final bool                        loadingTripleCup;
   final bool                        loadingPoints531;
@@ -7100,7 +7139,6 @@ class _GameStatusSection extends StatelessWidget {
     required this.games,
     required this.nassau,
     required this.skins,
-    this.multiSkins,
     required this.sixesSummary,
     this.vegasSummary,
     this.fourballSummary,
@@ -7115,7 +7153,6 @@ class _GameStatusSection extends StatelessWidget {
     required this.currentHole,
     required this.loadingNassau,
     required this.loadingSkins,
-    this.loadingMultiSkins = false,
     this.loadingSixes      = false,
     this.loadingTripleCup  = false,
     required this.loadingPoints531,
@@ -7152,53 +7189,19 @@ class _GameStatusSection extends StatelessWidget {
         // that card's scorecard and strokes table — the move Stroke Play's
         // grid, Rabbit's, Survivor's rail and Sixes' card each made.
 
-        // **The scorecard, where the standings card used to be.** The
-        // standings — who has how many skins and what they are worth — are
-        // the leaderboard's, which already lists them per player; the reader's
-        // own now rides in the standing row at the top of this screen.
+        // **Skins draws no scorecard here — it is the leaderboard's.**
         //
-        // What score entry has no other way to show is the card: which holes
-        // were won, by whom and on what score, with the stroke dots that say
-        // where the next skin is cheapest. Same widget and same payload the
-        // leaderboard draws, green skin-winner cell and all.
-        //
-        // The hole in play keeps its own carry-pot line above the score card,
-        // so the one number that changes what this hole is worth stays beside
-        // the hole rather than in a table.
-        if (primaryGame == 'skins') ...[
-          if (skins != null && skins!.scorecardHoles.isNotEmpty)
-            HoleGridScorecard(
-              // A progress read-out under a keypad: a second table here would push
-              // the entry card off the screen. See `HoleGridScorecard.showStrokes`.
-              showStrokes: false,
-              holes:        skins!.scorecardHoles,
-              participants: skins!.scorecardPlayers,
-              holesInPlay:  skins!.scorecardHolesInPlay,
-            )
-          else if (loadingSkins)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          const SizedBox(height: 12),
-        ],
+        // The round's card sat under the hole, behind the tray, and the
+        // Skins board draws the same one with the skin-winner cells (Paul,
+        // 10 Nov 2026) — the move Stroke Play's, Nassau's, Las Vegas' and
+        // Fourball's made the same day. The hole in play still says what it
+        // is worth, in `SkinsHoleWorth` above the rows.
 
-        // Multi-Group Skins standings (round-level pool across foursomes) —
-        // only when it's the primary (a side game shows on the leaderboard).
-        if (primaryGame == 'multi_skins') ...[
-          if (multiSkins != null)
-            _MultiSkinsStandingsCard(summary: multiSkins!)
-          else if (loadingMultiSkins)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          const SizedBox(height: 12),
-        ],
+        // **Multi-Group Skins draws no standings table here** (Paul, 10 Nov
+        // 2026). It sat under the hole — pool, thru, skins and payout per
+        // golfer plus a per-hole winner strip — which is the leaderboard's
+        // board, drawn a second time behind the tray. The tray's own ledger
+        // says where this card's golfers stand after each hole.
 
         // The match strip is gone — the app-bar standing row replaced it.
         // **Sixes' scorecard is the BOARD's** (Paul, 31 Oct 2026). It drew
@@ -7289,76 +7292,21 @@ class _GameStatusSection extends StatelessWidget {
           const SizedBox(height: 12),
         ],
 
-        // Las Vegas — the mode in force, the per-hole numbers, and the card.
-        if (games.contains('vegas')) ...[
-          if (vegasSummary != null) ...[
-            // **The scorecard, moved here from the leaderboard — and ABOVE the
-            // hole chips.** Vegas is a digit game with no card of its own,
-            // which is exactly why the server already emits this block: a net
-            // or strokes-off player has nowhere else to see where his strokes
-            // fall, and the chips below are built out of scores he cannot
-            // otherwise check.
-            //
-            // The order is the reading order. `45-57 +12` is a CONCLUSION, and
-            // the scores it was drawn from have to be above it — a reader
-            // going the other way has to scroll back up to check the number he
-            // has just been given.
-            //
-            // Same widget, same payload, same `winner_team` tint as the
-            // leaderboard draws. One implementation is what keeps the two
-            // cards identical.
-            if (vegasSummary!.scorecardHoles.isNotEmpty) ...[
-              HoleGridScorecard(
-                // A progress read-out under a keypad: a second table here would push
-                // the entry card off the screen. See `HoleGridScorecard.showStrokes`.
-                showStrokes: false,
-                holes:        vegasSummary!.scorecardHoles,
-                participants: vegasSummary!.scorecardPlayers,
-                legend:       null,
-                holesInPlay:  vegasSummary!.scorecardHolesInPlay,
-              ),
-              const SizedBox(height: 8),
-            ],
-            _VegasStatusCard(
-              summary:     vegasSummary!,
-              currentHole: currentHole,
-            ),
-          ]
-          else if (loadingVegas)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          const SizedBox(height: 12),
-        ],
-
-        // Fourball — the per-hole progress grid.
+        // **Las Vegas draws nothing here — it is the leaderboard's.**
         //
-        // **The status card came off 22 Sep 2026.** It said the match state
-        // (`Paul & Mike 2 UP thru 5`) and named the two sides; the standing
-        // row in the app bar says the first, and the four player rows above
-        // are already tinted with the two sides' fixed colours. Nassau's team
-        // banner came off for the identical reason.
-        if (games.contains('fourball') && fourballSummary != null) ...[
-          // **The app's standard scorecard**, replacing this game's own
-          // progress grid. Its `winner_team` tint colours the WINNING side's
-          // two scores on every hole, which is why there is no `Won by` row
-          // any more: the boxes say it where the scores are, and a row of
-          // team initials underneath was the same fact one line down.
-          if (fourballSummary!.scorecardHoles.isNotEmpty)
-            HoleGridScorecard(
-              // A progress read-out under a keypad: a second table here would push
-              // the entry card off the screen. See `HoleGridScorecard.showStrokes`.
-              showStrokes: false,
-              holes:        fourballSummary!.scorecardHoles,
-              participants: fourballSummary!.scorecardPlayers,
-              legend:       null,
-              holesInPlay:  fourballSummary!.scorecardHolesInPlay,
-            ),
-          const SizedBox(height: 12),
-        ],
+        // This held the round's scorecard and a band reading `Las Vegas ·
+        // Flip` over a wrap of per-hole chips (`H3 45-57 +12`), both under
+        // the hole tray (Paul, 10 Nov 2026). The board already draws the
+        // card and the hole-by-hole grid, and the rule in force is a chip at
+        // the top of it now (`Gross birdies flip`) — the move Stroke Play's
+        // grid and Nassau's made the same day.
+
+        // **Fourball draws no scorecard here — it is the leaderboard's.**
+        //
+        // The round's card sat under the hole, behind the tray, and the board
+        // draws the same one (Paul, 10 Nov 2026) — the move Stroke Play's,
+        // Nassau's and Las Vegas' made the same day. The status card that
+        // used to sit beside it came off on 22 Sep.
 
         // **40 Balls — the picker, under the player rows.** It is the game:
         // the group chooses having seen its nets, so the card sits directly
@@ -8421,82 +8369,6 @@ class _MatchStatusBar extends StatelessWidget {
 
 // ---------------------------------------------------------------------------
 // Sixes match grid (ported from sixes_screen.dart _MatchGrid / _SegmentCard)
-// ---------------------------------------------------------------------------
-// Multi-Group Skins standings card — compact round-level pool snapshot for
-// the score-entry screen.  Shows pool, Thru, skins, payout per participant
-// and the per-hole winner strip ("—" = dead skin).  Tapping the title bar
-// navigates to the full /multi-skins screen.
-// ---------------------------------------------------------------------------
-
-class _MultiSkinsStandingsCard extends StatelessWidget {
-  final MultiSkinsSummary summary;
-  const _MultiSkinsStandingsCard({required this.summary});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Icon(Icons.attach_money, size: 18),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(
-                'Multi-Group Skins — '
-                '\$${summary.pool.toStringAsFixed(2)} pool, '
-                '${summary.totalSkins} skin(s) won',
-                style: theme.textTheme.titleSmall,
-              ),
-            ),
-          ]),
-          const SizedBox(height: 4),
-          // Standings table (Thru / Skins / Payout)
-          Table(
-            columnWidths: const {
-              0: FlexColumnWidth(),
-              1: FixedColumnWidth(36),
-              2: FixedColumnWidth(40),
-              3: FixedColumnWidth(56),
-            },
-            children: [
-              TableRow(children: [
-                Text('Player',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.bold)),
-                Text('Thru', textAlign: TextAlign.right,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.bold)),
-                Text('Skins', textAlign: TextAlign.right,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.bold)),
-                Text('Payout', textAlign: TextAlign.right,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.bold)),
-              ]),
-              for (final p in summary.players)
-                TableRow(children: [
-                  Text(p.shortName.isNotEmpty ? p.shortName : p.name,
-                      style: theme.textTheme.bodySmall),
-                  Text(p.thru == 0 ? '—' : '${p.thru}',
-                      textAlign: TextAlign.right,
-                      style: theme.textTheme.bodySmall),
-                  Text('${p.skinsWon}',
-                      textAlign: TextAlign.right,
-                      style: theme.textTheme.bodySmall),
-                  Text('\$${p.payout.toStringAsFixed(2)}',
-                      textAlign: TextAlign.right,
-                      style: theme.textTheme.bodySmall),
-                ]),
-            ],
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
 // ---------------------------------------------------------------------------
 
 String _sixesInitials(String name) {
@@ -10329,90 +10201,6 @@ class _CupSinglesStatusCard extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Las Vegas status card — team totals + per-hole numbers (shown in score entry)
 // ---------------------------------------------------------------------------
-
-class _VegasStatusCard extends StatelessWidget {
-  final VegasSummary summary;
-  final int currentHole;
-  const _VegasStatusCard({required this.summary, required this.currentHole});
-
-  // `_teamRow` was here — a coloured bar, both partners' names, the side's
-  // total points and its money, once per side. **Removed 22 Sep 2026.**
-  //
-  // The names were redundant with the player rows below, which are already
-  // tinted with those exact two colours — the same call made on Nassau, where
-  // a `Paul Lipkin vs. Jim …` line sat above rows that said it in colour. And
-  // an absolute point total is not a standing: `Team 1: 84 · Team 2: 96` says
-  // nothing a golfer can act on, because the only figure that settles is the
-  // gap. The standing row carries the gap, signed, with the money beside it.
-  //
-  // What is left is what only this card can say: the mode in force and the
-  // per-hole arithmetic.
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final decided = summary.holes.where((h) => h.winner != null).toList();
-
-    Color winColor(String? w) => w == 'team1' ? GameColors.team1
-        : w == 'team2' ? GameColors.team2
-        : theme.colorScheme.onSurfaceVariant;
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Text('Las Vegas', style: theme.textTheme.titleSmall
-                ?.copyWith(fontWeight: FontWeight.bold)),
-            const Spacer(),
-            Text(summary.birdieMode == 'flip' ? 'Flip' : 'Multiply',
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            if (summary.carryover) ...[
-              const SizedBox(width: 8),
-              Text('Carryover', style: theme.textTheme.labelSmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            ],
-          ]),
-          if (decided.isNotEmpty) ...[
-            const Divider(height: 18),
-            Wrap(spacing: 6, runSpacing: 6, children: [
-              for (final h in decided)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: winColor(h.winner).withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                        color: h.hole == currentHole
-                            ? theme.colorScheme.primary
-                            : winColor(h.winner).withValues(alpha: 0.4)),
-                  ),
-                  child: Text(
-                    // A halved Vegas hole is worth 0 points (a push), not the
-                    // match-play "½" — the equal numbers already show the tie.
-                    h.winner == 'halved'
-                        ? 'H${h.hole} ${h.team1Number}-${h.team2Number} · 0'
-                        : 'H${h.hole} ${h.team1Number}-${h.team2Number} '
-                          '+${h.points}',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        color: winColor(h.winner),
-                        fontWeight: FontWeight.w600,
-                        fontFeatures: const [FontFeature.tabularFigures()]),
-                  ),
-                ),
-            ]),
-          ],
-        ]),
-      ),
-    );
-  }
-}
 
 // `_FourballStatusCard` was here — both teams on one line with `vs.`
 // between them, and the running result led by the leading pair's short

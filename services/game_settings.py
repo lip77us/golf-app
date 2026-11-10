@@ -58,6 +58,17 @@ _PRESS = {
     'manual_auto': 'Auto + one by hand',
 }
 
+# Las Vegas' birdie rule. **`Gross`, because it is**: the two numbers are
+# built from NETS, but what flips (or multiplies) is a side's best GROSS ball
+# against par — `services.vegas._best_under` — whatever the handicap mode. A
+# chip reading `Flip` left a golfer asking exactly that (Paul, 10 Nov 2026:
+# *"do I only flip on gross birdies?"*). The wording follows skins'
+# `Gross birdies steal`.
+_BIRDIE = {
+    'flip':       'Gross birdies flip',
+    'multiplier': 'Gross birdies multiply',
+}
+
 _PAYOUT = {
     'pool':       'Pool',
     'pay_around': 'Pay around',
@@ -148,7 +159,8 @@ def settings_chips(summary: dict) -> list[str]:
     for key, table in (('variant', _VARIANT),
                        ('scoring_format', _FORMAT),
                        ('handicap_allocation', _ALLOCATION),
-                       ('press_mode', _PRESS)):
+                       ('press_mode', _PRESS),
+                       ('birdie_mode', _BIRDIE)):
         chip = table.get(summary.get(key))
         if chip:
             out.append(chip)

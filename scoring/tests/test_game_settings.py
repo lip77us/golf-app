@@ -108,6 +108,44 @@ class ChipsTests(SimpleTestCase):
         self.assertEqual(settings_chips('nonsense'), [])
 
 
+class LasVegasSaysWhichBirdiesTests(SimpleTestCase):
+    """Paul, 10 Nov 2026: *"that Flip should be on the top of the
+    Leaderboard"*, and in the same message *"do I only flip on gross
+    birdies?"* — which a chip reading `Flip` cannot answer and this one does.
+    """
+
+    def _chips(self, mode, carry=True):
+        return settings_chips({
+            'handicap': {'mode': 'strokes_off', 'net_percent': 100},
+            'birdie_mode': mode, 'carryover': carry,
+        })
+
+    def test_flip_names_the_gross_birdie(self):
+        self.assertEqual(self._chips('flip'),
+                         ['Strokes off', 'Gross birdies flip', 'Carries on'])
+
+    def test_multiply_does_too(self):
+        self.assertIn('Gross birdies multiply', self._chips('multiplier'))
+
+    def test_an_unknown_mode_is_skipped_not_printed(self):
+        self.assertEqual(self._chips('nonsense', carry=False),
+                         ['Strokes off', 'No carry'])
+
+    def test_it_is_true_of_the_engine(self):
+        # The chip says GROSS. The engine's birdie test reads the gross
+        # index against par and nothing else; if that ever takes a net, this
+        # chip is lying and should fail here rather than on a golfer.
+        import inspect
+        from services import vegas
+        src = inspect.getsource(vegas._best_under)
+        self.assertIn('gross_index', src)
+        self.assertNotIn('net', src.replace('gross_index', ''))
+
+    def test_no_other_game_grows_the_chip(self):
+        self.assertEqual(settings_chips({'handicap_mode': 'net',
+                                         'net_percent': 100}), ['Net'])
+
+
 class SkinRulesAreChipsTests(SimpleTestCase):
     """Paul, 30 Oct 2026: the rules belong in the bubbles at the top."""
 

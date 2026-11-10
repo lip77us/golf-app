@@ -63,33 +63,56 @@ Future<void> _pump(WidgetTester t, SkinsBoardData d) => t.pumpWidget(
     );
 
 
-/// The handicap, because a net figure cannot be checked against nothing.
+/// The ledger row is skins and money, and names no handicap.
 ///
-/// The board named neither number until 31 Oct 2026 — "add the CH to all
-/// four boards". The label itself is `utils/handicap_label.dart`; this is
-/// that it reaches the ledger.
-void _handicapOnTheLedger() {
-  group('the ledger names the handicap', () {
-    testWidgets('index and CH, on the line it already had', (t) async {
+/// It carried `16.2 · CH 14` under each name from 31 Oct 2026 ("add the CH to
+/// all four boards") until 10 Nov, when the scorecard under the board started
+/// saying `Gil gets 10` beside each golfer — the figure a skin is actually won
+/// with — and Paul asked for the index and CH to come off this row.
+void _noHandicapOnTheLedger() {
+  group('the ledger names no handicap', () {
+    testWidgets('a payload carrying index and CH draws neither', (t) async {
+      await _pump(t, SkinsBoardData.fromSkins(_skins(players: [
+        _p(1, 'Paul', won: 2, net: 10, index: '16.2', ch: 14),
+        _p(2, 'Dave', net: -10, index: '8.4', ch: 9),
+      ], holes: [_won(1, 1), _won(2, 1)])));
+      expect(find.textContaining('CH'), findsNothing);
+      expect(find.textContaining('16.2'), findsNothing);
+      expect(find.textContaining('8.4'), findsNothing);
+    });
+
+    testWidgets('a single foursome has no under-line at all', (t) async {
+      // `thru` is the pool's; without it the name stands alone, so the row
+      // is one line shorter than it was.
       await _pump(t, SkinsBoardData.fromSkins(_skins(players: [
         _p(1, 'Paul', won: 2, net: 10, index: '16.2', ch: 14),
         _p(2, 'Dave', net: -10),
       ], holes: [_won(1, 1), _won(2, 1)])));
-      expect(find.textContaining('16.2 · CH 14'), findsOneWidget);
+      expect(find.textContaining('thru'), findsNothing);
+      expect(find.textContaining('not started'), findsNothing);
     });
+  });
 
-    testWidgets('a payload with neither shows no empty separator', (t) async {
-      await _pump(t, SkinsBoardData.fromSkins(_skins(players: [
-        _p(1, 'Paul', won: 2, net: 10),
-        _p(2, 'Dave', net: -10),
-      ], holes: [_won(1, 1), _won(2, 1)])));
-      expect(find.textContaining(' · CH'), findsNothing);
+  group('the board card', () {
+    test('draws no strokes table under its scorecard', () {
+      // The dots are on the cells and `gets N` is beside each name.
+      final lb = File('lib/screens/leaderboard_screen.dart').readAsStringSync();
+      final at = lb.indexOf('class _SkinsGroupCard');
+      expect(at, greaterThan(0));
+      final end = lb.indexOf('\nclass ', at + 10);
+      final card = lb.substring(at, end);
+      // One scorecard in this card, so the class is the bound — a window
+      // measured in characters reports edits, not regressions.
+      expect('HoleGridScorecard('.allMatches(card).length, 1);
+      final call = card.indexOf('HoleGridScorecard(');
+      expect(RegExp(r'showStrokes:\s*false').hasMatch(card.substring(call)),
+          isTrue);
     });
   });
 }
 
 void main() {
-  _handicapOnTheLedger();
+  _noHandicapOnTheLedger();
   group('up next', () {
     testWidgets('names the carried holes and what is riding', (t) async {
       await _pump(t, SkinsBoardData.fromSkins(_skins(

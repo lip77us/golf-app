@@ -112,15 +112,24 @@ void main() {
       expect(body, contains('...fsGames'));
     });
 
-    test('the skins standings card is gated on the PRIMARY, not membership',
-        () {
-      // Which is what takes it off a stroke round's entry screen: the pool
-      // has a leaderboard tab, and a board crushed under the keypad is a
-      // second drawing of it.
+    test('no skins standings card is drawn on score entry at all', () {
+      // It was gated on the PRIMARY, which took it off a stroke round's
+      // entry screen. On 10 Nov 2026 it came off the pool's own entry too —
+      // the pool plays through the Skins tray now, and the standings are the
+      // leaderboard's. So the stronger claim holds for every round.
       final src = _src('lib/screens/score_entry_screen.dart');
-      expect(src, contains("if (primaryGame == 'multi_skins')"));
-      expect(src.contains("games.contains('multi_skins')\n"
-          "            && _MultiSkinsStandingsCard"), isFalse);
+      expect(src.contains('_MultiSkinsStandingsCard('), isFalse);
+    });
+
+    test('and the pool only takes the entry screen as the PRIMARY', () {
+      // The half of the old guard that still matters: on a stroke round the
+      // pool must not hand its card to the Skins tray.
+      final src = _src('lib/screens/score_entry_screen.dart');
+      final i = src.indexOf('SkinsHoleCard? _skinsCard(RoundProvider rp) {');
+      final body = src.substring(i, src.indexOf('\n  }', i));
+      expect(body, contains('if (primary == GameIds.multiSkins)'));
+      expect(resolvePrimary(null, ['multi_skins', 'low_net_round']),
+          isNot(GameIds.multiSkins));
     });
 
     test('a stroke round with a pool reaches the keypad', () {

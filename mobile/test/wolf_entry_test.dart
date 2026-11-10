@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/theme/halved_brand.dart';
@@ -134,7 +135,7 @@ Future<void> _pumpTray(WidgetTester t, WolfHoleCard card,
 }
 
 Future<void> _pumpChips(WidgetTester t, WolfHoleCard card,
-    List<String> calls) async {
+    List<String> calls, {bool locked = false}) async {
   await t.binding.setSurfaceSize(const Size(390, 900));
   addTearDown(() => t.binding.setSurfaceSize(null));
   await t.pumpWidget(MaterialApp(
@@ -142,6 +143,7 @@ Future<void> _pumpChips(WidgetTester t, WolfHoleCard card,
       body: SingleChildScrollView(
         child: WolfCallCard(
           card: card,
+          locked: locked,
           onCall: (d, {int? partnerId}) =>
               calls.add(partnerId == null ? d : '$d:$partnerId'),
         ),
@@ -232,6 +234,105 @@ void main() {
           t, _card(decision: 'pending', canPartner: false), []);
       expect(find.text('Dave'), findsNothing);
       expect(find.textContaining('Lone or Blind only'), findsNothing);
+    });
+  });
+
+  group('a settled hole locks the call', () {
+    // Paul, 10 Nov 2026: "It is very easy to be on the previous hole still
+    // and if you set the wolf partner, you might be changing the previous
+    // hole. Lets lock the wolf choice unless you hit edit scores."
+    testWidgets('no chip does anything', (t) async {
+      final calls = <String>[];
+      await _pumpChips(t, _card(), calls, locked: true);
+      for (final label in ['Paul', 'Dave', 'Lee', 'Lone', 'Blind']) {
+        await t.tap(find.text(label));
+      }
+      await t.pump();
+      expect(calls, isEmpty);
+    });
+
+    testWidgets('not even the chip that is on — tapping it would CLEAR it',
+        (t) async {
+      // The selected chip is a toggle, so it is the one tap that un-decides
+      // a hole already settled.
+      final calls = <String>[];
+      await _pumpChips(t, _card(decision: 'lone'), calls, locked: true);
+      await t.tap(find.text('Lone'));
+      await t.pump();
+      expect(calls, isEmpty);
+    });
+
+    testWidgets('the card says why, and how to change it', (t) async {
+      await _pumpChips(t, _card(), [], locked: true);
+      expect(find.text('Hole settled — Edit scores to change the call.'),
+          findsOneWidget);
+      expect(find.byIcon(Icons.lock_outline), findsOneWidget);
+    });
+
+    testWidgets('the call that was made stays readable', (t) async {
+      // An inert chip fades; the one that is ON is the call, and on a
+      // locked card it is the only thing worth reading.
+      await _pumpChips(t, _card(), [], locked: true);
+      final on  = t.widget<Text>(find.text('Paul'));
+      final off = t.widget<Text>(find.text('Dave'));
+      expect(on.style!.color!.a, 1.0);
+      expect(off.style!.color!.a, lessThan(0.5));
+    });
+
+    testWidgets('unlocked is the default, and says nothing about a lock',
+        (t) async {
+      final calls = <String>[];
+      await _pumpChips(t, _card(), calls);
+      expect(find.byIcon(Icons.lock_outline), findsNothing);
+      await t.tap(find.text('Dave'));
+      await t.pump();
+      expect(calls, ['partner:2']);
+    });
+
+    testWidgets('Edit scores says the call is editable too', (t) async {
+      await t.binding.setSurfaceSize(const Size(390, 900));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          bottomNavigationBar: WolfHoleTray(
+            card: _card(), picking: true,
+            onEdit: () {}, onCall: (d, {int? partnerId}) {},
+            onNext: () {}, onPrev: () {},
+          ),
+        ),
+      ));
+      await t.pumpAndSettle();
+      expect(find.text('Tap a score or the call above to change it'),
+          findsOneWidget);
+    });
+
+    group('the screen decides when', () {
+      final src = File('lib/screens/wolf_screen.dart').readAsStringSync();
+      final at = src.indexOf('bool _callLocked(');
+      final body = at < 0
+          ? ''
+          : src.substring(at, src.indexOf(';', src.indexOf('=>', at)));
+
+      test('the chips are handed the lock', () {
+        expect(at, greaterThan(0));
+        expect(src, contains('locked: _callLocked(card, players, scores)'));
+      });
+
+      test('all four scores AND a call', () {
+        expect(body, contains('_allScored(players, scores)'));
+        expect(body, contains('card.isDecided'));
+      });
+
+      test('four scores with NO call stays open', () {
+        // That is the state where the tray asks for it; a lock keyed on the
+        // scores alone would leave the chips dead while the tray begged.
+        expect(body.contains('needsCall'), isFalse);
+        expect(body, contains('card.isDecided'));
+      });
+
+      test('and Edit scores is what opens it again', () {
+        expect(body, contains('!_trayEditing'));
+      });
     });
   });
 
@@ -393,6 +494,56 @@ void main() {
       await t.binding.setSurfaceSize(const Size(320, 900));
       await t.pumpAndSettle();
       expect(t.takeException(), isNull);
+    });
+  });
+
+  group('the standing\'s columns do not move with the name', () {
+    // Paul, 10 Nov 2026: "bottom table all wobbly". A loose `Flexible` name
+    // beside a `Spacer` split the free width and left the name's unused
+    // half at the END of the row, so `Jim`'s figures sat 50pt left of
+    // `Gilbert`'s. Names of very different lengths are the whole fixture:
+    // four names the same length cannot tell the two layouts apart.
+    final card = WolfHoleCard.fromJson(_cardJson(standing: const [
+      [1, 'Paul', 'wolf', true, 1.0, 2.0, 2.0],
+      [2, 'Gilbert', 'wolf', false, 1.0, 0.0, 0.0],
+      [3, 'Jim', 'field', false, -1.0, 0.0, 0.0],
+      [4, 'Larry', 'field', false, -1.0, -2.0, -2.0],
+    ]));
+
+    for (final (name, width) in const [
+      ('Hole', 44.0), ('Pts', 52.0), ('Money', 64.0),
+    ]) {
+      testWidgets('$name: the heading and all four rows share a right edge',
+          (t) async {
+        await _pumpTray(t, card);
+        final col = find.byWidgetPredicate(
+            (w) => w is SizedBox && w.width == width && w.child != null);
+        expect(col, findsNWidgets(5), reason: 'a heading and four rows');
+        final edges = {
+          for (final e in col.evaluate())
+            (e.renderObject as RenderBox)
+                .localToGlobal(Offset((e.renderObject as RenderBox).size.width, 0))
+                .dx
+                .round(),
+        };
+        expect(edges, hasLength(1), reason: '$name drifts: $edges');
+      });
+    }
+
+    testWidgets('and the money reaches the row\'s right edge', (t) async {
+      // The leftover used to sit at the END of the row, so the last column
+      // stopped short of the heading above it.
+      await _pumpTray(t, card);
+      final money = find.byWidgetPredicate(
+          (w) => w is SizedBox && w.width == 64.0 && w.child != null);
+      final rights = [
+        for (final e in money.evaluate())
+          t.getTopRight(find.byWidget(e.widget)).dx,
+      ];
+      final head = t.getTopRight(find.text('MONEY')).dx;
+      for (final r in rights) {
+        expect((r - head).abs(), lessThan(0.5));
+      }
     });
   });
 

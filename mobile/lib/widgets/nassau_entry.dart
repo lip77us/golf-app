@@ -5,6 +5,7 @@ import '../theme/halved_brand.dart';
 import 'side_colour.dart';
 import 'tray_edit_header.dart';
 import 'tray_label.dart';
+import 'tray_result_row.dart';
 
 // Nassau score entry — `~/Downloads/handoff-nassau-score-entry`, Claremont
 // included. 2 v 2 or 1 v 1, Front / Back / Overall, and the presses.
@@ -180,18 +181,7 @@ class _MatchCard extends StatelessWidget {
   }
 }
 
-/// `Paul + Dave v Sam + Mike   net 5 v 4  [Won]` — one row.
-///
-/// **The names, then why, then the result** (Paul, 10 Nov 2026: *"putting
-/// net 5 v 4 and the Won badge on the same row as the names … with net 5 v 4
-/// first"*). It was three sizes of type across two lines; short names made
-/// the room to say it on one, and the eye now runs left to right through
-/// who, the two figures, and the verdict.
-///
-/// **The names are what yield.** They are flexible with an ellipsis each,
-/// and the reason and the badge take their natural width: a long pairing
-/// loses a letter before the result loses a digit, because the result is
-/// what the tray exists to say.
+/// The hole's result — the shared [TrayResultRow], fed from the card.
 class _Header extends StatelessWidget {
   final NassauHoleCard card;
   const _Header({required this.card});
@@ -201,118 +191,20 @@ class _Header extends StatelessWidget {
     final s1 = card.sides.isNotEmpty ? card.sides[0] : null;
     final s2 = card.sides.length > 1 ? card.sides[1] : null;
     final winner = card.winner;
-    final leader = winner == 'team1' ? 1 : (winner == 'team2' ? 2 : null);
-    return LayoutBuilder(builder: (context, box) =>
-        Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-      // **Each name yields on its own.** One `Text.rich` ellipsises from
-      // the right, which takes the SECOND side away entirely — and that is
-      // the one the reader cannot name from anywhere else on this card.
-      // **Loose, not `Expanded`**: the result follows the names directly
-      // instead of being pushed to the right edge. Right-justified it sat
-      // under the tray's `HOLES 1–18` label on a large phone and read as
-      // belonging to that, when it is about the hole just played (Paul,
-      // 10 Nov 2026).
-      Flexible(
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (s1 != null)
-            Flexible(
-              child: Text(s1.label,
-                  maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      color: sideColour(1, onDark: true),
-                      fontSize: 14, fontWeight: FontWeight.w700)),
-            ),
-          // The `v` rides INSIDE the second name's run, so nothing in
-          // this row is rigid: with the result sharing the line the names
-          // can be squeezed hard, and a fixed `v` between two flexible
-          // names is the one piece that would overflow.
-          if (s2 != null)
-            Flexible(
-              child: Text.rich(
-                TextSpan(children: [
-                  const TextSpan(
-                      text: ' v ',
-                      style: TextStyle(color: _trayMuted, fontSize: 12)),
-                  TextSpan(text: s2.label),
-                ]),
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    color: sideColour(2, onDark: true),
-                    fontSize: 14, fontWeight: FontWeight.w700),
-              ),
-            ),
-        ]),
-      ),
-      if (winner != null) ...[
-        const SizedBox(width: 12),
-        // **At most two thirds of the row, and it scales rather than
-        // spills.** On a phone it fits at full size with room to spare; the
-        // cap is for a narrow screen or large type, where the names would
-        // otherwise be squeezed to nothing and then the row would overflow.
-        // Names give way first, and only then does the result get smaller.
-        ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: box.maxWidth * 0.66),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              _Reason(card: card),
-              const SizedBox(width: 8),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                decoration: BoxDecoration(
-                  color: leader == null
-                      ? Colors.white.withValues(alpha: 0.14)
-                      : sideColour(leader, onDark: true),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(leader == null ? 'Halved' : 'Won',
-                    style: TextStyle(
-                        color:
-                            leader == null ? Colors.white : Halved.deepPine,
-                        fontSize: 14, fontWeight: FontWeight.w800)),
-              ),
-            ]),
-          ),
-        ),
-      ],
-    ]));
-  }
-}
-
-/// `net 5 v 5`, each figure in its own side's colour.
-///
-/// The words stay muted so the two numbers are what is read; an older
-/// server sends no parts, and then the sentence draws flat as it always did
-/// — bigger, but uncoloured, rather than this guessing which digit is whose.
-class _Reason extends StatelessWidget {
-  final NassauHoleCard card;
-  const _Reason({required this.card});
-
-  static const _words = TextStyle(
-      color: _secondary, fontSize: 14, fontWeight: FontWeight.w600);
-
-  @override
-  Widget build(BuildContext context) {
-    if (!card.hasReasonParts) {
-      if (card.reason.isEmpty) return const SizedBox.shrink();
-      return Text(card.reason,
-          maxLines: 1, overflow: TextOverflow.ellipsis, style: _words);
-    }
-    TextSpan figure(int v, int side) => TextSpan(
-        text: '$v',
-        style: TextStyle(
-            color: sideColour(side, onDark: true),
-            fontSize: 16, fontWeight: FontWeight.w800));
-    return Text.rich(
-      TextSpan(style: _words, children: [
-        TextSpan(text: '${card.reasonLabel} '),
-        figure(card.reasonTeam1!, 1),
-        const TextSpan(text: ' v '),
-        figure(card.reasonTeam2!, 2),
-      ]),
-      maxLines: 1, overflow: TextOverflow.ellipsis,
+    return TrayResultRow(
+      name1: s1?.label ?? '',
+      name2: s2?.label ?? '',
+      colour1: sideColour(1, onDark: true),
+      colour2: sideColour(2, onDark: true),
+      decided: winner != null,
+      winner: winner == 'team1' ? 1 : (winner == 'team2' ? 2 : null),
+      // The SERVER's parts: on a 2nd-ball hole these are the second balls,
+      // not the equal best nets. An older server sends none, and then the
+      // sentence draws flat.
+      reasonLabel: card.reasonLabel,
+      figure1: card.reasonTeam1,
+      figure2: card.reasonTeam2,
+      flatReason: card.reason,
     );
   }
 }

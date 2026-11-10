@@ -25,11 +25,17 @@ class TrayEditHeader extends StatelessWidget {
   /// Toggles [picking]. The caller clears its own cursor here.
   final VoidCallback onEdit;
 
+  /// What the picking line says. Every tray edits scores; Wolf's `Edit
+  /// scores` also unlocks the CALL, and a line that names only the scores
+  /// would leave that half undiscoverable.
+  final String pickingHint;
+
   const TrayEditHeader({
     super.key,
     required this.title,
     required this.onEdit,
     this.picking = false,
+    this.pickingHint = 'Tap a score above to change it',
   });
 
   @override
@@ -53,10 +59,11 @@ class TrayEditHeader extends StatelessWidget {
             ),
           ]),
           if (picking)
-            const Padding(
-              padding: EdgeInsets.only(top: 2, bottom: 2),
-              child: Text('Tap a score above to change it',
-                  style: TextStyle(color: Halved.brightMint, fontSize: 12)),
+            Padding(
+              padding: const EdgeInsets.only(top: 2, bottom: 2),
+              child: Text(pickingHint,
+                  style: const TextStyle(
+                      color: Halved.brightMint, fontSize: 12)),
             ),
         ],
       );

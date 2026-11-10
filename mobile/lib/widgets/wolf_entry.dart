@@ -58,6 +58,17 @@ class WolfCallCard extends StatelessWidget {
   /// A call is in flight — every chip goes inert rather than queueing taps.
   final bool busy;
 
+  /// **The hole is settled, so the call is too.**
+  ///
+  /// Once the four scores and the call are in, the tray rises and the group
+  /// walks to the next tee with the PREVIOUS hole still on screen — and
+  /// these chips were still live, directly above it. A tap meant for the
+  /// new hole's partner re-decided the old hole (Paul, 10 Nov 2026: "it is
+  /// very easy to be on the previous hole still"). Locked, every chip is
+  /// inert and the card says how to change it: the tray's `Edit scores`,
+  /// which is already the deliberate way back into a finished hole.
+  final bool locked;
+
   /// Opens the tee-order sheet. Null hides the link.
   final VoidCallback? onTeeOrder;
 
@@ -66,12 +77,14 @@ class WolfCallCard extends StatelessWidget {
     required this.card,
     required this.onCall,
     this.busy = false,
+    this.locked = false,
     this.onTeeOrder,
   });
 
   @override
   Widget build(BuildContext context) {
     final others = card.players.where((p) => !p.isWolf).toList();
+    final inert = busy || locked;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
@@ -119,7 +132,7 @@ class WolfCallCard extends StatelessWidget {
                   label: p.first,
                   selected: card.decision == 'partner' &&
                       card.partnerId == p.playerId,
-                  onTap: busy
+                  onTap: inert
                       ? null
                       : () => _tap('partner', partnerId: p.playerId),
                 ),
@@ -131,16 +144,28 @@ class WolfCallCard extends StatelessWidget {
               label: 'Lone',
               solo: true,
               selected: card.decision == 'lone',
-              onTap: busy ? null : () => _tap('lone'),
+              onTap: inert ? null : () => _tap('lone'),
             ),
             _Chip(
               label: 'Blind',
               solo: true,
               selected: card.decision == 'blind',
-              onTap: busy ? null : () => _tap('blind'),
+              onTap: inert ? null : () => _tap('blind'),
             ),
           ]),
-          if (card.partnerLocked) ...[
+          if (locked) ...[
+            const SizedBox(height: 6),
+            const Row(children: [
+              Icon(Icons.lock_outline, size: 13, color: Halved.muted),
+              SizedBox(width: 4),
+              Flexible(
+                child: Text('Hole settled — Edit scores to change the call.',
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11.5, color: Halved.muted,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ] else if (card.partnerLocked) ...[
             const SizedBox(height: 6),
             Text(
               '${card.wolfFirst}’s last turn — Lone or Blind only.',
@@ -226,7 +251,11 @@ class _Chip extends StatelessWidget {
               child: Text(label,
                   style: TextStyle(
                       fontSize: 13.5, fontWeight: FontWeight.w600,
-                      color: onTap == null ? text.withValues(alpha: 0.4) : text)),
+                      // The chip that is ON never fades: it is the call,
+                      // and on a locked card the one thing worth reading.
+                      color: onTap == null && !selected
+                          ? text.withValues(alpha: 0.4)
+                          : text)),
             ),
           ),
         ),
@@ -301,6 +330,8 @@ class WolfHoleTray extends StatelessWidget {
             // said its phase three times).
             title: gettingResult ? 'Getting result…' : 'All 4 scores in',
             onEdit: onEdit,
+            // `Edit scores` is also what unlocks the call above.
+            pickingHint: 'Tap a score or the call above to change it',
             picking: picking,
           ),
           // **A hole saved on the phone but not yet at the server shows no
@@ -543,19 +574,30 @@ class _Standing extends StatelessWidget {
               color: colour, borderRadius: BorderRadius.circular(3)),
         ),
         const SizedBox(width: 8),
-        Flexible(
-          child: Text(s.first,
-              maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white, fontSize: 14,
-                  fontWeight: FontWeight.w600)),
+        // **ONE flexible child, and it is tight.** This was a loose
+        // `Flexible` name beside a `Spacer`: the two split the free width
+        // evenly, the name took only what it needed of its half, and the
+        // rest was left over at the END of the row — so the three figure
+        // columns sat further left the shorter the name was. `Jim`'s row
+        // was 50pt off `Gilbert`'s (Paul, 10 Nov 2026: "bottom table all
+        // wobbly"). The header above always used `Expanded`, which is why
+        // it never agreed with any row.
+        Expanded(
+          child: Row(children: [
+            Flexible(
+              child: Text(s.first,
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontSize: 14,
+                      fontWeight: FontWeight.w600)),
+            ),
+            if (s.isWolf) ...[
+              const SizedBox(width: 5),
+              const Text('WOLF',
+                  style: TextStyle(color: _secondary, fontSize: 9.5,
+                      letterSpacing: 0.4, fontWeight: FontWeight.w700)),
+            ],
+          ]),
         ),
-        if (s.isWolf) ...[
-          const SizedBox(width: 5),
-          const Text('WOLF',
-              style: TextStyle(color: _secondary, fontSize: 9.5,
-                  letterSpacing: 0.4, fontWeight: FontWeight.w700)),
-        ],
-        const Spacer(),
         SizedBox(
           width: 44,
           child: Text(_signed(hole),

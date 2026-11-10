@@ -6250,6 +6250,18 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
              'low_net_round', 'points_531', 'wolf', 'vegas',
              'fourball', 'match_18', 'nassau', 'nassau_nine', 'skins',
              'sequoya_threes'} & active
+    # **The skins POOL, only where it owns the entry screen.** A pool rides
+    # as a side game on a sixty-player tournament, where its card would be a
+    # pool summary computed on every posted score for a tray nobody draws
+    # (the round's own game owns the entry there). The client fetches the
+    # card by GET when this does not send one, so the gate costs latency at
+    # worst and never the tray.
+    rnd = foursome.round
+    if 'multi_skins' in active and (
+            rnd.primary_game == 'multi_skins'
+            or (not rnd.primary_game and not scored_on
+                and list(rnd.active_games or []) == ['multi_skins'])):
+        wants = wants | {'multi_skins'}
     if not wants:
         return {}
     from services.skins import skins_summary
@@ -6268,6 +6280,12 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
                 card = skins_hole_card(foursome, hole_number)
                 if card:
                     out['skins_hole'] = card
+            # The pool's card is the Skins card over the whole field.
+            if 'multi_skins' in wants and hole_number:
+                from services.multi_skins import multi_skins_hole_card
+                card = multi_skins_hole_card(foursome, hole_number)
+                if card:
+                    out['multi_skins_hole'] = card
             # Sixes' tray reports ONE hole, so it is the card for the hole
             # just posted rather than the whole summary.
             if 'sixes' in wants and hole_number:
@@ -8602,6 +8620,20 @@ class SkinsHoleCardView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.skins import skins_hole_card
         return Response(skins_hole_card(foursome, int(hole)))
+
+
+class MultiSkinsHoleCardView(APIView):
+    """GET /api/foursomes/{id}/multi-skins/hole/{hole}/
+
+    One hole's score-entry card for the skins pool the foursome's round
+    hosts — the Skins card's shape, over the whole field. The POST that
+    saves a score returns it under `multi_skins_hole` when the pool is the
+    round's primary game.
+    """
+    def get(self, request, pk, hole):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.multi_skins import multi_skins_hole_card
+        return Response(multi_skins_hole_card(foursome, int(hole)))
 
 
 class SinglesHoleCardView(APIView):

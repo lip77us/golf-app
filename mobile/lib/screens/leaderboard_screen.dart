@@ -7,7 +7,6 @@ import '../config.dart';
 import '../game_catalog.dart';
 import '../game_colors.dart';
 import '../utils/match_notation.dart';
-import '../utils/nassau_team_style.dart';
 import '../widgets/match_panel.dart';
 import '../widgets/solo_board.dart';
 import '../widgets/forty_balls_board.dart';
@@ -19,6 +18,7 @@ import '../widgets/round_chat_button.dart';
 import '../widgets/round_landscape_scorecard.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/hole_grid_scorecard.dart';
+import '../widgets/wolf_scorecard.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
@@ -2728,12 +2728,16 @@ class _MultiSkinsView extends StatelessWidget {
         const SizedBox(height: 12),
 
         // ── Full scorecard grid ─────────────────────────────────────
+        // No strokes table under it (Paul, 10 Nov 2026): the dots are on
+        // the cells and `gets N` is beside each name. In a pool the table
+        // was also a row per participant, so twenty of them.
         Card(
           child: Padding(
             padding: const EdgeInsets.all(8),
             child: HoleGridScorecard(
               holes:        holes,
               participants: players,
+              showStrokes:  false,
             ),
           ),
         ),
@@ -2811,6 +2815,10 @@ class _SkinsGroupCard extends StatelessWidget {
           // highlighted, mirroring the Multi-Group Skins view.  Adds a
           // visual answer to "who actually won each hole?" right next
           // to the totals above.
+          //
+          // No strokes table under it (Paul, 10 Nov 2026): the dots are on
+          // the cells and `gets N` is beside each name, so the table was
+          // the third statement of one allocation.
           if (holes.isNotEmpty) ...[
             const SizedBox(height: 10),
             Card(
@@ -2822,6 +2830,7 @@ class _SkinsGroupCard extends StatelessWidget {
                   participants: players,
                   holesInPlay:  (summary['holes_in_play'] as List? ?? const [])
                       .map((e) => e as int).toList(),
+                  showStrokes:  false,
                 ),
               ),
             ),
@@ -3778,22 +3787,9 @@ class _WolfGroupCard extends StatelessWidget {
     final hcap    = summary['handicap'] as Map<String, dynamic>? ?? const {};
     final status  = summary['status']?.toString() ?? 'pending';
     final players = (summary['players'] as List? ?? const []);
-    final holes   = (summary['holes']   as List? ?? const []);
     final money   = summary['money']    as Map<String, dynamic>? ?? const {};
     final betUnit = (money['bet_unit']  as num?)?.toDouble() ?? 0.0;
     final lossCap = (money['loss_cap']  as num?)?.toDouble();
-
-    // Scorecard grid (prospective stroke dots + Index row + per-hole points),
-    // so a strokes-off / net player can see which holes get strokes over the
-    // whole round — including before they're played.
-    final scorecard   = summary['scorecard'] as Map<String, dynamic>? ?? const {};
-    final scHoles     = (scorecard['holes'] as List? ?? const [])
-        .cast<Map<String, dynamic>>();
-    final scPlayers   = (scorecard['players'] as List? ?? const [])
-        .cast<Map<String, dynamic>>();
-    final scHolesInPlay = (scorecard['holes_in_play'] as List? ?? const [])
-        .map((e) => e as int)
-        .toList();
 
     final singleGroup = group['_single_group'] == true;
 
@@ -3878,19 +3874,9 @@ class _WolfGroupCard extends StatelessWidget {
               );
             }),
 
-          if (holes.isNotEmpty) ...[
-            const Divider(height: 20),
-            Text('Wolf by hole',
-                style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary)),
-            const SizedBox(height: 6),
-            Wrap(spacing: 8, runSpacing: 4, children: [
-              for (final h in holes)
-                if ((h as Map)['winning_side'] != null)
-                  _wolfChip(theme, h),
-            ]),
-          ],
+          // `Wolf by hole` was here — a chip a hole naming its Wolf, tinted
+          // by the side that won. The scorecard below says both, hole for
+          // hole, in its `Wolf` row and its tints (Paul, 10 Nov 2026).
 
           if (betUnit > 0)
             Padding(
@@ -3903,48 +3889,15 @@ class _WolfGroupCard extends StatelessWidget {
               ),
             ),
 
-          // Per-hole gross scorecard + a second block of per-hole points.
-          // Prospective: the stroke dots + the "Index" row show which holes get
-          // strokes across the whole round (including unplayed ones), so a
-          // strokes-off / net player can see the plan up front.
-          if (scHoles.isNotEmpty) ...[
-            const Divider(height: 20),
-            HoleGridScorecard(
-              holes:       scHoles,
-              participants: scPlayers,
-              showPoints:  true,
-              legend:      null,
-              holesInPlay: scHolesInPlay,
-            ),
-          ],
+          // **The Wolf scorecard, which was the play screen's** (Paul,
+          // 10 Nov 2026): who held the Wolf, each gross tinted in the colour
+          // of the side that won the hole, the stroke dots and `gets N`. It
+          // replaced a gross card with a second block of per-hole points and
+          // a strokes table under it.
+          const Divider(height: 20),
+          WolfScorecard(summary: summary),
         ]),
       ),
-    );
-  }
-
-  Widget _wolfChip(ThemeData theme, Map h) {
-    final hole = (h['hole'] as num?)?.toInt() ?? 0;
-    final wolf = h['wolf_short']?.toString() ?? '';
-    final side = h['winning_side']?.toString();
-    final dec  = h['decision']?.toString() ?? '';
-    final tag  = dec == 'blind' ? 'B' : dec == 'lone' ? 'L'
-              : dec == 'partner' ? 'P' : '';
-    // Wolf-side = team 1 (blue), Opponents = team 2 (orange); ties neutral.
-    final c = side == 'wolf'
-        ? GameColors.team1
-        : side == 'opponents'
-            ? GameColors.team2
-            : theme.colorScheme.onSurfaceVariant;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: c.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: c.withOpacity(0.4)),
-      ),
-      child: Text('$hole: $wolf${tag.isNotEmpty ? ' $tag' : ''}',
-          style: theme.textTheme.labelSmall?.copyWith(
-              color: c, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -9656,34 +9609,18 @@ class _MyFoursomeTabView extends StatelessWidget {
 // Fourball — one card per foursome (the 2v2 best-ball match + money).
 // ---------------------------------------------------------------------------
 
-class _FourballGroupCard extends StatefulWidget {
+class _FourballGroupCard extends StatelessWidget {
   final Map<String, dynamic> group;
   const _FourballGroupCard({required this.group});
 
   @override
-  State<_FourballGroupCard> createState() => _FourballGroupCardState();
-}
-
-class _FourballGroupCardState extends State<_FourballGroupCard> {
-  final ScrollController _scroll = ScrollController();
-  static const double _labelW = 96;
-  static const double _cellW  = 26;
-  static const double _rowH   = 24;
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final theme   = Theme.of(context);
-    final summaryRaw = (widget.group['summary'] as Map).cast<String, dynamic>();
+    final summaryRaw = (group['summary'] as Map).cast<String, dynamic>();
     final summary = FourballSummary.fromJson(summaryRaw);
 
-    // Per-player scorecard (dots + stroke-index row + hole-winner tint) — shows
-    // WHERE handicap strokes fall, which the team-net match grid above doesn't.
+    // The round's scorecard: gross with the stroke dots, and the ball that
+    // won each hole tinted in its side's colour.
     final scHoles = (summaryRaw['scorecard'] as List? ?? const [])
         .cast<Map<String, dynamic>>();
     final scPlayers = (summaryRaw['players'] as List? ?? const [])
@@ -9703,25 +9640,14 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
     final s2 = join(summary.team2.shortNames, summary.team2.players);
 
     final margin  = summary.holesUp;          // + = team 1 up
-    // thru = the group's CURRENT hole number (last hole played in play order),
-    // so the grid scrolls/highlights the hole just posted even after wrapping
-    // (7…18 → 1). thruCount = holes COMPLETED, the "Thru N" the golfer reads
-    // (played 7–12 = thru 6, not 12).
-    final thru      = summary.currentHole;
+    // Holes COMPLETED, the "thru N" a golfer reads (played 7-12 = thru 6,
+    // not 12).
     final thruCount = summary.holesPlayed;
     final decided = summary.status == 'complete' || summary.status == 'halved';
     final leaderColor = margin > 0
         ? t1Color
         : margin < 0 ? t2Color : theme.colorScheme.onSurface;
     final leaderName = margin > 0 ? s1 : margin < 0 ? s2 : null;
-
-    // Auto-scroll the grid so the latest played hole is in view.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients && thru > 7) {
-        _scroll.jumpTo(((thru - 7) * _cellW)
-            .clamp(0.0, _scroll.position.maxScrollExtent));
-      }
-    });
 
     String status;
     if (summary.status == 'pending') {
@@ -9736,10 +9662,13 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
           ? '$leaderName wins ${margin.abs()}&$left'
           : '$leaderName wins ${margin.abs()} up';
     } else if (margin == 0) {
-      status = thru == 0 ? 'Not started' : 'All Square';
+      status = thruCount == 0 ? 'Not started' : 'All Square';
     } else {
       status = '$leaderName ${margin.abs()} UP';
     }
+    // `thru N` rides the standing while the match is LIVE. A decided match
+    // has said how it ended (`3&2`), and one not started has no thru.
+    final thruTail = (!decided && thruCount > 0) ? '  thru $thruCount' : '';
 
     // Provisionally award the current leader the per-player stake, mirroring
     // the 18-Hole Match card (status-screen style).
@@ -9748,56 +9677,11 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
         ? (decided ? 'Halved — no money' : 'All square — no money')
         : '$leaderName  +\$${bet.formatBet()} each';
 
-    final byHole = {for (final h in summary.holes) h.hole: h};
-    // The holes actually in play, in the backend's play order (fourball_summary
-    // walks play order) — no blank 1-9 on a back-9 / shotgun round.
-    final holeRange = summary.holes.isNotEmpty
-        ? summary.holes.map((h) => h.hole).toList()
-        : List.generate(18, (i) => i + 1);
-
-    Widget cell(Widget child, {Color? bg, bool current = false}) => Container(
-          width: _cellW, height: _rowH,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: bg ??
-                (current
-                    ? theme.colorScheme.primaryContainer.withValues(alpha: .3)
-                    : null),
-          ),
-          child: child,
-        );
-
-    Widget labelCell(String text, {Color? color, FontStyle? style}) => SizedBox(
-          width: _labelW, height: _rowH,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(text,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                    color: color, fontWeight: FontWeight.w600, fontStyle: style)),
-          ),
-        );
-
-    Widget scoreRow(String label, Color color, int? Function(FourballHole) get) =>
-        Row(children: [
-          labelCell(label, color: color),
-          for (final h in holeRange)
-            cell(
-              Text(
-                byHole[h] != null && get(byHole[h]!) != null
-                    ? '${get(byHole[h]!)}'
-                    : '·',
-                style: theme.textTheme.labelSmall,
-              ),
-              current: h == thru,
-            ),
-        ]);
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Header — team long names, team 1 vs team 2.
+          // Line 1 — the two sides, in full.
           Center(
             child: RichText(
               textAlign: TextAlign.center,
@@ -9816,22 +9700,29 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
               ),
             ),
           ),
-          if (thruCount > 0 && thruCount < 18)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text('Thru $thruCount',
-                    style: theme.textTheme.labelSmall
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-              ),
-            ),
-          const Divider(height: 14),
+          const SizedBox(height: 6),
 
-          // Match status + running money
+          // Line 2 — `Larry & Jim 1 UP thru 1`. The standing and how far
+          // round, on one line: they were a `Thru 1` under the names and a
+          // headline under a rule, which is two places to look for one
+          // sentence (Paul, 10 Nov 2026).
           Center(
-            child: Text(status,
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(color: leaderColor, fontWeight: FontWeight.bold)),
+            child: Text.rich(
+              TextSpan(children: [
+                TextSpan(
+                    text: status,
+                    style: TextStyle(
+                        color: leaderColor, fontWeight: FontWeight.bold)),
+                if (thruTail.isNotEmpty)
+                  TextSpan(
+                      text: thruTail,
+                      style: TextStyle(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w500)),
+              ]),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium,
+            ),
           ),
           const SizedBox(height: 2),
           Center(
@@ -9843,67 +9734,20 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
                   fontWeight: FontWeight.w600,
                 )),
           ),
-          const SizedBox(height: 10),
 
-          // Per-hole grid — team best balls + won-by.
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            controller: _scroll,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                labelCell('Hole'),
-                for (final h in holeRange)
-                  cell(
-                    Text('$h',
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(fontWeight: FontWeight.bold)),
-                    current: h == thru,
-                  ),
-              ]),
-              scoreRow(s1, t1Color, (d) => d.t1Net),
-              scoreRow(s2, t2Color, (d) => d.t2Net),
-              // Won-by — team colour each hole.
-              Row(children: [
-                labelCell('Won by', style: FontStyle.italic,
-                    color: theme.colorScheme.onSurfaceVariant),
-                for (final h in holeRange)
-                  Builder(builder: (_) {
-                    final d = byHole[h];
-                    if (d == null) {
-                      return cell(Text('·', style: theme.textTheme.labelSmall));
-                    }
-                    if (d.winner == 'T1') {
-                      return cell(
-                        Text(teamInitialsFromNames(summary.team1.players),
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                fontWeight: FontWeight.bold, color: t1Color)),
-                        bg: GameColors.team1Bg,
-                      );
-                    }
-                    if (d.winner == 'T2') {
-                      return cell(
-                        Text(teamInitialsFromNames(summary.team2.players),
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                fontWeight: FontWeight.bold, color: t2Color)),
-                        bg: GameColors.team2Bg,
-                      );
-                    }
-                    return cell(
-                      Text('=',
-                          style: theme.textTheme.labelSmall
-                              ?.copyWith(color: Colors.grey.shade600)),
-                      bg: Colors.grey.shade100,
-                    );
-                  }),
-              ]),
-            ]),
-          ),
-
-          // Per-player scorecard: stroke dots + Index row + hole-winner tint.
+          // **No best-ball / `Won by` strip.** It was a small grid of each
+          // side's best net and the winner's initials per hole; the
+          // scorecard below now tints the BALL that won each hole in its
+          // side's colour, which says who won it and with what on the row
+          // the score is on.
+          //
+          // The scorecard: stroke dots on every hole in play, and no strokes
+          // table under it — the dots are the table.
           if (scHoles.isNotEmpty) ...[
             const Divider(height: 20),
             HoleGridScorecard(holes: scHoles, participants: scPlayers,
-                legend: null, holesInPlay: scHolesInPlay),
+                legend: null, holesInPlay: scHolesInPlay,
+                showStrokes: false),
           ],
         ]),
       ),
@@ -10001,27 +9845,26 @@ class _VegasGroupCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Text('Group ${group['group_number']}',
-                style: theme.textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-            if (thru > 0) ...[
-              const SizedBox(width: 8),
-              Text('Thru $thru',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            ],
-            const Spacer(),
-            Text(summary.birdieMode == 'flip' ? 'Flip' : 'Multiply',
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            if (summary.carryover) ...[
-              const SizedBox(width: 8),
-              Text('Carryover', style: theme.textTheme.labelSmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            ],
-          ]),
-          const SizedBox(height: 6),
+          // **No `Flip` / `Carryover` here** — the settings strip at the top
+          // of the tab states both (`Gross birdies flip · Carries on`), and
+          // saying a rule in two places is how the two come to disagree.
+          // **And no `Group 1` on a one-group round**: there is nothing to
+          // tell it apart from (`_ByGroupView` sets `_single_group`).
+          if (group['_single_group'] != true || thru > 0) ...[
+            Row(children: [
+              if (group['_single_group'] != true) ...[
+                Text('Group ${group['group_number']}',
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(width: 8),
+              ],
+              if (thru > 0)
+                Text('Thru $thru',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+            ]),
+            const SizedBox(height: 6),
+          ],
           if (t1 != null) teamRow(t1, GameColors.team1),
           if (t2 != null) teamRow(t2, GameColors.team2),
           if (big != null) ...[
@@ -10108,8 +9951,11 @@ class _VegasGroupCard extends StatelessWidget {
           // visible in advance of playing them.
           if (scHoles.isNotEmpty) ...[
             const Divider(height: 20),
+            // No strokes table: the dots are on the card's own cells,
+            // unplayed holes included (Paul, 10 Nov 2026).
             HoleGridScorecard(holes: scHoles, participants: scPlayers,
-                legend: null, holesInPlay: scHolesInPlay),
+                legend: null, holesInPlay: scHolesInPlay,
+                showStrokes: false),
           ],
         ]),
       ),

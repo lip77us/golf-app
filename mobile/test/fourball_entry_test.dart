@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/widgets/fourball_entry.dart';
+import 'package:golf_mobile/widgets/tray_result_row.dart';
+import 'package:golf_mobile/widgets/side_colour.dart';
 import 'package:golf_mobile/widgets/forty_balls_keypad.dart';
 
 /// Fourball score entry — `~/Downloads/handoff-fourball-score-entry`.
@@ -125,7 +127,11 @@ double _keyWidth(WidgetTester t, String label) => t.getSize(find.ancestor(
 
 void main() {
   group('the side header', () {
-    testWidgets('it carries the side\'s best ball', (t) async {
+    testWidgets('it names the side, and carries no best ball', (t) async {
+      // It carried `BEST` and the side's best net as the scores landed.
+      // Nassau dropped the tag first and Fourball an hour later (Paul,
+      // 10 Nov 2026: "remove the best number"): the tray reports both best
+      // balls the moment the hole is complete.
       await t.binding.setSurfaceSize(const Size(390, 300));
       addTearDown(() => t.binding.setSurfaceSize(null));
       final c = _card();
@@ -138,66 +144,72 @@ void main() {
         ),
       ));
       expect(find.text('PAUL + LARRY'), findsOneWidget);
-      expect(find.text('BEST'), findsNWidgets(2));
-      expect(find.text('4'), findsOneWidget);
-      expect(find.text('5'), findsOneWidget);
+      expect(find.text('JIM + RYAN'), findsOneWidget);
+      expect(find.text('BEST'), findsNothing);
+      expect(find.text('4'), findsNothing);
+      expect(find.text('5'), findsNothing);
     });
 
-    testWidgets('an unfinished side reads a dash', (t) async {
+    testWidgets('an unfinished side draws no dash either', (t) async {
       await t.binding.setSurfaceSize(const Size(390, 300));
       addTearDown(() => t.binding.setSurfaceSize(null));
       final c = _card(sides: const [
         [1, 'Paul + Larry', null, '', null],
-        [2, 'Jim + Ryan', 5, 'counts: Jim', null],
+        [2, 'Jim + Ryan', 5, '', null],
       ]);
       await t.pumpWidget(MaterialApp(
         home: Scaffold(body: FourballSideHeader(side: c.sides[0])),
       ));
-      expect(find.text('–'), findsOneWidget);
+      expect(find.text('–'), findsNothing);
     });
 
-    testWidgets('without the best ball it is a NAME for the side, and '
-        'nothing else', (t) async {
-      // Nassau and Nassau Nine (Paul, 10 Nov 2026: "remove the Best –
-      // from the top of the team names"). The side's names and colour
-      // stay; the tag and its figure go, scored or not.
-      await t.binding.setSurfaceSize(const Size(390, 300));
-      addTearDown(() => t.binding.setSurfaceSize(null));
-      final c = _card(sides: const [
-        [1, 'Paul + Larry', null, '', null],
-        [2, 'Jim + Ryan', 5, 'counts: Jim', null],
-      ]);
-      await t.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: Column(children: [
-            FourballSideHeader(side: c.sides[0], showBest: false),
-            FourballSideHeader(side: c.sides[1], showBest: false),
-          ]),
-        ),
-      ));
-      expect(find.text('PAUL + LARRY'), findsOneWidget);
-      expect(find.text('JIM + RYAN'), findsOneWidget);
-      expect(find.text('BEST'), findsNothing);
-      expect(find.text('–'), findsNothing, reason: 'the unscored side');
-      expect(find.text('5'), findsNothing, reason: 'the scored side');
+    test('no caller asks for the tag back', () {
+      // The option is gone with its last caller; a `showBest:` here would
+      // not compile, but the header's own file is where it would return.
+      final src = File('lib/widgets/fourball_entry.dart').readAsStringSync();
+      expect(src.contains("'BEST'"), isFalse);
+      expect(src.contains('showBest'), isFalse);
+    });
+  });
+
+  group('the round\'s card is the leaderboard\'s', () {
+    final se = File('lib/screens/score_entry_screen.dart').readAsStringSync();
+    final lb = File('lib/screens/leaderboard_screen.dart').readAsStringSync();
+
+    /// The Fourball leaderboard card's own source, bounded by the next
+    /// class rather than a character count.
+    String card() {
+      final at = lb.indexOf('class _FourballGroupCard');
+      return lb.substring(at, lb.indexOf('\nclass ', at + 10));
+    }
+
+    test('score entry draws no Fourball scorecard', () {
+      expect(se.contains('fourballSummary!.scorecardHoles'), isFalse);
     });
 
-    test('Nassau turns it off; Fourball keeps it', () {
-      // Two call sites on one screen draw this header, and the game decides
-      // which shape. Each is bounded by its own gate, not a character count.
-      final src = File('lib/screens/score_entry_screen.dart')
-          .readAsStringSync();
-      String call(String gate) {
-        final at = src.indexOf(gate);
-        expect(at, greaterThan(0), reason: gate);
-        final from = src.indexOf('FourballSideHeader(', at);
-        return src.substring(from, src.indexOf(';', from)
-            .clamp(from, src.length)).split('),').first;
-      }
-      expect(call('if (nassauCard?.sideOf(m.player.id) != null'),
-          contains('showBest: false'));
-      expect(call('if (fourballHole?.sideOf(m.player.id) != null'),
-          isNot(contains('showBest')));
+    test('the board draws the scorecard with no strokes table', () {
+      final c = card();
+      final at = c.indexOf('HoleGridScorecard(');
+      expect(at, greaterThan(0));
+      expect(c.substring(at, c.indexOf(');', at)),
+          contains('showStrokes: false'));
+    });
+
+    test('the little best-ball / Won by strip is gone', () {
+      // It was a second, smaller grid over the scorecard: each side's best
+      // net and the winner's initials per hole. The scorecard tints the
+      // ball that won instead.
+      final c = card();
+      expect(c.contains("'Won by'"), isFalse);
+      expect(c.contains('ScrollController'), isFalse);
+    });
+
+    test('the standing and thru are ONE line', () {
+      // `Larry & Jim 1 UP thru 1` — they were a `Thru 1` under the names
+      // and a headline under a rule.
+      final c = card();
+      expect(c.contains("'  thru \$thruCount'"), isTrue);
+      expect(c.contains("'Thru \$thruCount'"), isFalse);
     });
   });
 
@@ -206,9 +218,59 @@ void main() {
       await _pump(t, _card());
       expect(find.text('HOLE 5 · BEST BALL'), findsOneWidget);
       expect(find.text('\$20 A GOLFER'), findsOneWidget);
+      // A side's `sub` still draws when the server sends one — the Singles
+      // Match uses it for the golfer's strokes — so the fixture's line is
+      // on the tray. Fourball's own server card sends none any more.
       expect(find.text('counts: Paul · Larry'), findsOneWidget);
-      expect(find.text('won'), findsOneWidget);
-      expect(find.text('lost'), findsOneWidget);
+    });
+
+    testWidgets('with no sub the tray is the row alone', (t) async {
+      // What a Fourball card looks like now: `counts:` came off the server
+      // card (Paul, 10 Nov 2026), since each golfer's row marks his own ball.
+      await _pump(t, _card(sides: const [
+        [1, 'Paul + Larry', 4, '', 'won'],
+        [2, 'Jim + Ryan', 5, '', 'lost'],
+      ]));
+      expect(find.textContaining('counts:'), findsNothing);
+      expect(find.text('Won'), findsOneWidget);
+    });
+
+    testWidgets('the result is the row the Nassau and Sixes trays draw',
+        (t) async {
+      // Names, then `net 4 v 5` with each figure in its side's colour, then
+      // the badge (Paul, 10 Nov 2026). It was a row a side with a `won` /
+      // `lost` word and a 28pt net.
+      await _pump(t, _card());
+      final row = t.widget<TrayResultRow>(find.byType(TrayResultRow));
+      expect(row.name1, 'Paul + Larry');
+      expect(row.name2, 'Jim + Ryan');
+      expect((row.reasonLabel, row.figure1, row.figure2), ('net', 4, 5));
+      expect(row.winner, 1);
+      expect(row.colour1, sideColour(1, onDark: true));
+      expect(row.colour2, sideColour(2, onDark: true));
+      expect(find.text('Won'), findsOneWidget);
+      expect(find.text('won'), findsNothing);
+      expect(find.text('lost'), findsNothing);
+    });
+
+    testWidgets('a halved hole wears no side', (t) async {
+      await _pump(t, _card(sides: const [
+        [1, 'Paul + Larry', 4, 'counts: Paul', 'halved'],
+        [2, 'Jim + Ryan', 4, 'counts: Jim', 'halved'],
+      ]));
+      expect(t.widget<TrayResultRow>(find.byType(TrayResultRow)).winner,
+          isNull);
+      expect(find.text('Halved'), findsOneWidget);
+    });
+
+    testWidgets('side 2 winning is side 2\'s badge', (t) async {
+      // The mirror case: a card that always read side 1 would pass the
+      // test above it.
+      await _pump(t, _card(sides: const [
+        [1, 'Paul + Larry', 5, 'counts: Paul', 'lost'],
+        [2, 'Jim + Ryan', 4, 'counts: Jim', 'won'],
+      ]));
+      expect(t.widget<TrayResultRow>(find.byType(TrayResultRow)).winner, 2);
     });
 
     testWidgets('no stakes says so and draws no money', (t) async {

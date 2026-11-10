@@ -43,7 +43,6 @@ void main() {
   group('every board composes through it', () {
     const boards = <String, String>{
       'points': 'lib/utils/points_board_model.dart',
-      'skins': 'lib/utils/skins_board_model.dart',
       'rabbit': 'lib/utils/rabbit_board_model.dart',
       'nassau': 'lib/utils/nassau_board_model.dart',
       'stroke play': 'lib/screens/leaderboard_screen.dart',
@@ -58,6 +57,18 @@ void main() {
             reason: '${e.key} must import the one place it lives');
       });
     }
+
+    test('Skins names no handicap on its ledger', () {
+      // It did, from 31 Oct to 10 Nov 2026. The ledger row is skins and
+      // money; what a golfer gets is on the scorecard under it, beside his
+      // name. So this board is OUT of the map above on purpose — and must
+      // not quietly grow a label of its own.
+      final model = File('lib/utils/skins_board_model.dart').readAsStringSync();
+      final board = File('lib/widgets/skins_board.dart').readAsStringSync();
+      expect(model.contains('handicapLabel'), isFalse);
+      expect(board.contains('handicapLabel'), isFalse);
+      expect(RegExp(r"CH \$").hasMatch(board), isFalse);
+    });
 
     test('nobody writes their own middot label', () {
       // The shape that would drift: a board composing `"$index · CH $ch"`

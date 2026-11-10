@@ -2,8 +2,9 @@
 /// ---------------------------
 /// **One stroke source for the Wolf screen.**
 ///
-/// The score box's dots, the inline picker's and the by-hole grid's all come
-/// from `wolfStrokesForHole`. Two copies of this on one screen is how a row
+/// The score box's dots and the inline picker's both come from
+/// `wolfStrokesForHole`. (The by-hole grid drew from it too, until the grid
+/// moved to the leaderboard, where the server's own strokes draw the dots.) Two copies of this on one screen is how a row
 /// shows one dot and the grid shows two for the same golfer on the same hole,
 /// which reads as a bug in the scoring rather than in the drawing — and Wolf
 /// draws it in three places, more than any other screen.
@@ -16,7 +17,7 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/screens/wolf_screen.dart'
-    show wolfStrokesForHole, wolfWonTheHole;
+    show wolfStrokesForHole;
 
 const _me = 11;
 
@@ -125,35 +126,10 @@ void main() {
     });
   });
 
-  group('**the scorecard marks a SIDE, not a score**', () {
-    // The house rule is that a hole is marked when ONE ball wins it — Skins
-    // fills the winning cell green, Rabbit greens the outright winner. A Wolf
-    // hole is won by the Wolf's side or by the opponents, so pointing at one
-    // cell would name a man who may have been carried. The server says as much
-    // by sending `winner_id: None` for this game.
-    test('the Wolf and his partner are both marked when their side wins', () {
-      expect(wolfWonTheHole('wolf', 'wolf'), isTrue);
-      expect(wolfWonTheHole('wolf', 'partner'), isTrue);
-      expect(wolfWonTheHole('wolf', 'opponent'), isFalse);
-    });
-
-    test('and the opponents are, when theirs does', () {
-      expect(wolfWonTheHole('opponents', 'opponent'), isTrue);
-      expect(wolfWonTheHole('opponents', 'wolf'), isFalse);
-      expect(wolfWonTheHole('opponents', 'partner'), isFalse);
-    });
-
-    test('**a tie marks nobody**', () {
-      // Both sides drew it. Tinting both would say two sides won; tinting
-      // neither is the truth.
-      for (final r in const ['wolf', 'partner', 'opponent']) {
-        expect(wolfWonTheHole('tie', r), isFalse, reason: r);
-      }
-    });
-
-    test('an undecided hole marks nobody either', () {
-      expect(wolfWonTheHole(null, 'wolf'), isFalse);
-      expect(wolfWonTheHole('wolf', null), isFalse);
-    });
-  });
+  // **Which side won a hole is no longer decided here.** `wolfWonTheHole`
+  // lived on this screen while its grid did; the grid moved to the
+  // leaderboard on 10 Nov 2026 and the rule moved to the server with it
+  // (`winner_team` / `team` on the summary's scorecard). Its truth table is
+  // `scoring/tests/test_wolf_scorecard_sides.py`; what the card draws from it
+  // is `test/wolf_scorecard_test.dart`.
 }

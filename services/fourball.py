@@ -471,6 +471,23 @@ def fourball_summary(foursome) -> dict | None:
         net_percent=game.net_percent,
         holes=holes_in_play,
     )
+    # **Which BALL won the hole, not which side.** The card tinted both of
+    # the winning side's scores, so a 6 beside the 5 that won it wore the
+    # same colour (Paul, 10 Nov 2026: *"only highlight the winner or winners,
+    # not the winning team"*). A golfer's score `won` when his side took the
+    # hole and his net IS the side's best ball — `_team_best` over the same
+    # index the engine decided the hole with, so two partners who tie for it
+    # both carry the mark and nobody else does.
+    side_pids = {1: [p for p in real_pids if team_of.get(p) == 1],
+                 2: [p for p in real_pids if team_of.get(p) == 2]}
+
+    def _won(pid, hn):
+        side = winner_by_hole.get(hn)
+        if side is None or team_of.get(pid) != side:
+            return False
+        best = _team_best(side_pids[side], hn, net_index)
+        return best is not None and net_index.get(pid, {}).get(hn) == best
+
     scorecard = []
     for hn in holes_in_play:
         row_scores = []
@@ -479,6 +496,7 @@ def fourball_summary(foursome) -> dict | None:
             row_scores.append({
                 'player_id': pid, 'gross': g,
                 'strokes'  : strokes_by.get(pid, {}).get(hn, 0),
+                'won'      : _won(pid, hn),
             })
         scorecard.append({
             'hole'        : hn,
@@ -668,12 +686,12 @@ def fourball_hole_card(foursome, hole: int) -> dict:
             'label'     : ' + '.join(label.get(pid, '') for pid in side_ids[n]),
             'player_ids': list(side_ids[n]),
             'best'      : best,
-            # **The line under the side's name, composed here.** Fourball
-            # says whose ball counted; Singles Match says what that golfer
-            # gets on the hole. One field so the tray renders rather than
-            # composing, and so the two games can share it.
-            'sub'       : ('counts: ' + ' · '.join(
-                label.get(pid, '') for pid in counts)) if counts else '',
+            # **The line under the side's name.** Singles Match uses it for
+            # what that golfer gets on the hole. Fourball said whose ball
+            # counted (`counts: Paul · Larry`) and no longer does (Paul,
+            # 10 Nov 2026): each golfer's row marks his own ball as the one
+            # that counted, directly above the tray, so the tray repeated it.
+            'sub'       : '',
             'result'    : result,
         })
 

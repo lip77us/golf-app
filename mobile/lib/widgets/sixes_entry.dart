@@ -26,6 +26,7 @@ import 'package:flutter/material.dart';
 import '../api/models.dart';
 import '../theme/halved_brand.dart';
 import 'tray_edit_header.dart';
+import 'tray_result_row.dart';
 import 'dashed_border.dart';
 import 'forty_balls_keypad.dart';
 import 'stroke_dots.dart';
@@ -512,80 +513,29 @@ class SixesHoleTray extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(children: [
-            Expanded(
-              child: Text.rich(
-                TextSpan(children: [
-                  TextSpan(
-                      text: card.match.team1.short,
-                      style: const TextStyle(
-                          color: kSixesSideADark,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15)),
-                  const TextSpan(
-                      text: '  v  ',
-                      style: TextStyle(color: _dim, fontSize: 13)),
-                  TextSpan(
-                      text: card.match.team2.short,
-                      style: const TextStyle(
-                          color: kSixesSideBDark,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15)),
-                ]),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(width: 8),
-            // Flexible, so a long pair and a long chip degrade instead of
-            // overflowing: the chip's own nets ellipsise before the words
-            // that say what happened do.
-            Flexible(child: _resultChip(r, won)),
-          ]),
+          // **The same row the Nassau tray draws** — names, then `net 5 v
+          // 4` with each figure in its side's colour, then the badge. It
+          // was a filled lozenge reading `Won hole 1  net 5 v 4` in 13pt
+          // and 11pt; one row for one fact on both trays (Paul, 10 Nov
+          // 2026). The standing line underneath is what says `1 UP`, so a
+          // bare `Won` here cannot be read as the match score — the row is
+          // about the hole and the label above it names the hole.
+          TrayResultRow(
+            name1: card.match.team1.short,
+            name2: card.match.team2.short,
+            colour1: kSixesSideADark,
+            colour2: kSixesSideBDark,
+            decided: true,
+            winner: won,
+            reasonLabel:
+                (r.t1Net == null || r.t2Net == null) ? null : 'net',
+            figure1: r.t1Net,
+            figure2: r.t2Net,
+          ),
           const SizedBox(height: 6),
           _standingLine(r),
         ],
       ),
-    );
-  }
-
-  /// "Won hole 10 · net 4 v 5", in the winning side's colour.
-  ///
-  /// Worded `Won hole` rather than a bare margin so it is not read as the
-  /// match standing, which is the line directly underneath it.
-  Widget _resultChip(SixesHoleOutcome r, int? won) {
-    final fill = won == null
-        ? const Color(0x33FFFFFF)
-        : sixesSideColour(won, dark: true);
-    final ink = won == null ? Colors.white : Halved.deepPine;
-    final nets = (r.t1Net == null || r.t2Net == null)
-        ? ''
-        : 'net ${r.t1Net} v ${r.t2Net}';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: fill,
-        borderRadius: BorderRadius.circular(9),
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Flexible(
-          child: Text(
-              won == null
-                  ? 'Hole ${card.hole} halved'
-                  : 'Won hole ${card.hole}',
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  color: ink, fontWeight: FontWeight.w700, fontSize: 13)),
-        ),
-        if (nets.isNotEmpty) ...[
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(nets,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    color: ink.withValues(alpha: 0.75), fontSize: 11)),
-          ),
-        ],
-      ]),
     );
   }
 

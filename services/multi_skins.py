@@ -1120,3 +1120,303 @@ def _summary_for_game(game: MultiSkinsGame) -> dict:
                           and all(p['round_id'] == game.round_id
                                   for p in players_out)),
     }
+
+
+# ---------------------------------------------------------------------------
+# The score-entry card
+# ---------------------------------------------------------------------------
+
+def _money(v) -> str:
+    v = float(v or 0)
+    return f'${v:.0f}' if v.is_integer() else f'${v:.2f}'
+
+
+def _names(ids, label, card_ids=(), cap: int = 3) -> str:
+    """`Paul, Larry` — or a count, past the point a tray line can hold.
+
+    **This card's golfers first, in card order, then the rest by name.** The
+    ids arrive in whatever order the decider's dict was built in, which
+    follows the summary's skins-sorted roster — so the same tie read
+    `Dave, Paul` on one hole and `Paul, Dave` on the next. The reader is
+    looking for his own group, so that is what leads.
+    """
+    card_ids = list(card_ids)
+    ids = sorted(ids, key=lambda i: (
+        (0, card_ids.index(i), '') if i in card_ids
+        else (1, 0, label.get(i, ''))))
+    if len(ids) > cap:
+        return f'{len(ids)} golfers'
+    return ', '.join(label.get(i, '') for i in ids)
+
+
+def multi_skins_hole_card(foursome, hole: int) -> dict:
+    """Everything the score-entry screen draws for ONE hole of a skins POOL.
+
+    **The same dict `services.skins.skins_hole_card` emits**, so the client
+    draws the pool with the card, keypad and tray it already has (Paul,
+    10 Nov 2026: "multi-group skins needs the new score entry model"). What
+    a pool changes is carried in the values and in a few extra keys, not in
+    a second shape:
+
+    * **A hole is not decided when this group finishes it.** It counts once
+      EVERY participant, in every group, has a score on it — so the usual
+      state on the tray is `waiting`: who leads so far, and how many are in.
+      `settled` says the field is complete; `hole_complete` stays what the
+      client already reads it as, this CARD's scores being in.
+    * **Nothing carries.** A tied hole kills the skin; `riding` is always 1.
+    * **The ledger is THIS CARD's golfers and nobody else's** (Paul, 10 Nov
+      2026: "there could be a lot of players in the match — just show the
+      status of the players in the group"). It first listed anybody in the
+      field holding a skin as well, which on a real pool is a list that
+      grows all day under a tray. The field is the leaderboard's; the result
+      line still names a winner from another group.
+    * **A golfer on the card who is not in the pool** still has a score to
+      enter, so he has a row (`in_pool: False`) and no net.
+
+    Every figure is the engine's: the nets come from the same score index
+    `_calculate_game` decides on, a settled hole's winner is the stored row,
+    and the money is the summary's whole-dollar share. The one thing derived
+    here is the PROVISIONAL leader on an unsettled hole, and that is asked
+    of `skin_rules.decide` rather than compared by hand.
+
+    Returns `{}` when the round hosts no pool.
+    """
+    from services.hole_plan import play_order
+    from services.player_labels import first_names
+
+    round_obj = foursome.round
+    try:
+        game = round_obj.multi_skins_game
+    except MultiSkinsGame.DoesNotExist:
+        return {}
+
+    order = play_order(round_obj, foursome) or list(range(1, 19))
+    if hole not in order:
+        return {}
+    pos = order.index(hole)
+
+    summary = _summary_for_game(game)
+    totals  = {p['player_id']: p for p in (summary.get('players') or [])}
+    pool_ids = list(totals)
+    by_hole = {h['hole']: h for h in (summary.get('holes') or [])}
+    row     = by_hole.get(hole) or {}
+
+    # The engine's own inputs, resolved once — what `_calculate_game` reads.
+    members   = _resolve_participant_memberships(game)
+    net_index = _build_pool_score_index(game, members)
+    gross_index, par_index = _pool_gross_and_pars(game, members)
+
+    card_ms = [m for m in foursome.memberships.select_related('player')
+               .order_by('id') if not m.player.is_phantom]
+    card_ids = [m.player_id for m in card_ms]
+
+    people = {p.id: p for p in game.participants.all()}
+    for m in card_ms:
+        people.setdefault(m.player_id, m.player)
+    label = first_names(people)
+
+    # A golfer on the card who is not in the pool: his gross comes straight
+    # off this card, because no pool index carries him.
+    outside = [pid for pid in card_ids if pid not in totals]
+    loose_gross = {}
+    if outside:
+        loose_gross = dict(
+            HoleScore.objects
+            .filter(foursome=foursome, hole_number=hole,
+                    player_id__in=outside)
+            .exclude(gross_score=None)
+            .values_list('player_id', 'gross_score'))
+
+    strokes_here = {s['player_id']: (s.get('strokes') or 0)
+                    for s in (row.get('scores') or [])}
+
+    def _net(cid, h=hole):
+        return (net_index.get(cid) or {}).get(h)
+
+    def _gross(cid, h=hole):
+        return (gross_index.get(cid) or {}).get(h)
+
+    def _par(cid, h=hole):
+        return (par_index.get(cid) or {}).get(h)
+
+    # ── The golfers on this card ─────────────────────────────────────────
+    players = []
+    for i, m in enumerate(card_ms):
+        pid     = m.player_id
+        in_pool = pid in totals
+        t       = totals.get(pid) or {}
+        gross   = _gross(pid) if in_pool else loose_gross.get(pid)
+        players.append({
+            'player_id'      : pid,
+            'name'           : m.player.name,
+            'short'          : m.player.short_name or '',
+            'first'          : label.get(pid, ''),
+            'roster_index'   : i,
+            'course_handicap': m.course_handicap,
+            'strokes'        : strokes_here.get(pid, 0) if in_pool else 0,
+            'gross'          : gross,
+            'net'            : _net(pid) if in_pool else None,
+            'birdie'         : in_pool and skin_rules.is_natural_birdie(
+                                   gross, _par(pid)),
+            'in_pool'        : in_pool,
+            'skins_won'      : t.get('skins_won') or 0,
+            'junk_skins'     : 0,
+            'total_skins'    : t.get('skins_won') or 0,
+            'money'          : t.get('payout') or 0.0,
+        })
+    # Nets low to high; a golfer with no net (not in yet, or not in the
+    # pool) last; card order breaks every tie so rows never swap.
+    players.sort(key=lambda p: (p['net'] is None,
+                                p['net'] if p['net'] is not None else 0,
+                                p['roster_index']))
+
+    n_scored      = sum(1 for p in players if p['gross'] is not None)
+    hole_complete = bool(players) and n_scored == len(players)
+
+    # ── The field on this hole ───────────────────────────────────────────
+    in_ids  = [cid for cid in pool_ids if _net(cid) is not None]
+    n_pool  = len(pool_ids)
+    settled = n_pool >= 2 and len(in_ids) == n_pool
+
+    def _decide(ids, steal=None):
+        return skin_rules.decide(
+            {c: _net(c) for c in ids},
+            {c: _gross(c) for c in ids},
+            {c: _par(c) for c in ids},
+            minimum      = game.skin_minimum,
+            birdie_steal = game.birdie_steal if steal is None else steal,
+        )
+
+    winner_id = row.get('winner_id') if settled else None
+    outcome, line, rides_to, steal_by = 'pending', '', '', None
+
+    if settled:
+        if winner_id is not None:
+            w_net, w_gross = _net(winner_id), _gross(winner_id)
+            # A steal is "the rules changed the answer" — the same test the
+            # round-skins card makes, of the same one writer.
+            plain = _decide(pool_ids, steal=False)
+            natural = skin_rules.is_natural_birdie(w_gross, _par(winner_id))
+            if len(plain) > 1 and winner_id in plain and natural:
+                outcome, steal_by = 'steal', winner_id
+                # A man on this card if there is one — the reader knows him.
+                beaten = min((c for c in plain if c != winner_id),
+                             key=lambda c: (c not in card_ids,
+                                            label.get(c, '')),
+                             default=None)
+                line = (f"Gross birdie steals. {label.get(winner_id, '')}'s "
+                        f"gross {w_gross} beats {label.get(beaten, '')}'s "
+                        f"net {_net(beaten)}")
+            else:
+                outcome = 'outright'
+                line = (f"{label.get(winner_id, '')} takes the skin with "
+                        f"net {w_net}")
+        else:
+            outcome  = 'dead'
+            rides_to = 'no skin'
+            leaders  = _decide(pool_ids)
+            if leaders:
+                line = (f'Tied on net {_net(leaders[0])}: '
+                        f'{_names(leaders, label, card_ids)}')
+            else:
+                line = 'Nobody qualified for the skin'
+    elif hole_complete and in_ids:
+        # **The ordinary state of a pool hole**: this group is in and the
+        # field is not. Who leads so far is true and useful; calling it a
+        # result would not be.
+        outcome  = 'waiting'
+        rides_to = f'{len(in_ids)} of {n_pool} in'
+        leaders  = _decide(in_ids)
+        if len(leaders) == 1:
+            line = (f"Leading so far: {label.get(leaders[0], '')}, "
+                    f"net {_net(leaders[0])}")
+        elif leaders:
+            line = (f'Tied so far on net {_net(leaders[0])}: '
+                    f'{_names(leaders, label, card_ids)}')
+        else:
+            line = 'Nobody qualifies yet'
+
+    # ── The ledger ───────────────────────────────────────────────────────
+    # This card's pool golfers, most skins first; card order breaks a tie so
+    # the rows do not swap between two golfers with none.
+    shown = [cid for cid in card_ids if cid in totals]
+    ledger = sorted(
+        [{
+            'player_id'   : cid,
+            'first'       : label.get(cid, ''),
+            'roster_index': card_ids.index(cid),
+            'skins_won'   : totals[cid].get('skins_won') or 0,
+            'junk_skins'  : 0,
+            'total_skins' : totals[cid].get('skins_won') or 0,
+            'this_hole'   : 1 if cid == winner_id else 0,
+            'money'       : totals[cid].get('payout') or 0.0,
+        } for cid in shown],
+        key=lambda e: (-e['total_skins'], e['roster_index']))
+
+    money       = summary.get('money') or {}
+    bet_unit    = float(money.get('bet_unit') or 0)
+    pool        = float(money.get('pool') or 0)
+    won_total   = int(money.get('total_skins') or 0)
+    settled_holes = {h['hole'] for h in (summary.get('holes') or [])
+                     if h.get('winner_id') is not None or h.get('is_dead')}
+
+    # Holes this card has finished that the field has not.
+    card_pool = [pid for pid in card_ids if pid in totals]
+    waiting_n = sum(
+        1 for h in order
+        if h not in settled_holes and card_pool
+        and all(_net(pid, h) is not None for pid in card_pool))
+
+    bits = [f'Won {won_total} of {len(settled_holes)} settled']
+    if waiting_n:
+        bits.append(f'{waiting_n} waiting on other groups')
+    # **What the rest of the pool holds**, since the rows above are one
+    # group's: without it a card showing four `$0` under `Won 5 of 6` gives
+    # no way to see that the five went somewhere.
+    elsewhere = won_total - sum(e['skins_won'] for e in ledger)
+    if elsewhere:
+        bits.append(f'{elsewhere} to other groups')
+    footer = ' · '.join(bits)
+
+    trailing = (f'{_money(bet_unit)} ante · {_money(pool)} pool'
+                if bet_unit else f'{n_pool} in the pool')
+
+    nxt = order[pos + 1] if pos + 1 < len(order) else None
+    return {
+        'hole'         : hole,
+        'par'          : row.get('par'),
+        'stroke_index' : row.get('stroke_index'),
+        'thru'         : pos + 1,
+        'stake'        : bet_unit,
+        'skin_worth'   : 0.0,
+        'is_pool'      : True,
+        'carry'        : False,
+        'skin_rules'   : summary.get('skin_rules') or '',
+        'players'      : players,
+        'scored'       : n_scored,
+        'hole_complete': hole_complete,
+        'riding'       : 1,
+        'carried_in'   : 0,
+        'carried_from' : None,
+        'hole_value'   : 0.0,
+        'winner_id'    : winner_id,
+        'winner_short' : row.get('winner_short') if settled else None,
+        'steal_by'     : steal_by,
+        'outcome'      : outcome,
+        'line'         : line,
+        'rides_to'     : rides_to,
+        'ledger'       : ledger,
+        'skins_won'    : won_total,
+        'holes_played' : len(settled_holes),
+        'holes_left'   : max(0, len(order) - pos - (1 if hole_complete else 0)),
+        'round_over'   : hole_complete and pos == len(order) - 1,
+        'next_hole'    : nxt,
+        # ── The pool's own ───────────────────────────────────────────────
+        'across_groups': True,
+        'settled'      : settled,
+        'field_in'     : len(in_ids),
+        'field_size'   : n_pool,
+        'tray_trailing': trailing,
+        'footer'       : footer,
+        'worth_sub'    : f'{n_pool} in the pool · a tie kills it',
+    }
