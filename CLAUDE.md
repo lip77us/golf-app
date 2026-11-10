@@ -11354,3 +11354,85 @@ re-points at the shared file (the rule did not change, the file did), and
 40 Balls' card test counts a golfer's name with `findsWidgets` because the
 table names him a second time — which is the table working, not a duplicate
 row.
+
+## The pool that settled to nothing — and `T1` four times
+
+Reported from a live round (Paul, 9 Nov 2026): *"we played a multi group
+skins side game and this didn't seem to finish correctly and there was no
+receipt."* Two independent causes, plus a third bug visible in the same
+screenshot.
+
+### `multi_skins` was never in `settlement.NETTABLE`
+
+So a round whose only money game was the pool produced **no settlement at
+all**, and `build_round_receipt` had nothing to build from. **The third time
+an engine with a zero-sum ledger turned out never to have been wired in** —
+Nassau, Rabbit and Survivor were the first (11 of 40 completed casual rounds
+could produce no settlement), Banker and Sequoya the second.
+
+The pool now emits a signed `net` per golfer, and the two rules in it are the
+ones round skins already follows per segment:
+
+- **Everybody antes, so `payout − ante` balances by construction.**
+- **Nobody is charged until a skin has been won.** Every hole tying is a real
+  outcome of a pool with no carryover and awards nothing, so antes against no
+  prize would show a table of losses with no winner — not a pot, and it would
+  block Settle. The tournament pool's pot already had this rule.
+
+**`round_local` is what gates it.** A pool that spans rounds — or accounts —
+cannot be settled by a round-scoped receipt: half its golfers are not on it,
+and netting the slice that is would hand somebody a figure that is not what he
+is owed. The summary answers it (no linked rounds, and every participant
+seated in THIS round) and `_pid_nets_for_game` returns `{}` otherwise, so
+nothing guesses. The one-round pool is the degenerate case this module was
+built around and is the common one: a side game across the groups of a single
+round.
+
+Three receipt formatters registered — `GAME_SUMMARY`, `GAME_STAKE`,
+`GAME_DETAIL`. **The summary is ONE row, not one per golfer**, because the
+pool is one competition across the groups. The pot and the skin count are
+ROWS of the detail section rather than a note, because `_detail_sections`
+copies only `label` and `rows` — a `note` key is silently dropped.
+
+### …and the round genuinely had not finished
+
+**A pool hole counts only once EVERY participant has a score on it.** Right
+for a live pool — you cannot award a skin before everybody has played the
+hole — and what it means when one group never posts is that **no hole counts,
+for anybody, including the golfers who entered their own cards.** His board
+said so: `1 still out of 2 — the board is not final. Group 1 (thru 0)`.
+
+So the pot awarded nothing, nobody was charged, and **the receipt would still
+have been refused after the wiring above was fixed** — correctly, because a
+staked round that settles to nothing produces no transfers and four `+$0`
+lines texted to a group say nothing. CLAUDE.md already records this trap from
+the paper-card side (*"enter a pool member's card in full or not at all"*);
+`AGroupThatNeverPostedTakesTheWholePoolDownTests` pins it from the settlement
+side, with the same fixture passing both ways so the missing scores are
+demonstrably the cause.
+
+**The round itself was never inspected.** A read-only production query was
+blocked by a built-in safety classifier and not worked around, so everything
+above is from the screenshot and the code. If it recurs, the round id (or
+permission for that read) settles it in one query.
+
+### `T1` four times beside a +23
+
+Same screenshot, different board. `_rank_standings`' **sort and rank read
+different keys**: the sort already sent a golfer with no holes to the bottom,
+while the rank compared `total - par_played` alone — which is `0 - 0` for a
+man who has not posted, so he tied the leader. One finished card and three
+empty ones read `T1` four times.
+
+The rank reads `_sort_key` now, so two golfers are tied only when the whole
+key matches: the not-yet-started are tied with each other and under everybody
+who has played, which is where the sort had them all along. **The fixture is
+the screenshot** — one group round, one group that has not teed off; a fixture
+where everybody has played cannot tell the two readings apart.
+
+Tests: `api/test_multi_skins_receipt.py` (10),
+`ANoScoreGolferIsNotTiedWithTheLeaderTests` (`api/test_low_net_modes.py`, 2),
+and a `multi_skins` fixture in `DetailShapeTests` — which calls every
+registered formatter DIRECTLY, because `_detail_sections` swallows a
+formatter's exception by design and a regression there is otherwise silent.
+Every guard mutation-checked.

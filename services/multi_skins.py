@@ -864,6 +864,15 @@ def _summary_for_game(game: MultiSkinsGame) -> dict:
             'round_id'     : m.foursome.round_id if m else None,
             'skins_won'    : won,
             'payout'       : round(payout, 2),
+            # **Signed and zero-sum**, for the settlement and the receipt.
+            # Every participant antes `bet_unit` and the shares sum to the
+            # pot, so `payout − ante` balances by construction — EXCEPT
+            # before anybody has won one, where charging the ante for a pot
+            # that has paid nothing would leave a table of losses with no
+            # winner. Same rule the tournament pool's pot uses, and the
+            # same rule round skins uses per segment.
+            'net'          : round(payout - (bet_unit if grand_total else 0.0),
+                                   2),
             'thru'         : thru_by_canon[cid],
             'phcp_in_play' : _phcp_in_play(m.playing_handicap or 0) if m else 0,
         })
@@ -929,6 +938,8 @@ def _summary_for_game(game: MultiSkinsGame) -> dict:
             'scores'      : scores,
         })
 
+    linked = [lr.round_id for lr in game.linked_rounds.all()]
+
     return {
         'status'   : game.status,
         'handicap' : {
@@ -955,5 +966,16 @@ def _summary_for_game(game: MultiSkinsGame) -> dict:
             'pool'       : pool,
             'total_skins': grand_total,
         },
-        'linked_rounds': [lr.round_id for lr in game.linked_rounds.all()],
+        'linked_rounds': linked,
+        # **Is the money entirely inside this round?**
+        #
+        # A pool that spans rounds — or accounts — cannot be settled by a
+        # round-scoped receipt: half its golfers are not on it, and netting
+        # the slice that is would hand somebody a figure that is not what
+        # he is owed. One round, every participant seated in it, is the
+        # degenerate case this module was built around, and it is the
+        # common one: a side game across the groups of a single round.
+        'round_local'  : (not linked and bool(players_out)
+                          and all(p['round_id'] == game.round_id
+                                  for p in players_out)),
     }

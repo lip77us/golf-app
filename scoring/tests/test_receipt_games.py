@@ -399,6 +399,20 @@ def _settled_round(game):
         for h in range(1, 19):
             submit_hole(fs, h, [(ids[0], 3), (ids[1], 4),
                                 (ids[2], 4), (ids[3], 5)])
+    elif game == 'multi_skins':
+        # The pool across a round's GROUPS — two foursomes, every golfer in
+        # one pot, which is the shape the live round that reported this had
+        # (Paul, 9 Nov 2026).
+        from services.multi_skins import (calculate_multi_skins,
+                                          setup_multi_skins)
+        a = make_foursome(rnd, [('A', 0), ('B', 0)], group_number=1)
+        b = make_foursome(rnd, [('C', 0), ('D', 0)], group_number=2)
+        ids = [m.player_id for fs in (a, b) for m in fs.memberships.all()]
+        setup_multi_skins(rnd, ids, handicap_mode='gross', bet_unit=5)
+        for h in range(1, 19):
+            submit_hole(a, h, [(ids[0], 3), (ids[1], 5)])
+            submit_hole(b, h, [(ids[2], 5), (ids[3], 5)])
+        calculate_multi_skins(rnd)
     else:
         raise AssertionError(f'no fixture for {game}')
     return rnd

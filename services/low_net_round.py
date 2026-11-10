@@ -297,16 +297,21 @@ def _rank_standings(player_totals, payouts_cfg, excluded_ids) -> list:
     rows = sorted(player_totals.items(), key=_sort_key)
 
     # ── Assign display ranks (all players, including excluded) ────────────────
+    #
+    # **The rank reads the SAME key the sort does.** It used to compare
+    # `total - par_played` alone, which is 0 - 0 for a golfer who has not
+    # posted a hole — so a man thru 0 tied the leader rather than sorting
+    # under him, and a board with one finished card and three empty ones
+    # read `T1` four times beside a +23 (Paul, 9 Nov 2026).
+    #
+    # Two golfers are tied only when the whole key matches, which keeps the
+    # not-yet-started tied with each other and under everybody who has
+    # played — where the sort already put them.
     ranked = []  # [(pid, data, display_rank)]
     rank = 1
     for i, (pid, data) in enumerate(rows):
-        if i > 0:
-            prev = rows[i - 1][1]
-            curr = data
-            prev_ntp = prev['total'] - prev['par_played']
-            curr_ntp = curr['total'] - curr['par_played']
-            if curr_ntp > prev_ntp:
-                rank = i + 1
+        if i > 0 and _sort_key(rows[i]) != _sort_key(rows[i - 1]):
+            rank = i + 1
         ranked.append((pid, data, rank))
 
     # ── Prize ranking — eligible (non-excluded) players only ─────────────────

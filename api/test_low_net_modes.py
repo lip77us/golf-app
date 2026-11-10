@@ -206,3 +206,55 @@ class TheWireRowCarriesTheCourseHandicapTests(_LowNetBase):
 
     def test_the_purse_is_the_table(self):
         self.assertEqual(low_net_round_summary(self.round)['purse'], 20.0)
+
+
+class ANoScoreGolferIsNotTiedWithTheLeaderTests(TestCase):
+    """A board with one finished card and three empty ones read `T1` four
+    times beside a +23 (Paul, 9 Nov 2026, from a live round).
+
+    The SORT already sent a golfer with no holes to the bottom; the RANK
+    compared `total - par_played` alone, which is `0 - 0` for a man who has
+    not posted — so he tied the leader rather than sorting under him. The
+    two read different keys.
+
+    **The fixture is the screenshot**: one group round, one group that has
+    not teed off. A fixture where everybody has played cannot tell the two
+    readings apart.
+    """
+
+    def setUp(self):
+        from games.models import LowNetRoundConfig
+        self.tee   = make_tee()
+        self.round = make_round(course=self.tee.course, handicap_mode='net',
+                                net_percent=100)
+        LowNetRoundConfig.objects.create(
+            round=self.round, handicap_mode='net', net_percent=100)
+        self.par = {h['number']: h['par'] for h in DEFAULT_HOLES}
+        self.played = make_foursome(self.round, [('Jim', 0)], tee=self.tee,
+                                    group_number=1)
+        self.idle   = make_foursome(
+            self.round, [('Paul', 0), ('Larry', 0), ('Wendell', 0)],
+            tee=self.tee, group_number=2)
+        pid = next(m.player_id for m in self.played.memberships.all())
+        for h in range(1, 19):
+            submit_hole(self.played, h, [(pid, self.par[h] + 1)])
+
+    def _standings(self):
+        from services.low_net_round import low_net_round_standings
+        return low_net_round_standings(self.round)
+
+    def test_a_golfer_thru_zero_ranks_under_one_who_has_played(self):
+        rows   = {r['player_name']: r['rank'] for r in self._standings()}
+        played = [r for r in self._standings() if r['holes_played'] > 0]
+        idle   = [r for r in self._standings() if r['holes_played'] == 0]
+        self.assertEqual(len(played), 1)
+        self.assertEqual(len(idle), 3)
+        self.assertEqual(rows['Jim'], 1)
+        self.assertTrue(
+            min(r['rank'] for r in idle) > max(r['rank'] for r in played),
+            f'a golfer thru 0 outranked one who has played: {rows}')
+
+    def test_and_the_not_yet_started_are_tied_with_EACH_OTHER(self):
+        idle = [r for r in self._standings() if r['holes_played'] == 0]
+        self.assertEqual(len({r['rank'] for r in idle}), 1,
+                         'they are all on nothing, so they share a place')

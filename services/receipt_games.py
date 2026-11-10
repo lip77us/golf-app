@@ -279,6 +279,73 @@ GAME_STAKE['skins'] = skins_stake
 
 
 # ---------------------------------------------------------------------------
+# Multi-Group Skins — the pool across a round's groups
+# ---------------------------------------------------------------------------
+
+def multi_skins_summary_rows(round_obj, entry, names):
+    """One row, because the pool is ONE competition across the groups.
+
+    Round skins is per foursome and gets a row each; this is a single pot
+    the whole field antes into, so a row a group would be three statements
+    of one thing.
+    """
+    from services.multi_skins import multi_skins_summary
+    s = multi_skins_summary(round_obj) or {}
+    won = [(p['player_id'], p.get('skins_won') or 0)
+           for p in s.get('players', []) if (p.get('skins_won') or 0)]
+    if not won:
+        return []
+    won.sort(key=lambda kv: -kv[1])
+    return [['Multi-Group Skins',
+             ' · '.join(f'{_short(names, pid)} {n}' for pid, n in won)]]
+
+
+def multi_skins_stake(round_obj) -> str:
+    from services.multi_skins import multi_skins_summary
+    s = multi_skins_summary(round_obj) or {}
+    unit = (s.get('money') or {}).get('bet_unit')
+    return f'{money(unit)} in the pool' if unit else ''
+
+
+def multi_skins_detail(round_obj, entry, names):
+    """Where the skins went, and what the pot paid.
+
+    The pool divides ONE pot among however many skins get won, so a golfer
+    cannot work his share out from a per-skin price — there isn't one. The
+    section states the pot, the count it divided by, and each winner's
+    share.
+    """
+    from services.multi_skins import multi_skins_summary
+    s = multi_skins_summary(round_obj) or {}
+    m = s.get('money') or {}
+    total = int(m.get('total_skins') or 0)
+    if not total:
+        return []
+    rows = [[f'{_short(names, p["player_id"])} '
+             f'{p.get("skins_won") or 0} '
+             f'{"skin" if (p.get("skins_won") or 0) == 1 else "skins"}',
+             money(p.get('payout') or 0)]
+            for p in s.get('players', [])
+            if (p.get('skins_won') or 0)]
+    if not rows:
+        return []
+    # **The pot and the count are ROWS, not a note.** A section carries a
+    # label and rows and nothing else — and these two are the figures a
+    # golfer checks his share against, so a row is where they belong.
+    return [{
+        'label': 'The pool',
+        'rows' : [['The pot', money(m.get('pool') or 0)],
+                  ['Skins won',
+                   f'{total} {"skin" if total == 1 else "skins"}']] + rows,
+    }]
+
+
+GAME_SUMMARY['multi_skins'] = multi_skins_summary_rows
+GAME_STAKE['multi_skins'] = multi_skins_stake
+GAME_DETAIL['multi_skins'] = multi_skins_detail
+
+
+# ---------------------------------------------------------------------------
 # Points 5-3-1
 # ---------------------------------------------------------------------------
 

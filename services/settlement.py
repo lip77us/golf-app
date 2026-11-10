@@ -54,10 +54,19 @@ NETTABLE = {
     # construction.  Verified zero-sum against every such round in the local
     # database before being added.
     'banker', 'sequoya_threes',
+    # Multi-Group Skins — the pool across a round's groups. It had never
+    # been here, so a round whose only money game was the pool settled to
+    # NOTHING and could produce no receipt: reported from a live round
+    # (Paul, 9 Nov 2026). The third time an engine with a zero-sum ledger
+    # turned out never to have been wired in.
+    #
+    # **Only when the pool is inside this round** — see `_pid_nets_for_game`.
+    'multi_skins',
 }
 
 _LABELS = {
-    'skins': 'Skins', 'spots': 'Spots', 'points_531': 'Points 5-3-1',
+    'skins': 'Skins', 'multi_skins': 'Multi-Group Skins',
+    'spots': 'Spots', 'points_531': 'Points 5-3-1',
     'wolf': 'Wolf', 'sixes': 'Sixes', 'fourball': 'Fourball',
     'low_net_round': 'Stroke Play', 'stableford': 'Stableford',
     'match_play': 'Singles Bracket', 'triple_nassau': 'Triple Nassau',
@@ -130,7 +139,19 @@ def _pid_nets_for_game(game_key, round_obj, foursomes):
     """Return ``{player_id: net}`` for one game across the whole round."""
     out = defaultdict(float)
 
-    if game_key == 'skins':
+    if game_key == 'multi_skins':
+        from services.multi_skins import multi_skins_summary
+        s = multi_skins_summary(round_obj) or {}
+        # **A pool that spans rounds is not this round's to settle.** Half
+        # its golfers are not on this receipt, and netting the slice that is
+        # would hand somebody a figure that is not what he is owed. The
+        # engine says which case it is; this does not guess.
+        if not s.get('round_local'):
+            return {}
+        for p in s.get('players', []):
+            out[p['player_id']] += p.get('net') or 0
+
+    elif game_key == 'skins':
         from services.skins import skins_summary
         for fs in foursomes:
             for p in skins_summary(fs).get('players', []):
