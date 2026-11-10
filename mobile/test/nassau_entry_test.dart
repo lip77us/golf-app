@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/widgets/nassau_entry.dart';
+import 'package:golf_mobile/widgets/side_colour.dart';
 
 /// Nassau score entry — `~/Downloads/handoff-nassau-score-entry`.
 ///
@@ -23,6 +24,23 @@ Map<String, dynamic> _fixture(String name) => jsonDecode(
 
 NassauHoleCard _card(String name, {Map<String, dynamic> over = const {}}) =>
     NassauHoleCard.fromJson({..._fixture(name), ...over});
+
+/// The rich `net 5 v 5` run: words, a figure, ` v `, a figure. Four spans,
+/// which is what tells it from the names line — that one also carries a
+/// ` v ` span, in front of the second side's name.
+Finder _reasonFinder() => find.byWidgetPredicate((w) {
+      if (w is! Text || w.textSpan is! TextSpan) return false;
+      final kids = ((w.textSpan as TextSpan).children ?? const [])
+          .whereType<TextSpan>()
+          .toList();
+      return kids.length == 4 && kids[2].text == ' v ';
+    });
+
+List<TextSpan> _reasonSpans(WidgetTester t) =>
+    ((t.widget<Text>(_reasonFinder()).textSpan as TextSpan).children ??
+            const [])
+        .whereType<TextSpan>()
+        .toList();
 
 Future<void> _pump(WidgetTester t, NassauHoleCard card,
     {void Function(String side)? onPress, bool gettingResult = false,
@@ -100,8 +118,106 @@ void main() {
       await _pump(t, _card('nassau_hole2_press'));
       expect(find.text('All 4 scores in'), findsOneWidget);
       expect(find.text('HOLE 2 · NASSAU'), findsOneWidget);
-      expect(find.text('FRONT NINE'), findsOneWidget);
+      // No `FRONT NINE` beside it: the chips say which bet the hole is in,
+      // and the label sat over the hole's result as if it described it.
+      expect(find.text('FRONT NINE'), findsNothing);
       expect(find.text('Won'), findsOneWidget);
+      expect(_reasonSpans(t).map((s) => s.text).join(),
+          '2nd ball 4 v 5');
+    });
+
+    testWidgets('each figure wears its own side\'s colour', (t) async {
+      // Paul, 10 Nov 2026: "color the 5 v 5 to match team colors." Which
+      // figure is whose then needs no reading across to the names.
+      await _pump(t, _card('nassau_hole2_press'));
+      final spans = _reasonSpans(t);
+      final four = spans.firstWhere((s) => s.text == '4');
+      final five = spans.firstWhere((s) => s.text == '5');
+      expect(four.style?.color, sideColour(1, onDark: true));
+      expect(five.style?.color, sideColour(2, onDark: true));
+      // The words are NOT a side's colour — the numbers are what is read.
+      final words = spans.firstWhere((s) => s.text!.startsWith('2nd ball'));
+      expect(words.style?.color, isNull,
+          reason: 'inherits the muted run, wears no side');
+    });
+
+    testWidgets('names, then why, then the result — on one row', (t) async {
+      // Paul, 10 Nov 2026: "net 5 v 4 and the Won badge on the same row as
+      // the names … with net 5 v 4 first."
+      await _pump(t, _card('nassau_hole2_press'));
+      // `.first`: the money rows name the side again further down.
+      final names = t.getRect(find.text(_card('nassau_hole2_press')
+          .sides.first.label).first);
+      final reason = t.getRect(_reasonFinder());
+      final chip = t.getRect(find.text('Won'));
+      expect((names.center.dy - reason.center.dy).abs(), lessThan(3));
+      expect((reason.center.dy - chip.center.dy).abs(), lessThan(3));
+      expect(reason.left, greaterThan(names.right), reason: 'names first');
+      expect(chip.left, greaterThan(reason.right),
+          reason: 'the reason before the badge');
+    });
+
+    testWidgets('the result follows the names, not the right edge',
+        (t) async {
+      // Right-justified it sat under the tray's `HOLES 1–18` label on a
+      // large phone and read as belonging to that (Paul, 10 Nov 2026). A
+      // wide surface and short names, so there is slack for it to drift
+      // across if anything pushes it.
+      final j = _fixture('nassau_hole2_press');
+      final sides = [
+        for (final (i, s) in (j['sides'] as List).indexed)
+          {...(s as Map).cast<String, dynamic>(), 'label': i == 0 ? 'A' : 'B'},
+      ];
+      await _pump(t, NassauHoleCard.fromJson({...j, 'sides': sides}),
+          size: const Size(900, 900));
+      final reason = t.getRect(_reasonFinder());
+      final chip = t.getRect(find.text('Won'));
+      final names = t.getRect(find.byWidgetPredicate((w) =>
+          w is Text && (w.textSpan?.toPlainText() ?? '') == ' v B'));
+      expect(reason.left - names.right, lessThan(20),
+          reason: 'directly after the names');
+      expect(900 - chip.right, greaterThan(300),
+          reason: 'nowhere near the right edge');
+    });
+
+    testWidgets('a long pairing gives way; the result does not', (t) async {
+      // The names ellipsise before the reason or the badge lose anything —
+      // the result is what the tray exists to say.
+      final j = _fixture('nassau_hole2_press');
+      final sides = [
+        for (final s in (j['sides'] as List))
+          {...(s as Map).cast<String, dynamic>(),
+           'label': 'Bartholomew + Maximilian'},
+      ];
+      // At the default 390: the test font is one square a glyph, far wider
+      // than a real one, so a narrower surface here would be measuring the
+      // font rather than the row.
+      await _pump(t, NassauHoleCard.fromJson({...j, 'sides': sides}));
+      expect(t.takeException(), isNull);
+      final natural = _card('nassau_hole2_press');
+      await _pump(t, natural);
+      final want = t.getRect(_reasonFinder()).width;
+      await _pump(t, NassauHoleCard.fromJson({...j, 'sides': sides}));
+      expect(t.getRect(_reasonFinder()).width, want,
+          reason: 'the reason keeps its full width whatever the names are');
+      expect(t.getRect(find.text('Won')).right, lessThanOrEqualTo(390));
+    });
+
+    testWidgets('both are bigger than they were', (t) async {
+      await _pump(t, _card('nassau_hole2_press'));
+      expect(t.widget<Text>(find.text('Won')).style!.fontSize,
+          greaterThanOrEqualTo(14));
+      for (final s in _reasonSpans(t)) {
+        final size = s.style?.fontSize ??
+            t.widget<Text>(_reasonFinder()).textSpan!.style!.fontSize!;
+        expect(size, greaterThanOrEqualTo(14), reason: '"${s.text}"');
+      }
+    });
+
+    testWidgets('an older server draws the sentence flat', (t) async {
+      // No `reason_parts`: the tray must not guess which digit is whose.
+      final j = _fixture('nassau_hole2_press')..remove('reason_parts');
+      await _pump(t, NassauHoleCard.fromJson(j));
       expect(find.text('2nd ball 4 v 5'), findsOneWidget);
     });
 
@@ -339,7 +455,6 @@ void main() {
       final c = _card('nassau_nine_hole7_press');
       expect(c.title, 'Nassau Nine');
       expect(c.pressLine, 'match');
-      expect(c.nine, 'holes 1–9');
       expect(c.lines.map((l) => l.key), ['match']);
       expect(c.lines.single.chips.map((x) => x.text),
           ['Match 2 UP', 'P1 starts 8']);
@@ -355,7 +470,9 @@ void main() {
     testWidgets('the tray is labelled for the game and its holes', (t) async {
       await _pump(t, _card('nassau_nine_hole7_press'));
       expect(find.text('HOLE 7 · NASSAU NINE'), findsOneWidget);
-      expect(find.text('HOLES 1–9'), findsOneWidget);
+      // No `HOLES 1–9` beside it: built from the lowest and highest hole
+      // number, it was wrong for a nine that wraps and for a match over 18.
+      expect(find.textContaining('HOLES'), findsNothing);
       expect(find.text('MATCH'), findsOneWidget);
       for (final gone in ['FRONT', 'BACK', 'OVERALL']) {
         expect(find.text(gone), findsNothing);
@@ -379,11 +496,10 @@ void main() {
       expect(find.text('Press'), findsNothing);
     });
 
-    testWidgets('the ninth is the end, and still says which holes',
-        (t) async {
+    testWidgets('the ninth is the end', (t) async {
       await _pump(t, _card('nassau_nine_hole9_final'));
       expect(find.text('ROUND OVER'), findsOneWidget);
-      expect(find.text('HOLES 1–9'), findsOneWidget);
+      expect(find.textContaining('HOLES'), findsNothing);
       expect(find.text('FINAL, EACH'), findsOneWidget);
       expect(find.text('Complete Round ›'), findsOneWidget);
       expect(find.text('+\$20'), findsOneWidget);

@@ -2187,9 +2187,18 @@ def nassau_hole_card(foursome, hole: int) -> dict:
     members = {m.player_id: m.player
                for m in foursome.memberships.select_related('player')
                if not m.player.is_phantom}
-    label = first_names({p['player_id']: members[p['player_id']]
-                         for side in sides_in.values() for p in side
-                         if p['player_id'] in members})
+    firsts = first_names({p['player_id']: members[p['player_id']]
+                          for side in sides_in.values() for p in side
+                          if p['player_id'] in members})
+    # **A side is named by SHORT names** (Paul, 10 Nov 2026: *"we can switch
+    # the names to short names, not first names"*). `Paul + Gilbert v Larry
+    # + Jim` is four first names on one tray line, and it was crowding the
+    # hole's result off it; the short name is the one each golfer chose to
+    # be read by at arm's length, and it is what every board labels him
+    # with. The first name stays as the fallback for a blank one, and as
+    # the row's own `first`.
+    label = {pid: (members[pid].short_name or '').strip() or first
+             for pid, first in firsts.items()}
 
     card = summary.get('scorecard') or {}
     by_hole = {h['hole']: h for h in (card.get('holes') or [])}
@@ -2212,7 +2221,7 @@ def nassau_hole_card(foursome, hole: int) -> dict:
                 'player_id'      : pid,
                 'name'           : p.get('name') or '',
                 'short'          : p.get('short_name') or '',
-                'first'          : label.get(pid, ''),
+                'first'          : firsts.get(pid, ''),
                 'course_handicap': ch_of.get(pid),
                 'strokes'        : strokes,
                 'gross'          : gross,
@@ -2247,7 +2256,7 @@ def nassau_hole_card(foursome, hole: int) -> dict:
                         else f'{strokes} stroke' + ('' if strokes == 1 else 's'))
             sub = ' · '.join(bits)
         else:
-            counted = [r['first'] for r in rows
+            counted = [label.get(r['player_id'], '') for r in rows
                        if r['side'] == n and r['counted']]
             sub = ('counts: ' + ' · '.join(counted)) if counted else ''
         result = None
@@ -2267,15 +2276,22 @@ def nassau_hole_card(foursome, hole: int) -> dict:
     # **Why the hole went the way it did.** `2nd ball` is not a second rule
     # here: equal best nets with a winner can only BE the 2nd-ball tiebreak,
     # which is the engine's own option.
-    reason = ''
+    #
+    # **`reason_parts` is the same fact, unjoined**, so the tray can put each
+    # figure in its own side's colour (Paul, 10 Nov 2026). Sent as parts
+    # rather than left for a client to parse back out of the sentence —
+    # which rule decided the hole, and so which two figures these are, is
+    # this function's answer. `reason` stays for a client that draws it flat.
+    reason_parts = None
     if winner == 'halved':
-        reason = (f'net {nets[1]} v {nets[2]}'
-                  if nets[1] is not None else '')
+        if nets[1] is not None:
+            reason_parts = ('net', nets[1], nets[2])
     elif winner in ('team1', 'team2'):
         if nets[1] == nets[2] and seconds[1] is not None:
-            reason = f'2nd ball {seconds[1]} v {seconds[2]}'
+            reason_parts = ('2nd ball', seconds[1], seconds[2])
         else:
-            reason = f'net {nets[1]} v {nets[2]}'
+            reason_parts = ('net', nets[1], nets[2])
+    reason = ('{} {} v {}'.format(*reason_parts) if reason_parts else '')
 
     scored = sum(1 for r in rows if r['gross'] is not None)
     hole_complete = scored == len(rows)
@@ -2433,21 +2449,18 @@ def nassau_hole_card(foursome, hole: int) -> dict:
     # shipped (`utils/nassau_standing.dart` → `_nassauRibbon`), at the top,
     # visible while scores are being entered rather than only once the tray
     # is up. A second copy is a second thing to keep in step.
-    this_nine = 'front' if pos < half else 'back'
-    if single:
-        # `holes 1–9`, or `holes 10–18` for a back-nine round. Lowest to
-        # highest rather than first to last played, so a shotgun start does
-        # not read `holes 4–3`.
-        span = f'holes {min(order)}–{max(order)}'
-    else:
-        span = 'front nine' if this_nine == 'front' else 'back nine'
+    # **The card names no nine and no span.** The tray drew `FRONT NINE` /
+    # `BACK NINE` (and `holes 1–18` on a Nassau Nine) beside `Hole N`. The
+    # span was built from the lowest and highest hole number, so it was wrong
+    # for a nine that wraps the turn; the nine was the ENGINE's — off the
+    # 10th tee it said `front nine` on the 10th. Neither told a golfer
+    # anything the chips below do not, so both are gone (Paul, 10 Nov 2026).
 
     return {
         'hole'        : hole,
         'par'         : row.get('par'),
         'stroke_index': row.get('stroke_index'),
         'yards'       : None,
-        'nine'        : span,
         # What the tray calls the game, and which line its Press button
         # sits on — the last one, which is `OVERALL` on a Nassau and the
         # only one on a Nassau Nine.
@@ -2463,6 +2476,10 @@ def nassau_hole_card(foursome, hole: int) -> dict:
         'sides'       : sides,
         'winner'      : winner,
         'reason'      : reason,
+        'reason_parts': ({'label': reason_parts[0],
+                          'team1': reason_parts[1],
+                          'team2': reason_parts[2]}
+                         if reason_parts else None),
         'scored'      : scored,
         'hole_complete': hole_complete,
         'lines'       : top_lines,

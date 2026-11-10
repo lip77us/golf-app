@@ -155,6 +155,50 @@ void main() {
       ));
       expect(find.text('–'), findsOneWidget);
     });
+
+    testWidgets('without the best ball it is a NAME for the side, and '
+        'nothing else', (t) async {
+      // Nassau and Nassau Nine (Paul, 10 Nov 2026: "remove the Best –
+      // from the top of the team names"). The side's names and colour
+      // stay; the tag and its figure go, scored or not.
+      await t.binding.setSurfaceSize(const Size(390, 300));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      final c = _card(sides: const [
+        [1, 'Paul + Larry', null, '', null],
+        [2, 'Jim + Ryan', 5, 'counts: Jim', null],
+      ]);
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Column(children: [
+            FourballSideHeader(side: c.sides[0], showBest: false),
+            FourballSideHeader(side: c.sides[1], showBest: false),
+          ]),
+        ),
+      ));
+      expect(find.text('PAUL + LARRY'), findsOneWidget);
+      expect(find.text('JIM + RYAN'), findsOneWidget);
+      expect(find.text('BEST'), findsNothing);
+      expect(find.text('–'), findsNothing, reason: 'the unscored side');
+      expect(find.text('5'), findsNothing, reason: 'the scored side');
+    });
+
+    test('Nassau turns it off; Fourball keeps it', () {
+      // Two call sites on one screen draw this header, and the game decides
+      // which shape. Each is bounded by its own gate, not a character count.
+      final src = File('lib/screens/score_entry_screen.dart')
+          .readAsStringSync();
+      String call(String gate) {
+        final at = src.indexOf(gate);
+        expect(at, greaterThan(0), reason: gate);
+        final from = src.indexOf('FourballSideHeader(', at);
+        return src.substring(from, src.indexOf(';', from)
+            .clamp(from, src.length)).split('),').first;
+      }
+      expect(call('if (nassauCard?.sideOf(m.player.id) != null'),
+          contains('showBest: false'));
+      expect(call('if (fourballHole?.sideOf(m.player.id) != null'),
+          isNot(contains('showBest')));
+    });
   });
 
   group('the tray', () {

@@ -3,7 +3,6 @@
   "par": 3,
   "stroke_index": 17,
   "yards": null,
-  "nine": "front nine",
   "title": "Nassau",
   "press_line": "overall",
   "thru": 7,
@@ -14,9 +13,9 @@
   "claremont": true,
   "players": [
     {
-      "player_id": 3642,
+      "player_id": 2830,
       "name": "Paul Lipkin",
-      "short": "PL",
+      "short": "Paul",
       "first": "Paul",
       "course_handicap": 0,
       "strokes": 0,
@@ -26,9 +25,9 @@
       "counted": true
     },
     {
-      "player_id": 3643,
+      "player_id": 2831,
       "name": "Dave Kim",
-      "short": "DK",
+      "short": "Dave",
       "first": "Dave",
       "course_handicap": 0,
       "strokes": 0,
@@ -38,9 +37,9 @@
       "counted": true
     },
     {
-      "player_id": 3644,
+      "player_id": 2832,
       "name": "Sam Reid",
-      "short": "SR",
+      "short": "Sam",
       "first": "Sam",
       "course_handicap": 0,
       "strokes": 0,
@@ -50,9 +49,9 @@
       "counted": true
     },
     {
-      "player_id": 3645,
+      "player_id": 2833,
       "name": "Mike Nash",
-      "short": "MN",
+      "short": "Mike",
       "first": "Mike",
       "course_handicap": 0,
       "strokes": 0,
@@ -67,8 +66,8 @@
       "side": 1,
       "label": "Paul + Dave",
       "player_ids": [
-        3642,
-        3643
+        2830,
+        2831
       ],
       "best": 4,
       "sub": "counts: Paul \u00b7 Dave",
@@ -78,8 +77,8 @@
       "side": 2,
       "label": "Sam + Mike",
       "player_ids": [
-        3644,
-        3645
+        2832,
+        2833
       ],
       "best": 4,
       "sub": "counts: Sam",
@@ -88,6 +87,11 @@
   ],
   "winner": "halved",
   "reason": "net 4 v 4",
+  "reason_parts": {
+    "label": "net",
+    "team1": 4,
+    "team2": 4
+  },
   "scored": 4,
   "hole_complete": true,
   "lines": [

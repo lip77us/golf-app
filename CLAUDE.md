@@ -11815,3 +11815,85 @@ Tests: the `the group card` / `the rotate hint` / `score entry draws it no
 more` groups in `mobile/test/stroke_play_board_test.dart` (12) and
 `TheWireRowCarriesTheShortNameTests` (`api/test_low_net_modes.py`, 3). Ten
 client mutations and three server ones, all killed.
+
+### Nassau's side header is a name, with no `BEST` tag
+
+Paul, 10 Nov 2026, looking at Nassau and Nassau Nine: *"remove the Best –
+from the top of the team names."* `FourballSideHeader` gained `showBest`
+(default true); the Nassau call site on `score_entry_screen` passes false, so
+both games draw the swatch and the names alone. **Fourball keeps the tag** —
+its whole game is that one ball — and a source test pins which call site
+passes what. This narrows the Nassau score-entry note above, which said the
+header is Fourball's "with the same best ball".
+
+### The Nassau tray: the result gets a line, and a side is its short names
+
+Paul, 10 Nov 2026, from a Nassau Nine hole: *"put net 5 v 5 and halved on the
+same line so that they are bigger … color the 5 v 5 to match team colors"*,
+then *"we can switch the names to short names, not first names."*
+
+**The header is ONE row: names, then why, then the result** —
+`Paul + Gil v Larry + Jim   net 5 v 4  [Won]`. The result was an 11.5pt chip
+stacked over a 10.5pt reason to the right of four names — the smallest type
+on the tray for the thing the tray exists to say. It is 14pt now (16pt
+figures), **each figure in its own side's colour**. A first pass gave the
+result a second line of its own; Paul asked for the same row with the reason
+FIRST (*"net 5 v 4 and the Won badge on the same row as the names … with net
+5 v 4 first"*), which short names are what make room for.
+
+**The result follows the names; it is not right-justified.** Pushed to the
+right edge it sat directly under the tray label's `HOLES 1–18` on a large
+phone and read as belonging to that, when it is about the hole just played.
+The names are a loose `Flexible`, so the result starts 12pt after them.
+
+**And a Nassau Nine names no span at all.** `holes {min}–{max}` was right
+only for nine consecutive holes off the 1st or the 10th: a nine that wraps
+the turn read `holes 1–18`, and so did a match over all eighteen, on a card
+titled Nassau NINE (*"it is wrong for a Nassau 9 in many cases"*). The server
+**A full Nassau lost its `FRONT NINE` / `BACK NINE` too**, a message later
+(*"lets drop it from Nassau as well"*) — and that one was the ENGINE's nine,
+so off the 10th tee it read `front nine` on the 10th hole. The `nine` key is
+gone from the card and from `NassauHoleCard`; the tray label is `Hole N ·
+Nassau` and nothing beside it. The chips say which bet a hole is in. This
+reverses the Nassau Nine note above, which called the span the answer to the
+handoff's open question.
+
+Three things keep one row honest:
+- **The names yield, the result does not** — names are flexible with an
+  ellipsis each; the reason and badge take their natural width.
+- **Nothing in the names run is rigid.** The ` v ` rides inside the second
+  name's `Text.rich`; a fixed `v` between two flexible names is the one piece
+  that overflowed once the names could be squeezed hard.
+- **The result is capped at two thirds of the row and scales down** past
+  that (`FittedBox`), so a narrow screen or large type shrinks it rather than
+  drawing overflow stripes.
+
+Measured with a real font at 390pt: `Paul + Gil v Larry + Jim` fits whole
+beside both `net 5 v 5 [Halved]` and `2nd ball 4 v 5 [Won]`, but only after
+the spacing was tightened — the first cut clipped it to `Larry + Ji…`. **Four
+five-letter short names will ellipsise**; that is the trade this row makes.
+
+**`reason_parts`** (`{label, team1, team2}`) ships beside `reason`, because
+colouring needs the figures apart and which two figures they ARE is the
+server's answer — on a 2nd-ball hole they are the SECOND balls, not the equal
+best nets. `reason` is built from the parts, so the two cannot disagree; a
+card with no parts (an older server) draws the sentence flat rather than
+guessing which digit is whose.
+
+**A side's label is its golfers' SHORT names**, with the first name as the
+fallback for a blank one. One `label` dict feeds the sides line, the header
+over the rows, the money rows, the bottom game and `counts:`, so they all
+moved together. The row's own `first` is unchanged. **`short_name` auto-fills
+to initials**, so a golfer who never set one reads `LS + JD` — true of some
+local copies of real golfers, and worth knowing before judging it on a
+device. **Singles Match is untouched** (`singles_hole_card` is its own
+function and still says first names).
+
+Test fixtures: `_CardBase` and the API base now give each golfer a short name
+equal to his first name, which keeps every assertion and regenerated fixture
+readable; `ASideIsNamedByShortNamesTests` is where the two are forced apart.
+
+Tests: `ASideIsNamedByShortNamesTests` (5) and four `reason_parts` cases in
+`scoring/tests/test_nassau_hole_card.py`; five in the `the tray` group of
+`mobile/test/nassau_entry_test.dart`. Four server and four client mutations
+killed. Tray rendered to images with a real font.

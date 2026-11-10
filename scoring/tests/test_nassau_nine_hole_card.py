@@ -53,7 +53,9 @@ class OneMatchOneLineTests(_NineBase):
         card = self._card(1)
         self.assertEqual(card['kind'], 'nassau_nine')
         self.assertEqual(card['title'], 'Nassau Nine')
-        self.assertEqual(card['nine'], 'holes 1–9')
+        # No span: built from the lowest and highest hole number it was
+        # wrong for a nine that wraps the turn and for a match over 18.
+        self.assertNotIn('nine', card)
         self.assertEqual(card['press_line'], 'match')
 
     def test_there_is_no_back_and_no_overall(self):
@@ -215,10 +217,9 @@ class BackNineTests(_NineBase):
     """The handoff's open question: a group playing 10–18."""
     START = 10
 
-    def test_the_span_and_the_end_follow_the_holes_played(self):
+    def test_the_end_follows_the_holes_played(self):
         self._setup(press_mode='manual')
         card = self._card(10)
-        self.assertEqual(card['nine'], 'holes 10–18')
         self.assertEqual(card['thru'], 1)
         for h in range(10, 17):
             self._halve(h)

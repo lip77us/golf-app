@@ -22,14 +22,28 @@ import 'tray_label.dart';
 const Color _secondary = Color(0xFFB9CCC3);
 const Color _trayMuted = Color(0xFF7F968C);
 
-/// `PAUL + LARRY` with `BEST` and the side's best net.
+/// `PAUL + LARRY`, and for Fourball `BEST` with the side's best net.
 ///
 /// **Hidden after a close-out**, which the caller decides: past that hole
 /// there is no team score for a ball to be the best of, and a tag that kept
 /// filling in would be reporting a match that is over.
 class FourballSideHeader extends StatelessWidget {
   final FourballHoleSide side;
-  const FourballSideHeader({super.key, required this.side});
+
+  /// Draw `BEST` and the side's best net beside the names.
+  ///
+  /// Fourball's whole game is that one ball, so it is on there. **Nassau
+  /// and Nassau Nine pass false** (Paul, 10 Nov 2026: *"remove the Best –
+  /// from the top of the team names"*): there the header is a name for the
+  /// side, and the tray reports the hole — with the 2nd ball or Claremont's
+  /// bottom game in play, the best ball alone is not even the whole of it.
+  final bool showBest;
+
+  const FourballSideHeader({
+    super.key,
+    required this.side,
+    this.showBest = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -50,23 +64,25 @@ class FourballSideHeader extends StatelessWidget {
                   fontSize: 11.5, fontWeight: FontWeight.w800,
                   letterSpacing: 0.5, color: colour)),
         ),
-        const SizedBox(width: 8),
-        const Text('BEST',
-            style: TextStyle(
-                fontSize: 10, fontWeight: FontWeight.w700,
-                letterSpacing: 0.5, color: Halved.muted)),
-        const SizedBox(width: 5),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-          decoration: BoxDecoration(
-            color: colour,
-            borderRadius: BorderRadius.circular(6),
+        if (showBest) ...[
+          const SizedBox(width: 8),
+          const Text('BEST',
+              style: TextStyle(
+                  fontSize: 10, fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5, color: Halved.muted)),
+          const SizedBox(width: 5),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: colour,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(side.best?.toString() ?? '–',
+                style: const TextStyle(
+                    color: Colors.white, fontSize: 12.5,
+                    fontWeight: FontWeight.w800)),
           ),
-          child: Text(side.best?.toString() ?? '–',
-              style: const TextStyle(
-                  color: Colors.white, fontSize: 12.5,
-                  fontWeight: FontWeight.w800)),
-        ),
+        ],
       ]),
     );
   }

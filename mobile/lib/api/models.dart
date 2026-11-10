@@ -12006,7 +12006,6 @@ class NassauHoleCard {
   final int hole;
   final int? par;
   final int? strokeIndex;
-  final String nine;
   final int thru;
 
   /// `Nassau` or `Nassau Nine` — the same card over three bets or one.
@@ -12032,6 +12031,19 @@ class NassauHoleCard {
 
   /// Why it went that way: `net 4 v 5` or `2nd ball 4 v 5`.
   final String reason;
+
+  /// The same fact unjoined — `net` / `2nd ball`, and each side's figure —
+  /// so the tray can put each figure in its own side's colour. Null from an
+  /// older server, where the tray draws [reason] flat. The SERVER splits it:
+  /// which rule decided the hole, and so which two figures these are, is
+  /// its answer, and a client parsing the sentence back apart would be a
+  /// second one.
+  final String? reasonLabel;
+  final int? reasonTeam1;
+  final int? reasonTeam2;
+
+  bool get hasReasonParts =>
+      reasonLabel != null && reasonTeam1 != null && reasonTeam2 != null;
 
   final int scored;
   final bool holeComplete;
@@ -12067,7 +12079,6 @@ class NassauHoleCard {
     required this.hole,
     required this.par,
     required this.strokeIndex,
-    required this.nine,
     required this.thru,
     this.title = 'Nassau',
     this.pressLine = 'overall',
@@ -12079,6 +12090,9 @@ class NassauHoleCard {
     required this.sides,
     required this.winner,
     required this.reason,
+    this.reasonLabel,
+    this.reasonTeam1,
+    this.reasonTeam2,
     required this.scored,
     required this.holeComplete,
     required this.lines,
@@ -12097,7 +12111,6 @@ class NassauHoleCard {
         hole: (j['hole'] as num?)?.toInt() ?? 0,
         par: (j['par'] as num?)?.toInt(),
         strokeIndex: (j['stroke_index'] as num?)?.toInt(),
-        nine: j['nine'] as String? ?? '',
         thru: (j['thru'] as num?)?.toInt() ?? 0,
         // An older server sends neither, and is always a full Nassau.
         title: j['title'] as String? ?? 'Nassau',
@@ -12116,6 +12129,9 @@ class NassauHoleCard {
             .toList(),
         winner: j['winner'] as String?,
         reason: j['reason'] as String? ?? '',
+        reasonLabel: (j['reason_parts'] as Map?)?['label'] as String?,
+        reasonTeam1: ((j['reason_parts'] as Map?)?['team1'] as num?)?.toInt(),
+        reasonTeam2: ((j['reason_parts'] as Map?)?['team2'] as num?)?.toInt(),
         scored: (j['scored'] as num?)?.toInt() ?? 0,
         holeComplete: j['hole_complete'] as bool? ?? false,
         lines: ((j['lines'] as List?) ?? const [])

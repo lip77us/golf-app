@@ -5606,13 +5606,16 @@ class _HoleScoreCard extends StatelessWidget {
                        fourballHole!.sideOf(m.player.id)?.side))
                 FourballSideHeader(
                     side: fourballHole!.sideOf(m.player.id)!),
-              // Nassau: the same slot and the same header — see the field.
+              // Nassau and Nassau Nine: the same slot and the same header,
+              // as a NAME for the side only — no `BEST` tag. The tray
+              // reports the hole; see `FourballSideHeader.showBest`.
               if (nassauCard?.sideOf(m.player.id) != null &&
                   (idx == 0 ||
                    nassauCard!.sideOf(players[idx - 1].player.id)?.side !=
                        nassauCard!.sideOf(m.player.id)?.side))
                 FourballSideHeader(
-                    side: nassauCard!.sideOf(m.player.id)!),
+                    side: nassauCard!.sideOf(m.player.id)!,
+                    showBest: false),
               // Skins has no sides, so this is ONE header over the card
               // rather than one a side: what the hole is worth.
               if (skinsCard != null && idx == 0)

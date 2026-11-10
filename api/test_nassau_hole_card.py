@@ -37,7 +37,10 @@ class _Base(TestCase):
         self.fs = Foursome.objects.create(round=self.round, group_number=1)
         self.pid = {}
         for name in ('Ann Archer', 'Ben Bell', 'Cal Croft', 'Dee Dunn'):
+            # A side is named by SHORT names; left blank that auto-fills to
+            # initials (`AA + BB`), so these golfers have named themselves.
             p = Player.objects.create(account=self.acct, name=name,
+                                      short_name=name.split()[0],
                                       handicap_index=Decimal('0'))
             FoursomeMembership.objects.create(
                 foursome=self.fs, player=p, tee=self.tee,

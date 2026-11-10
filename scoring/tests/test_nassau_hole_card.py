@@ -38,6 +38,14 @@ class _CardBase(TestCase):
         self.fs = make_foursome(self.round, names, tee=self.tee)
         self.pid = {m.player.name.split()[0]: m.player_id
                     for m in self.fs.memberships.select_related('player')}
+        # A side is named by SHORT names, and a blank one auto-fills to
+        # initials (`PL + DK`). These golfers have named themselves, the way
+        # a real roster does — which keeps every assertion and every fixture
+        # below readable. `ASideIsNamedByShortNamesTests` is where the short
+        # name and the first name are forced APART.
+        for m in self.fs.memberships.select_related('player'):
+            m.player.short_name = m.player.name.split()[0]
+            m.player.save(update_fields=['short_name'])
 
     def _setup(self, **kw):
         t1 = ([self.pid['Paul']] if self.SINGLES
@@ -61,6 +69,63 @@ class _CardBase(TestCase):
     def _chips(self, card, key, where='lines'):
         line = next(l for l in card[where] if l['key'] == key)
         return [c['text'] for c in line['chips']]
+
+
+class ASideIsNamedByShortNamesTests(_CardBase):
+    """Paul, 10 Nov 2026: *"we can switch the names to short names, not
+    first names."* Four first names on one tray line were crowding the
+    hole's result off it.
+
+    The base fixture's short names EQUAL its first names, so nothing there
+    can tell which one a label is built from — the Sixes anchor lesson.
+    Here they are forced apart.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from core.models import Player
+        for first, short in (('Paul', 'Lip'), ('Dave', 'DK'),
+                             ('Sam', 'Sammy'), ('Mike', 'Nash')):
+            Player.objects.filter(pk=self.pid[first]).update(short_name=short)
+
+    def test_the_sides_are_named_by_short_name(self):
+        self._setup()
+        self._play(1, 4, 4, 5, 5)
+        card = self._card(1)
+        self.assertEqual([s['label'] for s in card['sides']],
+                         ['Lip + DK', 'Sammy + Nash'])
+
+    def test_the_money_rows_say_the_same_names(self):
+        # One label per side, used everywhere on the card: a tray naming a
+        # side two ways is asking the reader to work out they are one side.
+        self._setup()
+        self._play(1, 4, 4, 5, 5)
+        card = self._card(1)
+        self.assertEqual({m['label'] for m in card['money']},
+                         {'Lip + DK', 'Sammy + Nash'})
+
+    def test_the_counting_ball_is_named_the_same_way(self):
+        self._setup()
+        self._play(1, 4, 6, 5, 7)
+        self.assertEqual(self._card(1)['sides'][0]['sub'], 'counts: Lip')
+
+    def test_the_row_keeps_his_first_name(self):
+        # `first` is the row's own field and other readers take it; only the
+        # SIDE's label moved.
+        self._setup()
+        row = next(r for r in self._card(1)['players']
+                   if r['player_id'] == self.pid['Paul'])
+        self.assertEqual(row['first'], 'Paul')
+        self.assertEqual(row['short'], 'Lip')
+
+    def test_a_blank_short_name_falls_back_to_the_first_name(self):
+        # `save()` auto-fills one, so a blank only arrives by `update()` or
+        # from an old row — but a side with no name in it is a tray reading
+        # ` + Dave`, so it is covered.
+        from core.models import Player
+        Player.objects.filter(pk=self.pid['Paul']).update(short_name='')
+        self._setup()
+        self.assertEqual(self._card(1)['sides'][0]['label'], 'Paul + DK')
 
 
 class TheHoleItselfTests(_CardBase):
@@ -89,6 +154,42 @@ class TheHoleItselfTests(_CardBase):
         card = self._card(1)
         self.assertEqual(card['winner'], 'halved')
         self.assertEqual(card['reason'], 'net 4 v 4')
+
+    def test_the_reason_also_ships_as_parts(self):
+        # So the tray can colour each figure by its side. Which rule decided
+        # the hole — and so which two figures these are — is the server's
+        # answer; a client parsing `net 4 v 5` back apart would be a second
+        # one.
+        self._setup()
+        self._play(1, 4, 4, 5, 5)
+        self.assertEqual(self._card(1)['reason_parts'],
+                         {'label': 'net', 'team1': 4, 'team2': 5})
+
+    def test_a_second_ball_hole_sends_the_SECOND_balls(self):
+        # Not the best nets, which are equal here — the figures that
+        # actually separated the sides.
+        self._setup(variant='tiebreak_2nd')
+        self._play(1, 4, 4, 4, 5)
+        self.assertEqual(self._card(1)['reason_parts'],
+                         {'label': '2nd ball', 'team1': 4, 'team2': 5})
+
+    def test_the_parts_and_the_sentence_cannot_disagree(self):
+        # One is built from the other, on every outcome a hole can have.
+        for variant, scores in (('none', (4, 4, 5, 5)),
+                                ('none', (4, 4, 4, 5)),
+                                ('tiebreak_2nd', (4, 4, 4, 5))):
+            with self.subTest(variant=variant, scores=scores):
+                self._setup(variant=variant)
+                self._play(1, *scores)
+                card = self._card(1)
+                p = card['reason_parts']
+                self.assertEqual(
+                    card['reason'],
+                    f"{p['label']} {p['team1']} v {p['team2']}")
+
+    def test_a_fresh_hole_has_no_parts(self):
+        self._setup()
+        self.assertIsNone(self._card(1)['reason_parts'])
 
     def test_the_counting_ball_is_named(self):
         self._setup()
@@ -559,7 +660,6 @@ class ItFollowsPlayOrderTests(_CardBase):
         self._play(10, 4, 4, 5, 5)
         card = self._card(10)
         self.assertEqual(card['thru'], 1)
-        self.assertEqual(card['nine'], 'front nine')
         self.assertEqual(self._chips(card, 'front'), ['Front 1 UP'])
         self.assertEqual(self._chips(card, 'back'), ['Back starts 1'])
 
@@ -567,7 +667,15 @@ class ItFollowsPlayOrderTests(_CardBase):
         self._setup()
         card = self._card(1)
         self.assertEqual(card['thru'], 10)
-        self.assertEqual(card['nine'], 'back nine')
+        # The hole belongs to the BACK bet: the front is waiting on nine
+        # holes nobody has played, and the back is the line that says so.
+        self.assertEqual(self._chips(card, 'back'), ['Back starts 1'])
+
+    def test_the_card_names_no_nine(self):
+        # The tray drew it beside `Hole N`, and off the 10th it read `front
+        # nine` on the 10th hole. The chips say which bet a hole is in.
+        self._setup()
+        self.assertNotIn('nine', self._card(10))
 
 
 class NassauFixtureRegenTests(_CardBase):
