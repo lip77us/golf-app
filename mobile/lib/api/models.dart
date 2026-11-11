@@ -12836,3 +12836,232 @@ class TripleCupHoleCard {
     );
   }
 }
+
+
+// ---------------------------------------------------------------------------
+// Mini Singles Bracket — the score-entry card for ONE hole
+// ---------------------------------------------------------------------------
+
+/// One hole tile in a match's strip: `p1` / `p2` won it, `halved`, `open`
+/// or `dead` (after a close-out).
+class MiniSinglesTile {
+  final int hole;
+  final String state;
+  const MiniSinglesTile({required this.hole, required this.state});
+
+  factory MiniSinglesTile.fromJson(Map<String, dynamic> j) => MiniSinglesTile(
+        hole: j['hole'] as int? ?? 0,
+        state: j['state'] as String? ?? 'open',
+      );
+}
+
+/// One match live on the hole: the hole's own result and the match as of it.
+class MiniSinglesBlock {
+  final String key;
+
+  /// `Semi 1`, `Semi 2`, `Finals`, `3rd place`.
+  final String title;
+  final List<String> names;
+
+  /// A back-nine match against a semi that is still level: the opponent
+  /// cannot be named yet, and the match is scored all the same.
+  final bool tbd;
+  final bool played;
+
+  /// 1 or 2, or null for a halved hole.
+  final int? winner;
+  final String? reasonLabel;
+  final int? figure1;
+  final int? figure2;
+
+  /// Non-empty when the match was over BEFORE this hole: the block is this
+  /// one line, and the hole is stroke play only for these two.
+  final String overLine;
+  final int? leader;
+  final String head;
+  final String margin;
+  final String sub;
+  final bool decided;
+  final List<MiniSinglesTile> tiles;
+
+  const MiniSinglesBlock({
+    required this.key,
+    required this.title,
+    required this.names,
+    required this.tbd,
+    required this.played,
+    required this.winner,
+    required this.reasonLabel,
+    required this.figure1,
+    required this.figure2,
+    required this.overLine,
+    required this.leader,
+    required this.head,
+    required this.margin,
+    required this.sub,
+    required this.decided,
+    required this.tiles,
+  });
+
+  factory MiniSinglesBlock.fromJson(Map<String, dynamic> j) {
+    final r = j['reason'] as Map<String, dynamic>?;
+    final names =
+        (j['names'] as List? ?? const []).map((e) => '$e').toList();
+    return MiniSinglesBlock(
+      key: j['key'] as String? ?? '',
+      title: j['title'] as String? ?? '',
+      names: [
+        names.isNotEmpty ? names[0] : '',
+        names.length > 1 ? names[1] : '',
+      ],
+      tbd: j['tbd'] as bool? ?? false,
+      played: j['played'] as bool? ?? false,
+      winner: j['winner'] as int?,
+      reasonLabel: r?['label'] as String?,
+      figure1: (r?['p1'] as num?)?.toInt(),
+      figure2: (r?['p2'] as num?)?.toInt(),
+      overLine: j['over_line'] as String? ?? '',
+      leader: j['leader'] as int?,
+      head: j['head'] as String? ?? '',
+      margin: j['margin'] as String? ?? '',
+      sub: j['sub'] as String? ?? '',
+      decided: j['decided'] as bool? ?? false,
+      tiles: (j['tiles'] as List? ?? const [])
+          .map((e) => MiniSinglesTile.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+class MiniSinglesResultRow {
+  final String name;
+  final String place;
+  final String amount;
+
+  /// `up`, `level` or `dn`.
+  final String tone;
+  const MiniSinglesResultRow({
+    required this.name,
+    required this.place,
+    required this.amount,
+    required this.tone,
+  });
+
+  factory MiniSinglesResultRow.fromJson(Map<String, dynamic> j) =>
+      MiniSinglesResultRow(
+        name: j['name'] as String? ?? '',
+        place: j['place'] as String? ?? '',
+        amount: j['amount'] as String? ?? '',
+        tone: j['tone'] as String? ?? 'level',
+      );
+}
+
+class MiniSinglesCardPlayer {
+  final int playerId;
+  final String first;
+  final int strokes;
+  const MiniSinglesCardPlayer({
+    required this.playerId,
+    required this.first,
+    required this.strokes,
+  });
+
+  factory MiniSinglesCardPlayer.fromJson(Map<String, dynamic> j) =>
+      MiniSinglesCardPlayer(
+        playerId: j['player_id'] as int? ?? 0,
+        first: j['first'] as String? ?? '',
+        strokes: j['strokes'] as int? ?? 0,
+      );
+}
+
+/// Everything the Mini Singles tray draws for one hole.
+///
+/// **Every sentence arrives written**, because each is a rule: when a semi
+/// plays on, what a halved finals does to the money, who goes through.
+class MiniSinglesHoleCard {
+  final int hole;
+
+  /// 1 or 2 in a tournament; null for a casual bracket.
+  final int? day;
+  final String label;
+  final String trailing;
+  final bool holeComplete;
+  final List<MiniSinglesBlock> blocks;
+
+  final String? nextLabel;
+  final String? nextTitle;
+  final String? nextBody;
+  final String? nextButton;
+  final String? winnerLabel;
+  final String? winnerName;
+  final String? winnerLine;
+  final List<MiniSinglesResultRow> result;
+  final String resultLine;
+  final bool lastHole;
+  final bool roundOver;
+  final List<MiniSinglesCardPlayer> players;
+
+  const MiniSinglesHoleCard({
+    required this.hole,
+    required this.day,
+    required this.label,
+    required this.trailing,
+    required this.holeComplete,
+    required this.blocks,
+    required this.nextLabel,
+    required this.nextTitle,
+    required this.nextBody,
+    required this.nextButton,
+    required this.winnerLabel,
+    required this.winnerName,
+    required this.winnerLine,
+    required this.result,
+    required this.resultLine,
+    required this.lastHole,
+    required this.roundOver,
+    required this.players,
+  });
+
+  /// This golfer's strokes on the hole, in the match he is IN on it — which
+  /// changes at the turn because his opponent does.
+  int? strokesFor(int playerId) {
+    for (final p in players) {
+      if (p.playerId == playerId) return p.strokes;
+    }
+    return null;
+  }
+
+  factory MiniSinglesHoleCard.fromJson(Map<String, dynamic> j) {
+    final next = j['next'] as Map<String, dynamic>?;
+    final winner = j['winner'] as Map<String, dynamic>?;
+    final result = j['result'] as Map<String, dynamic>?;
+    return MiniSinglesHoleCard(
+      hole: j['hole'] as int? ?? 0,
+      day: j['day'] as int?,
+      label: j['label'] as String? ?? '',
+      trailing: j['trailing'] as String? ?? '',
+      holeComplete: j['hole_complete'] as bool? ?? false,
+      blocks: (j['blocks'] as List? ?? const [])
+          .map((e) => MiniSinglesBlock.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      nextLabel: next?['label'] as String?,
+      nextTitle: next?['title'] as String?,
+      nextBody: next?['body'] as String?,
+      nextButton: next?['button'] as String?,
+      winnerLabel: winner?['label'] as String?,
+      winnerName: winner?['name'] as String?,
+      winnerLine: winner?['line'] as String?,
+      result: (result?['rows'] as List? ?? const [])
+          .map((e) =>
+              MiniSinglesResultRow.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      resultLine: result?['line'] as String? ?? '',
+      lastHole: j['last_hole'] as bool? ?? false,
+      roundOver: j['round_over'] as bool? ?? false,
+      players: (j['players'] as List? ?? const [])
+          .map((e) =>
+              MiniSinglesCardPlayer.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}

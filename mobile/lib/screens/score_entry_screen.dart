@@ -44,6 +44,7 @@ import '../widgets/skins_entry.dart';
 import '../utils/banker_strokes.dart';
 import '../widgets/banker_entry.dart';
 import '../widgets/banker_entry_strip.dart';
+import '../widgets/mini_singles_entry.dart';
 import '../widgets/triple_cup_entry.dart';
 import '../widgets/triple_cup_pairings.dart';
 import '../widgets/standing_ribbon.dart';
@@ -203,6 +204,16 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final sp = _strokePlayCard(rp);
     if (sp != null) {
       final s = sp.player(m.player.id)?.strokes;
+      if (s != null) return s;
+    }
+
+    // **Mini Singles: the strokes of the match he is IN on this hole.**
+    // Strokes come off the low man of each PAIR, and a golfer's opponent
+    // changes at the turn — so his dots do too, and a semi that plays on
+    // keeps its own.
+    final ms = _miniSinglesCard(rp);
+    if (ms != null) {
+      final s = ms.strokesFor(m.player.id);
       if (s != null) return s;
     }
 
@@ -1643,8 +1654,63 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         primary == GameIds.banker ||
         // Triple Cup, per `handoff-triple-cup-score-entry` (11 Nov 2026):
         // the same keypad and tray over a round cut in thirds.
-        primary == GameIds.tripleCup;
+        primary == GameIds.tripleCup ||
+        // The Mini Singles bracket, per `handoff-mini-singles-score-entry`.
+        _miniSinglesRound(rp);
   }
+
+  /// **This group is playing a Mini Singles bracket on this screen** — a
+  /// casual Match Play foursome, or a tournament group whose round carries
+  /// the bracket as one of its games.
+  ///
+  /// Not a primary test, on purpose: in a tournament the bracket is a game
+  /// the TD switched on beside the stroke play the round is scored on, and
+  /// the packet gives THIS tray to that screen. What it must not do is take
+  /// the tray from a game that has one of its own, so those primaries are
+  /// named. Stroke Play is not among them — its tray reports a place in the
+  /// field, which the leaderboard still does, and two trays cannot both rise.
+  ///
+  /// Four golfers: a threesome plays a different game under the same slug.
+  bool _miniSinglesRound(RoundProvider rp) {
+    final games = _activeGames(rp.round);
+    if (!games.contains(GameIds.matchPlay)) return false;
+    final fs = rp.round?.foursomes
+        .where((f) => f.id == widget.foursomeId)
+        .firstOrNull;
+    if (fs == null || fs.realPlayers.length != 4) return false;
+    const owners = {
+      GameIds.annandaleFriday, GameIds.sixes, GameIds.vegas,
+      GameIds.fourball, GameIds.match18, GameIds.nassau, GameIds.nassauNine,
+      GameIds.skins, GameIds.multiSkins, GameIds.banker, GameIds.tripleCup,
+    };
+    final primary = resolvePrimary(rp.round?.primaryGame, games);
+    return primary == null || !owners.contains(primary);
+  }
+
+  /// The hole we have asked the server for; see `_ensureFourballCard`.
+  int? _miniSinglesCardAsked;
+
+  /// **Make sure the hole on screen has a Mini Singles card.** A save drops
+  /// every other hole's card — editing a back-nine hole can change who won a
+  /// semi that played on, and with it both back-nine pairings.
+  void _ensureMiniSinglesCard(RoundProvider rp) {
+    if (!_miniSinglesRound(rp)) return;
+    if (rp.miniSinglesHole(_selectedHole) != null) {
+      _miniSinglesCardAsked = null;
+      return;
+    }
+    if (_miniSinglesCardAsked == _selectedHole) return;
+    _miniSinglesCardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<RoundProvider>()
+          .loadMiniSinglesHole(widget.foursomeId, _selectedHole);
+    });
+  }
+
+  /// The Mini Singles card for the hole on screen.
+  MiniSinglesHoleCard? _miniSinglesCard(RoundProvider rp) =>
+      _miniSinglesRound(rp) ? rp.miniSinglesHole(_selectedHole) : null;
 
   /// This hole ends in a TRAY — Annandale Friday's, Sixes' or Stroke Play's.
   /// Those read the server's result for the hole, so the scorer stays on it
@@ -1655,6 +1721,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       _vegasCard(rp) != null ||
       _fourballCard(rp) != null ||
       _tripleCupCard(rp) != null ||
+      _miniSinglesCard(rp) != null ||
       _singlesCard(rp) != null ||
       _nassauCard(rp) != null ||
       _skinsCard(rp) != null ||
@@ -1721,6 +1788,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.strokePlay) {
       return null;
     }
+    // A group playing a Mini Singles bracket gets THAT tray: two cannot
+    // both rise, and the place in the field is still on the leaderboard.
+    if (_miniSinglesRound(rp)) return null;
     return rp.strokePlayHole(_selectedHole);
   }
 
@@ -3734,6 +3804,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final tcTray =
         tcCard != null && fbActive && allDone && _editHotPid == null;
 
+    // **Mini Singles.** Same tray, one block per match live on the hole.
+    _ensureMiniSinglesCard(rp);
+    final msCard = _miniSinglesCard(rp);
+    final msTray =
+        msCard != null && fbActive && allDone && _editHotPid == null;
+
     // **Banker.** The tray rises on a RESOLVED hole rather than on four
     // scores: three of the four numbers mean nothing until the banker's is
     // among them, which is the strip's own long-standing rule.
@@ -3849,6 +3925,29 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                   : (_nextHoleInOrder(rp) == null
                       ? () => _completeRound(ctx, players, par)
                       : _advance),
+              gettingResult: rp.trayResultPending(_selectedHole) ||
+                  _hasRealPending(_selectedHole),
+              notSynced: rp.trayHoleUnsynced(_selectedHole),
+              // Picks nobody — see the Sixes tray above.
+              picking: _trayEditing,
+              onEdit: () => setState(() {
+                _trayEditing = !_trayEditing;
+                _editHotPid = null;
+              }),
+            )
+          else if (msTray)
+            MiniSinglesHoleTray(
+              card: msCard,
+              // While this tray is up it IS the bottom bar — the pager below
+              // is hidden, so these are the only arrows on screen, and on
+              // the last hole the forward button finishes the round.
+              onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
+              onNext: rp.submitting
+                  ? null
+                  : (_nextHoleInOrder(rp) == null
+                      ? () => _completeRound(ctx, players, par)
+                      : _advance),
+              nextHole: _nextHoleInOrder(rp),
               gettingResult: rp.trayResultPending(_selectedHole) ||
                   _hasRealPending(_selectedHole),
               notSynced: rp.trayHoleUnsynced(_selectedHole),
@@ -4131,7 +4230,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // has the tray overlaying this row, so this is the half that goes
           // (Paul, 30 Oct 2026).
           if (!sixTray && !spTray && !vgTray && !fourTray && !nasTray
-              && !skTray && !bkTray && !tcTray)
+              && !skTray && !bkTray && !tcTray && !msTray)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Column(children: [
@@ -4492,7 +4591,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 // once they are locked. Above, because the hole is bought
                 // before it is played and a card under four rows and a
                 // keypad is a card nobody finds.
-                aboveRows: (_bankerRound(rp) &&
+                // **Mini Singles: who is playing whom, under the hole.**
+                // The rows are in card order and the opponents change at the
+                // turn, so without this the only way to find your match was
+                // the leaderboard (Paul, 11 Nov 2026). Banker can never be
+                // on the same round — it is one of the tray owners.
+                aboveRows: _miniSinglesCard(rp) != null
+                    ? MiniSinglesMatches(card: _miniSinglesCard(rp)!)
+                    : (_bankerRound(rp) &&
                         rp.bankerSummary?.current?.hole == _selectedHole)
                     ? BankerBetsCard(
                         summary: rp.bankerSummary!,
@@ -4748,9 +4854,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 points531Summary:        games.contains('points_531')        ? rp.points531Summary           : null,
                 // Gate on match play / cup singles being active so stale
                 // bracket data can't tint a non-match-play round's rows.
-                matchPlayData:           (games.contains('match_play') ||
+                // **The bracket card leaves this screen for a Mini Singles
+                // group** (handoff-mini-singles-score-entry, 11 Nov 2026):
+                // both semis and a dimmed final from the first tee. The tray
+                // reports the matches live on the hole, and the bracket is
+                // the leaderboard's.
+                matchPlayData:           ((games.contains('match_play') ||
                         games.contains('singles_nassau') ||
-                        games.contains('singles_18'))
+                        games.contains('singles_18')) &&
+                        !_miniSinglesRound(rp))
                     ? rp.matchPlayData : null,
                 threePersonMatchSummary: games.contains('three_person_match') ? rp.threePersonMatchSummary   : null,
                 foursomeId:              widget.foursomeId,
@@ -4764,7 +4876,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 loadingTripleCup:        rp.loadingTripleCup,
                 loadingPoints531:        rp.loadingPoints531,
                 loadingVegas:            rp.loadingVegas,
-                loadingMatchPlay:        rp.loadingMatchPlay,
+                loadingMatchPlay:        rp.loadingMatchPlay &&
+                                         !_miniSinglesRound(rp),
                 loadingThreePersonMatch: rp.loadingThreePersonMatch,
                 onTapHole:               _selectHole,
                 irBallsConfig:           games.contains('irish_rumble')

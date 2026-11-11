@@ -1,0 +1,165 @@
+{
+  "hole": 12,
+  "day": null,
+  "stage": "back nine",
+  "label": "Hole 12 · back nine",
+  "trailing": "$40 pot",
+  "hole_complete": true,
+  "blocks": [
+    {
+      "key": "finals",
+      "title": "Finals",
+      "names": [
+        "Paul",
+        "Sam"
+      ],
+      "tbd": false,
+      "played": true,
+      "winner": 1,
+      "reason": {
+        "label": "net",
+        "p1": 3,
+        "p2": 4
+      },
+      "over_line": "",
+      "leader": 1,
+      "head": "Paul",
+      "margin": "2 UP",
+      "sub": "thru 3 of 9 · 6 to play",
+      "decided": false,
+      "tiles": [
+        {
+          "hole": 10,
+          "state": "p1"
+        },
+        {
+          "hole": 11,
+          "state": "halved"
+        },
+        {
+          "hole": 12,
+          "state": "p1"
+        },
+        {
+          "hole": 13,
+          "state": "open"
+        },
+        {
+          "hole": 14,
+          "state": "open"
+        },
+        {
+          "hole": 15,
+          "state": "open"
+        },
+        {
+          "hole": 16,
+          "state": "open"
+        },
+        {
+          "hole": 17,
+          "state": "open"
+        },
+        {
+          "hole": 18,
+          "state": "open"
+        }
+      ]
+    },
+    {
+      "key": "3rd_place",
+      "title": "3rd place",
+      "names": [
+        "Lee",
+        "Dave"
+      ],
+      "tbd": false,
+      "played": true,
+      "winner": null,
+      "reason": {
+        "label": "net",
+        "p1": 4,
+        "p2": 4
+      },
+      "over_line": "",
+      "leader": null,
+      "head": "3rd place · all square",
+      "margin": "AS",
+      "sub": "thru 3 of 9 · 6 to play",
+      "decided": false,
+      "tiles": [
+        {
+          "hole": 10,
+          "state": "p1"
+        },
+        {
+          "hole": 11,
+          "state": "p2"
+        },
+        {
+          "hole": 12,
+          "state": "halved"
+        },
+        {
+          "hole": 13,
+          "state": "open"
+        },
+        {
+          "hole": 14,
+          "state": "open"
+        },
+        {
+          "hole": 15,
+          "state": "open"
+        },
+        {
+          "hole": 16,
+          "state": "open"
+        },
+        {
+          "hole": 17,
+          "state": "open"
+        },
+        {
+          "hole": 18,
+          "state": "open"
+        }
+      ]
+    }
+  ],
+  "next": null,
+  "winner": null,
+  "result": null,
+  "last_hole": false,
+  "round_over": false,
+  "players": [
+    {
+      "player_id": 201,
+      "first": "Paul",
+      "strokes": 0,
+      "side": 1,
+      "match": "Finals"
+    },
+    {
+      "player_id": 202,
+      "first": "Dave",
+      "strokes": 0,
+      "side": 2,
+      "match": "3rd place"
+    },
+    {
+      "player_id": 203,
+      "first": "Sam",
+      "strokes": 0,
+      "side": 2,
+      "match": "Finals"
+    },
+    {
+      "player_id": 204,
+      "first": "Lee",
+      "strokes": 0,
+      "side": 1,
+      "match": "3rd place"
+    }
+  ]
+}

@@ -6261,7 +6261,7 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
     wants = {'annandale_friday', 'sixes', 'rabbit', 'survivor',
              'low_net_round', 'points_531', 'wolf', 'vegas',
              'fourball', 'match_18', 'nassau', 'nassau_nine', 'skins',
-             'sequoya_threes', 'triple_cup'} & active
+             'sequoya_threes', 'triple_cup', 'match_play'} & active
     # **The skins POOL, only where it owns the entry screen.** A pool rides
     # as a side game on a sixty-player tournament, where its card would be a
     # pool summary computed on every posted score for a tray nobody draws
@@ -6347,6 +6347,15 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
                     out['vegas_hole'] = card
             # …and Fourball's, which reports the best balls, the match and
             # whether the hole still counts.
+            # Mini Singles' tray: the matches live on this hole and the
+            # bracket as of it. Empty for a group with no four-golfer
+            # bracket (a threesome plays a different game under this slug).
+            if 'match_play' in wants and hole_number:
+                from services.tournament_match_play import (
+                    mini_singles_hole_card)
+                card = mini_singles_hole_card(foursome, hole_number)
+                if card:
+                    out['mini_singles_hole'] = card
             # Triple Cup's tray: the hole, the match it belongs to and the
             # cup as of that hole.
             if 'triple_cup' in wants and hole_number:
@@ -8678,6 +8687,19 @@ class FourballHoleCardView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.fourball import fourball_hole_card
         return Response(fourball_hole_card(foursome, int(hole)))
+
+
+class MiniSinglesHoleCardView(APIView):
+    """GET /api/foursomes/{id}/match-play/hole/{hole}/
+
+    One hole's score-entry card for the Mini Singles bracket. The POST that
+    saves a score returns the same shape under `mini_singles_hole`, so this
+    is only for a hole the screen opens without posting.
+    """
+    def get(self, request, pk, hole):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.tournament_match_play import mini_singles_hole_card
+        return Response(mini_singles_hole_card(foursome, int(hole)))
 
 
 class TripleCupHoleCardView(APIView):

@@ -12705,3 +12705,87 @@ fixture writers under `REGEN_TC_FIXTURES=1`), `api/test_triple_cup_hole_card.py`
 (7), `mobile/test/triple_cup_entry_test.dart` (23),
 `mobile/test/triple_cup_board_test.dart` (19). Eight server mutations, seven
 killed; the eighth found a redundant branch, which was removed.
+
+## Mini Singles Bracket score entry — casual and tournament
+
+`~/Downloads/handoff-mini-singles-score-entry` (11 Nov 2026). The keypad and
+dark tray carried to the bracket. Built and tested; **not seen on a device.**
+
+**One card for the casual Match Play foursome and both tournament days** —
+Paul asked for casual explicitly, and it needed nothing extra: all three run
+on `services/tournament_match_play.py` and the shared `score_entry_screen`
+(`/match-play` is registered and nothing pushes it).
+
+### `mini_singles_hole_card(foursome, hole)`
+
+Renders `tournament_match_play_summary` and decides no golf. What it adds is
+the cut — the bracket AS OF the hole — and the sentences. Sent WITH the save
+as `mini_singles_hole`; `GET /api/foursomes/{id}/match-play/hole/{hole}/`.
+`{}` for a group with no four-golfer `single_elim` bracket (a threesome plays
+a different game under the `match_play` slug).
+
+- **One block per match LIVE on the hole**: the two semis on 1–9; on the back
+  nine the finals and 3rd place, plus a semi that is playing on.
+- **A match over before this hole is one line** (`over_line`): `Paul won 2&1
+  · hole 9 is stroke play only`.
+- **A back-nine match against a semi still level is ONE dashed card, `v
+  TBD`** — a departure. The packet draws both possible pairings; they are the
+  same match (the two still level can only halve their overtime holes), so
+  the engine scores one and two rows could never differ.
+- The championship match reads **Finals** and the money table **Result**.
+  Display only: the engine's stored label is still `Final`.
+- Strokes are the match a golfer is IN on the hole — the first in block
+  order, so on an extra hole it is still his semi. `strokes_by_hole` is new on
+  each match's scorecard block, because an unplayed overtime hole has no row
+  to read a stroke off.
+
+### Two changes from the first look (Paul, 11 Nov 2026)
+
+- **`MiniSinglesMatches`, under the hole header** (the hole card's
+  `aboveRows` slot): one line a match in play with its two golfers and where
+  it stands. The rows are in card order and opponents change at the turn, so
+  on the tee the only way to find your match was the leaderboard.
+- **No `Finals` / `3rd` card on the front-nine tray.** The packet draws
+  `Finals Paul v TBD · from 10` under the semis; it read the same on every
+  hole and added nothing. `matchups` is gone from the card. The back-nine
+  pairings are still named once, on the 9th, in the `Next` card.
+
+### Money — `_bracket_money`
+
+Three pots, read not recomputed: a casual bracket's own `payout_config`; a
+tournament's day 1 (`day1_payouts` out of the group's entries, shown **net of
+the entry**); day 2 (`day2_payouts` out of the carve-out, shown **as paid**,
+since nobody paid in). Shown on 18 only, and not at all when nothing is
+staked. 4th takes nothing where the table pays three places.
+
+### The gate — `_miniSinglesRound`
+
+`match_play` in the round's games, four real golfers, and the round's
+primary is NOT a game with a tray of its own. **Deliberately not a primary
+test**: in a tournament the bracket is a TD game beside the stroke play the
+round is scored on. So on those rounds **the Mini Singles tray replaces the
+Stroke Play tray** (`_strokePlayCard` stands down); the place in the field is
+still on the leaderboard.
+
+The old `_MatchPlayStatusCard` (both semis and a dimmed final from the first
+tee) is no longer drawn for these groups.
+
+### Not built / departures
+- **A round with the ball game still enters on `pink_ball_screen`**, which is
+  not converted. That is most tournament days that run all four TD games.
+- Rows are not regrouped by match, and the hole card has no bracket pill.
+- The packet's open question on strokes: the app takes the full difference
+  off the pair's low man and spreads it by the **18-hole stroke index**, so
+  only the strokes that land on the match's nine holes count — roughly half,
+  a little more or less as the indexes fall. That is what the packet drew
+  (Lee gets 10 from Paul: SI 1–10, of which five are on the front). It is NOT
+  a separate halve-it-for-nine calculation, and an earlier wording here
+  ("not halved") read as though the full ten applied to the nine.
+- The round-robin variant and the Mini Singles leaderboard (not drawn yet).
+- **The engine still hardcodes semis on 1–9 and the back matches on 10–18**,
+  so a shotgun start is unanswered here as it is in the engine.
+
+Tests: `scoring/tests/test_mini_singles_hole_card.py` (35, seven fixture
+writers under `REGEN_MS_FIXTURES=1`), `api/test_mini_singles_hole_card.py`
+(5), `mobile/test/mini_singles_entry_test.dart` (22). Eight mutations killed;
+one first survived and exposed a sort that did nothing, which was removed.

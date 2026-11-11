@@ -1,0 +1,165 @@
+{
+  "hole": 8,
+  "day": null,
+  "stage": "semis",
+  "label": "Hole 8 · semis",
+  "trailing": "$40 pot",
+  "hole_complete": true,
+  "blocks": [
+    {
+      "key": "semi_1",
+      "title": "Semi 1",
+      "names": [
+        "Paul",
+        "Lee"
+      ],
+      "tbd": false,
+      "played": true,
+      "winner": 1,
+      "reason": {
+        "label": "net",
+        "p1": 5,
+        "p2": 6
+      },
+      "over_line": "",
+      "leader": 1,
+      "head": "Paul wins",
+      "margin": "2&1",
+      "sub": "Paul goes to the finals · hole 9 stroke play only",
+      "decided": true,
+      "tiles": [
+        {
+          "hole": 1,
+          "state": "p1"
+        },
+        {
+          "hole": 2,
+          "state": "halved"
+        },
+        {
+          "hole": 3,
+          "state": "halved"
+        },
+        {
+          "hole": 4,
+          "state": "p1"
+        },
+        {
+          "hole": 5,
+          "state": "halved"
+        },
+        {
+          "hole": 6,
+          "state": "halved"
+        },
+        {
+          "hole": 7,
+          "state": "p2"
+        },
+        {
+          "hole": 8,
+          "state": "p1"
+        },
+        {
+          "hole": 9,
+          "state": "dead"
+        }
+      ]
+    },
+    {
+      "key": "semi_2",
+      "title": "Semi 2",
+      "names": [
+        "Dave",
+        "Sam"
+      ],
+      "tbd": false,
+      "played": true,
+      "winner": null,
+      "reason": {
+        "label": "net",
+        "p1": 5,
+        "p2": 5
+      },
+      "over_line": "",
+      "leader": 1,
+      "head": "Dave",
+      "margin": "1 UP",
+      "sub": "thru 8 of 9 · 1 to play",
+      "decided": false,
+      "tiles": [
+        {
+          "hole": 1,
+          "state": "p1"
+        },
+        {
+          "hole": 2,
+          "state": "halved"
+        },
+        {
+          "hole": 3,
+          "state": "halved"
+        },
+        {
+          "hole": 4,
+          "state": "halved"
+        },
+        {
+          "hole": 5,
+          "state": "halved"
+        },
+        {
+          "hole": 6,
+          "state": "halved"
+        },
+        {
+          "hole": 7,
+          "state": "halved"
+        },
+        {
+          "hole": 8,
+          "state": "halved"
+        },
+        {
+          "hole": 9,
+          "state": "open"
+        }
+      ]
+    }
+  ],
+  "next": null,
+  "winner": null,
+  "result": null,
+  "last_hole": false,
+  "round_over": false,
+  "players": [
+    {
+      "player_id": 201,
+      "first": "Paul",
+      "strokes": 0,
+      "side": 1,
+      "match": "Semi 1"
+    },
+    {
+      "player_id": 202,
+      "first": "Dave",
+      "strokes": 0,
+      "side": 1,
+      "match": "Semi 2"
+    },
+    {
+      "player_id": 203,
+      "first": "Sam",
+      "strokes": 0,
+      "side": 2,
+      "match": "Semi 2"
+    },
+    {
+      "player_id": 204,
+      "first": "Lee",
+      "strokes": 0,
+      "side": 2,
+      "match": "Semi 1"
+    }
+  ]
+}

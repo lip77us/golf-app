@@ -832,6 +832,13 @@ def tournament_match_play_summary(foursome) -> dict | None:
                         _side(p2id, match.player2, tbd_p2)],
             'holes'        : holes,
             'holes_in_play': base + extra,
+            # This PAIR's strokes on every hole of the round — a semi can
+            # play on into any back-nine hole, and the hole in play has no
+            # result row to read a stroke off.
+            'strokes_by_hole': {
+                pid: {h: _strokes(pid, h) for h in range(1, 19)}
+                for pid in (p1id, p2id)
+            },
         }
 
     # Derive current seed order from the round-1 match stubs.
@@ -1120,4 +1127,413 @@ def tournament_match_play_summary(foursome) -> dict | None:
         'seed_order': seed_order_out,
         'money'     : money,
         'matches'   : matches_out,
+    }
+
+
+
+# ---------------------------------------------------------------------------
+# The score-entry card — ONE hole
+# ---------------------------------------------------------------------------
+
+def _ordinal(n: int) -> str:
+    if 10 <= n % 100 <= 20:
+        return f'{n}th'
+    return f'{n}{ {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th") }'
+
+
+def _dollars(v) -> str:
+    v = float(v or 0)
+    return f'${v:g}' if v == int(v) else f'${v:.2f}'
+
+
+def _signed(v) -> str:
+    v = round(float(v or 0), 2)
+    if not v:
+        return '$0'
+    return f'{"+" if v > 0 else "−"}{_dollars(abs(v))}'
+
+
+def _bracket_money(foursome, summary) -> dict:
+    """What this bracket is played for, and who is paid what.
+
+    Three pots, read rather than recomputed:
+
+    * a **casual** bracket pays its own `payout_config` out of its entries;
+    * a tournament's **day 1** group pays `MiniSinglesConfig.day1_payouts`
+      out of the group's entries (`day1_group_payouts`, which settlement
+      reads too);
+    * the **day 2** champions' foursome pays `day2_payouts` out of the
+      carve-out — no entry, which is why it is shown as PAID rather than net.
+    """
+    from services.payout import (payouts_by_place, split_tied_places,
+                                 carve_out)
+    rows = summary['money']['payouts']
+    ranks = {}
+    for i, row in enumerate(rows, start=1):
+        if row['player_id'] is None:
+            continue
+        ranks[row['player_id']] = (i - 1 if row['split'] and i % 2 == 0
+                                   else i)
+    n_real = len(summary.get('players') or [])
+
+    tournament = getattr(foursome.round, 'tournament', None)
+    config = getattr(tournament, 'mini_singles_config', None) \
+        if tournament is not None else None
+    if config is not None:
+        day2 = bool(getattr(foursome, 'is_champions_foursome', False))
+        if day2:
+            from services.mini_singles import _championship_pool
+            pot, _ = carve_out(_championship_pool(tournament),
+                               tournament.mini_singles_carve_pct)
+            places, entry = payouts_by_place(config.day2_payouts), 0.0
+        else:
+            entry = float(config.day1_entry_fee)
+            pot = round(entry * n_real, 2)
+            places = payouts_by_place(config.day1_payouts)
+        day = 2 if day2 else 1
+    else:
+        day = None
+        entry = float(summary['money']['entry_fee'])
+        pot = float(summary['money']['prize_pool'])
+        places = {i: float(summary['money']['payout_config'].get(k, 0))
+                  for i, k in enumerate(('1st', '2nd', '3rd', '4th'), 1)}
+
+    per_rank = split_tied_places(places, list(ranks.values()))
+    paid = {pid: float(per_rank.get(rank) or 0) for pid, rank in ranks.items()}
+    return {'day': day, 'entry': entry, 'pot': pot, 'places': places,
+            'ranks': ranks, 'paid': paid}
+
+
+def mini_singles_hole_card(foursome, hole: int) -> dict:
+    """Everything the Mini Singles score-entry tray draws for ONE hole
+    (`~/Downloads/handoff-mini-singles-score-entry`, 11 Nov 2026).
+
+    **It renders `tournament_match_play_summary` and decides no golf.** Who
+    won a hole, each running margin, a close-out, a semi that played on and
+    the hole it was settled on, and the trophy on a halved finals are the
+    engine's stored answers. What this adds is the cut — the bracket AS OF
+    this hole, so a tray reopened on the 4th does not report the 16th — and
+    the sentences, each of which is a rule.
+
+    One card for the casual Match Play foursome and for both tournament
+    days; the only thing that differs is the money (`_bracket_money`).
+
+    **A back-nine match against a semi still level is ONE line, `v TBD`.**
+    The design draws both possible pairings. They are the same match: the
+    two still level can only halve their overtime holes, so the engine
+    scores one and it is right for both — printing it twice would be two
+    rows that cannot differ.
+
+    Returns `{}` when there is no four-golfer bracket, so a caller can test
+    the key. Gated on the BRACKET, not its status: no card means no keypad.
+    """
+    from services.player_labels import first_names
+
+    summary = tournament_match_play_summary(foursome)
+    if not summary or summary.get('bracket_type') != 'single_elim':
+        return {}
+    matches = summary['matches']
+    semis = [m for m in matches if m['round'] == 1]
+    back = [m for m in matches if m['round'] == 2]
+    if len(semis) != 2 or len(back) != 2 or not 1 <= hole <= 18:
+        return {}
+    if semis[0]['player1_id'] == semis[1]['player1_id']:
+        return {}                                   # the round-robin variant
+
+    members = [m for m in foursome.memberships.select_related('player')
+               if not m.player.is_phantom]
+    by_pid = {m.player_id: m.player for m in members}
+    rank = {m.player_id: i for i, m in enumerate(members)}
+    first = first_names(by_pid)
+
+    def name(m, side):
+        tbd = m['scorecard']['players'][side - 1].get('tbd')
+        return 'TBD' if tbd else first.get(m[f'player{side}_id'], '')
+
+    def title(m):
+        return 'Finals' if m['label'] == 'Final' else \
+            '3rd place' if m['label'] == '3rd Place' else m['label']
+
+    def seg_of(m):
+        start = 1 if m['round'] == 1 else 10
+        return list(range(start, start + 9))
+
+    def decided_hole(m):
+        if m['status'] != 'complete' or m['result'] is None:
+            return None
+        if m.get('finished_hole'):
+            return m['finished_hole']
+        return m['holes'][-1]['hole'] if m['holes'] else None
+
+    def state(m):
+        """This match as of `hole`."""
+        seg = seg_of(m)
+        rows = [r for r in m['holes'] if r['hole'] <= hole]
+        dh = decided_hole(m)
+        decided = dh is not None and dh <= hole
+        margin = rows[-1]['margin'] if rows else 0
+        thru = len([r for r in rows if r['hole'] in seg])
+        left = 9 - thru
+        n1, n2 = name(m, 1), name(m, 2)
+        t = title(m)
+        note = ''
+        if decided and m['result'] in ('player1', 'player2'):
+            leader = 1 if m['result'] == 'player1' else 2
+            w, l = (n1, n2) if leader == 1 else (n2, n1)
+            up = abs(m['holes'][-1]['margin']) if m['holes'] else 0
+            to_play = max(seg[-1] - dh, 0) if dh in seg else 0
+            if m['round'] == 1 and dh > seg[-1]:
+                head, text = f'{w} wins the semi', _ordinal(dh)
+                sub = f'Level after 9, won on the {_ordinal(dh)}.'
+                closing = text
+            else:
+                text = f'{up}&{to_play}' if to_play else f'{up} UP'
+                head, closing = f'{w} wins', text
+                if m['round'] == 1:
+                    sub = f'{w} goes to the finals'
+                    if to_play:
+                        rest = (f'hole {seg[-1]}' if to_play == 1
+                                else f'holes {dh + 1}–{seg[-1]}')
+                        sub += f' · {rest} stroke play only'
+                elif t == 'Finals':
+                    sub = f'{w} 1st, {l} 2nd'
+                else:
+                    sub = f'{w} 3rd, {l} 4th'
+            over = f'{w} won {closing}'
+        elif decided:
+            leader = None
+            head, text = f'{t} halved', 'AS'
+            sub = ('1st and 2nd split' if t == 'Finals'
+                   else '3rd and 4th split')
+            over = f'{t} halved'
+        else:
+            leader = 1 if margin > 0 else 2 if margin < 0 else None
+            over = ''
+            if m['round'] == 1 and hole >= seg[-1] and thru == 9:
+                # Level after nine: it plays on.
+                leader = None
+                if hole == seg[-1]:
+                    # **Not `halved`.** A semi cannot be halved — level after
+                    # nine it goes to extra holes until somebody wins one
+                    # (Paul, 11 Nov 2026). `Halved` is a RESULT, and the
+                    # finals and 3rd place are the only matches that have it.
+                    head, text = 'All square after 9', 'AS'
+                    sub = f'{t} goes to extra holes from the 10th'
+                else:
+                    head, text = 'Still level', 'AS'
+                    sub = (f'Halved the {_ordinal(hole)}. The first hole '
+                           'either of them wins settles it.'
+                           if any(r['hole'] == hole for r in rows)
+                           else 'The first hole either of them wins '
+                                'settles it.')
+            else:
+                head = (n1 if leader == 1 else n2) if leader \
+                    else f'{t} · all square'
+                text = f'{abs(margin)} UP' if margin else 'AS'
+                sub = (f'thru {thru} of 9 · {left} to play' if thru
+                       else f'holes {seg[0]}–{seg[-1]}')
+
+        tiles = []
+        shown = seg + sorted(r['hole'] for r in m['holes']
+                             if r['hole'] not in seg)
+        by_hole = {r['hole']: r for r in rows}
+        for h in shown:
+            r = by_hole.get(h)
+            if r is None:
+                st = 'dead' if decided and dh is not None and h > dh \
+                    else 'open'
+            elif r['winner'] is None:
+                st = 'halved'
+            else:
+                st = ('p1' if r['winner'] == by_pid[m['player1_id']].name
+                      else 'p2')
+            tiles.append({'hole': h, 'state': st})
+
+        here = by_hole.get(hole)
+        winner = None
+        if here is not None and here['winner'] is not None:
+            winner = 1 if here['winner'] == by_pid[m['player1_id']].name else 2
+        tbd = bool(m.get('players_tbd'))
+        return {
+            'key'    : t.lower().replace(' ', '_'),
+            'title'  : t,
+            'names'  : [n1, n2],
+            'tbd'    : tbd,
+            'played' : here is not None,
+            'winner' : winner,
+            'reason' : ({'label': 'net', 'p1': here['p1_net'],
+                         'p2': here['p2_net']} if here is not None else None),
+            # Over BEFORE this hole: one line, and the hole is stroke play
+            # only for these two.
+            'over_line': (f'{over} · hole {hole} is stroke play only'
+                          if decided and dh < hole else ''),
+            'leader' : leader,
+            'head'   : head,
+            'margin' : text,
+            'sub'    : sub,
+            'decided': decided,
+            'tiles'  : tiles,
+        }
+
+    # ── Which matches are live on this hole ─────────────────────────────
+    if hole <= 9:
+        on_hole = list(semis)
+    else:
+        on_hole = [m for m in semis
+                   if any(r['hole'] == hole for r in m['holes'])
+                   or (m['status'] != 'complete' and hole >= 10)]
+        on_hole += back
+    blocks = [state(m) for m in on_hole]
+    last_hole = hole == 18
+    for b in blocks:
+        if last_hole:
+            b['tiles'] = []          # the tray on 18 carries the money
+
+    # ── The bracket ahead (front nine only) ─────────────────────────────
+    def through(m, want):
+        dh = decided_hole(m)
+        if dh is None or dh > hole or m['result'] not in ('player1',
+                                                          'player2'):
+            return 'TBD'
+        won = 1 if m['result'] == 'player1' else 2
+        return first.get(m[f'player{won if want == "winner" else 3 - won}'
+                           '_id'], '')
+
+    # **No matchups card on the front nine** (Paul, 11 Nov 2026): `Finals
+    # Paul v TBD · from 10` read the same on every hole until a semi ended
+    # and added nothing. The back-nine pairings are named ONCE, on the 9th.
+    nxt = None
+    if hole <= 9:
+        fa, fb = through(semis[0], 'winner'), through(semis[1], 'winner')
+        ta, tb = through(semis[0], 'loser'), through(semis[1], 'loser')
+        if hole == 9:
+            level = [m for m in semis if through(m, 'winner') == 'TBD'
+                     and len([r for r in m['holes'] if r['hole'] <= 9]) == 9]
+            if level:
+                m = level[0]
+                nxt = {
+                    'label': 'Next · the back nine',
+                    'title': (f'{first.get(m["player1_id"], "")} and '
+                              f'{first.get(m["player2_id"], "")} '
+                              'go to extra holes from 10'),
+                    'body' : ('The first hole either of them wins settles '
+                              'it. The finals and 3rd place are scored from '
+                              'the 10th meanwhile, and read back once it '
+                              'does.'),
+                    'button': 'Back nine · hole 10',
+                }
+            elif 'TBD' not in (fa, fb):
+                nxt = {
+                    'label': 'Next · the back nine',
+                    'title': f'Finals {fa} v {fb} · 3rd {ta} v {tb}',
+                    'body' : '',
+                    'button': 'Back nine · hole 10',
+                }
+
+    # ── Hole 18: who won it, and the money ──────────────────────────────
+    money = _bracket_money(foursome, summary)
+    finals, third = back[0], back[1]
+    all_done = all(decided_hole(m) is not None and decided_hole(m) <= hole
+                   for m in matches)
+    winner_card = result = None
+    if last_hole and decided_hole(finals) is not None:
+        label = 'Champion' if money['day'] == 2 else 'Group winner'
+        if finals['result'] in ('player1', 'player2'):
+            wid = finals['player1_id' if finals['result'] == 'player1'
+                         else 'player2_id']
+            line = (f"{first.get(wid, '')} goes through to the champions' "
+                    'foursome on day 2.' if money['day'] == 1 else '')
+            winner_card = {'label': label, 'name': by_pid[wid].name,
+                           'line': line}
+        else:
+            tid = finals.get('trophy_player_id')
+            line = 'Finals halved, so 1st and 2nd split.'
+            if tid:
+                won = [r['hole'] for r in finals['holes']
+                       if r['winner'] is not None]
+                line += (f' The trophy goes to {first.get(tid, "")}, who '
+                         'won the last hole that was not halved'
+                         + (f' (the {_ordinal(won[-1])}).' if won else '.'))
+            winner_card = {'label': label,
+                           'name': by_pid[tid].name if tid
+                           else 'Finals halved',
+                           'line': line}
+    if last_hole and all_done and money['pot']:
+        ranks = money['ranks']
+        counts = {}
+        for r in ranks.values():
+            counts[r] = counts.get(r, 0) + 1
+        net = money['day'] != 2
+        rows = []
+        for pid, r in sorted(ranks.items(), key=lambda kv: (kv[1],
+                                                           rank.get(kv[0], 9))):
+            amount = money['paid'].get(pid, 0.0) - (money['entry'] if net
+                                                    else 0.0)
+            rows.append({
+                'player_id': pid,
+                'name'  : by_pid[pid].name,
+                'place' : (f'T{r}' if counts[r] > 1 else _ordinal(r)),
+                'amount': _signed(amount),
+                'tone'  : 'up' if amount > 0 else 'dn' if amount < 0
+                          else 'level',
+            })
+        paying = [money['places'][k] for k in sorted(money['places'])
+                  if money['places'][k]]
+        line = ' / '.join(_dollars(v) for v in paying)
+        line += (f' from the {_dollars(money["pot"])} carve-out'
+                 if money['day'] == 2
+                 else f' on the {_dollars(money["pot"])} pot')
+        if len(ranks) > len(paying):
+            line += f', {_ordinal(len(paying) + 1)} nothing'
+        line += '.'
+        if net and money['entry']:
+            line += f' Net of the {_dollars(money["entry"])} entry.'
+        result = {'label': 'Result', 'rows': rows, 'line': line}
+
+    # ── The rows the keypad reads: each golfer's strokes in the match he
+    # is IN on this hole, which changes at the turn because his opponent
+    # does. ──────────────────────────────────────────────────────────────
+    def match_for(pid):
+        # The first match on this hole that he is in. The semis come first,
+        # so a golfer whose semi is playing on reads THAT match's strokes on
+        # an extra hole, not the back-nine match he is standing in for.
+        return next((m for m in on_hole
+                     if pid in (m['player1_id'], m['player2_id'])), None)
+
+    players = []
+    for m in members:
+        pid = m.player_id
+        mt = match_for(pid)
+        strokes = 0
+        if mt is not None:
+            strokes = (mt['scorecard'].get('strokes_by_hole', {})
+                       .get(pid, {}).get(hole, 0))
+        players.append({'player_id': pid, 'first': first.get(pid, ''),
+                        'strokes': strokes,
+                        'side': (1 if mt and mt['player1_id'] == pid else 2),
+                        'match': title(mt) if mt else ''})
+    players.sort(key=lambda r: rank.get(r['player_id'], 99))
+
+    pot = money['pot']
+    trailing = ('' if not pot else
+                f'{_dollars(pot)} carve-out' if money['day'] == 2
+                else f'{_dollars(pot)} pot')
+    live_blocks = [b for b in blocks if not b['over_line']]
+    return {
+        'hole'         : hole,
+        'day'          : money['day'],
+        'stage'        : 'semis' if hole <= 9 else 'back nine',
+        'label'        : ('Round over' if last_hole and all_done
+                          else f'Hole {hole} · '
+                               f'{"semis" if hole <= 9 else "back nine"}'),
+        'trailing'     : trailing,
+        'hole_complete': bool(live_blocks) and all(b['played']
+                                                   for b in live_blocks),
+        'blocks'       : blocks,
+        'next'         : nxt,
+        'winner'       : winner_card,
+        'result'       : result,
+        'last_hole'    : last_hole,
+        'round_over'   : last_hole and all_done,
+        'players'      : players,
     }

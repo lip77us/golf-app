@@ -2697,6 +2697,19 @@ class ApiClient {
     return FourballHoleCard.fromJson(map);
   }
 
+  /// GET /api/foursomes/{id}/match-play/hole/{hole}/
+  ///
+  /// Only for a hole the screen opens WITHOUT posting — a save returns the
+  /// same shape under `mini_singles_hole`. Null for a group with no
+  /// four-golfer bracket.
+  Future<MiniSinglesHoleCard?> getMiniSinglesHoleCard(
+      int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/match-play/hole/$hole/');
+    final map = (data as Map).cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    return MiniSinglesHoleCard.fromJson(map);
+  }
+
   /// GET /api/foursomes/{id}/triple-cup/hole/{hole}/
   ///
   /// Only for a hole the screen opens WITHOUT posting — a save returns the

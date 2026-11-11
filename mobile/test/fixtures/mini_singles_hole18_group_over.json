@@ -1,0 +1,124 @@
+{
+  "hole": 18,
+  "day": null,
+  "stage": "back nine",
+  "label": "Round over",
+  "trailing": "$40 pot",
+  "hole_complete": true,
+  "blocks": [
+    {
+      "key": "finals",
+      "title": "Finals",
+      "names": [
+        "Paul",
+        "Sam"
+      ],
+      "tbd": false,
+      "played": false,
+      "winner": null,
+      "reason": null,
+      "over_line": "Paul won 3&2 · hole 18 is stroke play only",
+      "leader": 1,
+      "head": "Paul wins",
+      "margin": "3&2",
+      "sub": "Paul 1st, Sam 2nd",
+      "decided": true,
+      "tiles": []
+    },
+    {
+      "key": "3rd_place",
+      "title": "3rd place",
+      "names": [
+        "Lee",
+        "Dave"
+      ],
+      "tbd": false,
+      "played": true,
+      "winner": null,
+      "reason": {
+        "label": "net",
+        "p1": 4,
+        "p2": 4
+      },
+      "over_line": "",
+      "leader": null,
+      "head": "3rd place halved",
+      "margin": "AS",
+      "sub": "3rd and 4th split",
+      "decided": true,
+      "tiles": []
+    }
+  ],
+  "next": null,
+  "winner": {
+    "label": "Group winner",
+    "name": "Paul Lipkin",
+    "line": ""
+  },
+  "result": {
+    "label": "Result",
+    "rows": [
+      {
+        "player_id": 201,
+        "name": "Paul Lipkin",
+        "place": "1st",
+        "amount": "+$14",
+        "tone": "up"
+      },
+      {
+        "player_id": 203,
+        "name": "Sam Reid",
+        "place": "2nd",
+        "amount": "$0",
+        "tone": "level"
+      },
+      {
+        "player_id": 202,
+        "name": "Dave Moran",
+        "place": "T3",
+        "amount": "−$7",
+        "tone": "dn"
+      },
+      {
+        "player_id": 204,
+        "name": "Lee Naylor",
+        "place": "T3",
+        "amount": "−$7",
+        "tone": "dn"
+      }
+    ],
+    "line": "$24 / $10 / $6 on the $40 pot, 4th nothing. Net of the $10 entry."
+  },
+  "last_hole": true,
+  "round_over": true,
+  "players": [
+    {
+      "player_id": 201,
+      "first": "Paul",
+      "strokes": 0,
+      "side": 1,
+      "match": "Finals"
+    },
+    {
+      "player_id": 202,
+      "first": "Dave",
+      "strokes": 0,
+      "side": 2,
+      "match": "3rd place"
+    },
+    {
+      "player_id": 203,
+      "first": "Sam",
+      "strokes": 0,
+      "side": 2,
+      "match": "Finals"
+    },
+    {
+      "player_id": 204,
+      "first": "Lee",
+      "strokes": 0,
+      "side": 1,
+      "match": "3rd place"
+    }
+  ]
+}

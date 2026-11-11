@@ -143,6 +143,7 @@ class RoundProvider extends ChangeNotifier {
   final Map<int, FourballHoleCard> _fourballHoles = {};
   final Map<int, FourballHoleCard> _singlesHoles = {};
   final Map<int, TripleCupHoleCard> _tripleCupHoles = {};
+  final Map<int, MiniSinglesHoleCard> _miniSinglesHoles = {};
   final Map<int, NassauHoleCard>   _nassauHoles   = {};
   final Map<int, SkinsHoleCard>    _skinsHoles    = {};
   final Map<int, SkinsHoleCard>    _poolHoles     = {};
@@ -224,6 +225,8 @@ class RoundProvider extends ChangeNotifier {
   FourballHoleCard? fourballHole(int hole) => _fourballHoles[hole];
   FourballHoleCard? singlesHole(int hole)  => _singlesHoles[hole];
   TripleCupHoleCard? tripleCupHole(int hole) => _tripleCupHoles[hole];
+  MiniSinglesHoleCard? miniSinglesHole(int hole) =>
+      _miniSinglesHoles[hole];
   NassauHoleCard?   nassauHole(int hole)   => _nassauHoles[hole];
   SkinsHoleCard?    skinsHole(int hole)    => _skinsHoles[hole];
   /// The skins POOL's card for a hole — the same model as round skins'.
@@ -312,6 +315,7 @@ class RoundProvider extends ChangeNotifier {
     _vegasHoles.clear();
     _fourballHoles.clear();
     _tripleCupHoles.clear();
+    _miniSinglesHoles.clear();
     _nassauHoles.clear();
     _skinsHoles.clear();
     _poolHoles.clear();
@@ -462,6 +466,7 @@ class RoundProvider extends ChangeNotifier {
       _vegasHoles.clear();
       _fourballHoles.clear();
       _tripleCupHoles.clear();
+      _miniSinglesHoles.clear();
     _nassauHoles.clear();
     _skinsHoles.clear();
     _poolHoles.clear();
@@ -540,6 +545,7 @@ class RoundProvider extends ChangeNotifier {
            || _poolHoles.isNotEmpty
            || _singlesHoles.isNotEmpty
            || _tripleCupHoles.isNotEmpty
+           || _miniSinglesHoles.isNotEmpty
            || _survivorHoles.isNotEmpty || _strokePlayHoles.isNotEmpty)) {
         _annandaleResults.hold(holeNumber);
       }
@@ -1161,6 +1167,21 @@ class RoundProvider extends ChangeNotifier {
     }
   }
 
+  /// Fetch one hole's Mini Singles card. Silent on failure, like Rabbit's.
+  Future<void> loadMiniSinglesHole(int foursomeId, int hole) async {
+    try {
+      final card = await _client.getMiniSinglesHoleCard(foursomeId, hole);
+      if (card != null) {
+        _miniSinglesHoles[hole] = card;
+        notifyListeners();
+      }
+    } on NetworkException {
+      // Offline — keep whatever is on screen.
+    } catch (e) {
+      debugPrint('loadMiniSinglesHole error: $e');
+    }
+  }
+
   /// Fetch one hole's Triple Cup card. Silent on failure, like Rabbit's: a
   /// card that cannot be fetched must not stop a group entering scores.
   Future<void> loadTripleCupHole(int foursomeId, int hole) async {
@@ -1692,6 +1713,17 @@ class RoundProvider extends ChangeNotifier {
       // LATER holes count at all.
       _singlesHoles.clear();
       _singlesHoles[holeNumber] = FourballHoleCard.fromJson(singles);
+      _annandaleResults.answer(holeNumber);
+      notifyListeners();
+    }
+
+    final msHole = response['mini_singles_hole'];
+    if (msHole is Map<String, dynamic>) {
+      // Same staleness as the others, and sharper: editing a back-nine hole
+      // can change who won a semi that played on, and with it the finals
+      // and 3rd-place pairings on every card we hold.
+      _miniSinglesHoles.clear();
+      _miniSinglesHoles[holeNumber] = MiniSinglesHoleCard.fromJson(msHole);
       _annandaleResults.answer(holeNumber);
       notifyListeners();
     }

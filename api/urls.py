@@ -213,6 +213,7 @@ urlpatterns = [
 
     # ---- Triple Cup (One-Round Ryder Cup) ----
     path('foursomes/<int:pk>/triple-cup/',                  views.TripleCupResultView.as_view(),         name='api-triple-cup-result'),
+    path('foursomes/<int:pk>/match-play/hole/<int:hole>/',  views.MiniSinglesHoleCardView.as_view(),     name='api-mini-singles-hole'),
     path('foursomes/<int:pk>/triple-cup/hole/<int:hole>/',  views.TripleCupHoleCardView.as_view(),       name='api-triple-cup-hole'),
     path('foursomes/<int:pk>/triple-cup/setup/',            views.TripleCupSetupView.as_view(),          name='api-triple-cup-setup'),
     path('foursomes/<int:pk>/triple-cup/foursomes-tee-off/', views.TripleCupFoursomesTeeOffView.as_view(), name='api-triple-cup-foursomes-tee-off'),
