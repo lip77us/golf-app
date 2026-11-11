@@ -1528,6 +1528,19 @@ private struct CupCell: View {
                     stops: [.init(color: Sixes.blue, location: 0.5),
                             .init(color: Sixes.orange, location: 0.5)],
                     startPoint: .leading, endPoint: .trailing)
+            } else if cell == "bh" {
+                // Half a point to blue: the LEFT half of its next cell.
+                // Blue fills from the left and orange from the right, so the
+                // grey left over is exactly what is still to play.
+                LinearGradient(
+                    stops: [.init(color: Sixes.blue, location: 0.5),
+                            .init(color: Sixes.pip("out"), location: 0.5)],
+                    startPoint: .leading, endPoint: .trailing)
+            } else if cell == "oh" {
+                LinearGradient(
+                    stops: [.init(color: Sixes.pip("out"), location: 0.5),
+                            .init(color: Sixes.orange, location: 0.5)],
+                    startPoint: .leading, endPoint: .trailing)
             } else {
                 Sixes.pip(cell)
             }

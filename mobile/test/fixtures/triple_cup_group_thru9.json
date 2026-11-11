@@ -1,0 +1,1519 @@
+{
+  "foursome_id": 6,
+  "group_number": 1,
+  "summary": {
+    "status": "in_progress",
+    "group_size": 4,
+    "foursomes_first": false,
+    "team1_ids": [
+      21,
+      22
+    ],
+    "team2_ids": [
+      23,
+      24
+    ],
+    "team1_colour": null,
+    "team2_colour": null,
+    "team1_name": null,
+    "team2_name": null,
+    "handicap": {
+      "mode": "gross",
+      "net_percent": 100,
+      "fourball_percent": 100,
+      "singles_percent": 100,
+      "alt_shot_low_pct": 50,
+      "alt_shot_high_pct": 50
+    },
+    "matches": [
+      {
+        "match_number": 1,
+        "segment": "fourball",
+        "label": "Fourball",
+        "start_hole": 1,
+        "end_hole": 6,
+        "display_end_hole": 6,
+        "status": "complete",
+        "result": "team1",
+        "finished_on_hole": 6,
+        "holes_to_play": 0,
+        "holes_up_final": 2,
+        "winner_label": "Team 1",
+        "team1_first_tee_id": null,
+        "team2_first_tee_id": null,
+        "team1": {
+          "players": [
+            "Paul Lipkin",
+            "Hal Hacker"
+          ],
+          "shorts": [
+            "PL",
+            "HH"
+          ]
+        },
+        "team2": {
+          "players": [
+            "Wendy Weekender",
+            "Pete Player"
+          ],
+          "shorts": [
+            "WW",
+            "PP"
+          ]
+        },
+        "players": [
+          {
+            "player_id": 101,
+            "name": "Paul Lipkin",
+            "short_name": "PL",
+            "team_number": 1,
+            "is_phantom": false,
+            "playing_handicap": 0,
+            "strokes_off": null,
+            "strokes_by_hole": {
+              "1": 0,
+              "2": 0,
+              "3": 0,
+              "4": 0,
+              "5": 0,
+              "6": 0
+            },
+            "so_by_hole": {}
+          },
+          {
+            "player_id": 102,
+            "name": "Hal Hacker",
+            "short_name": "HH",
+            "team_number": 1,
+            "is_phantom": false,
+            "playing_handicap": 0,
+            "strokes_off": null,
+            "strokes_by_hole": {
+              "1": 0,
+              "2": 0,
+              "3": 0,
+              "4": 0,
+              "5": 0,
+              "6": 0
+            },
+            "so_by_hole": {}
+          },
+          {
+            "player_id": 104,
+            "name": "Wendy Weekender",
+            "short_name": "WW",
+            "team_number": 2,
+            "is_phantom": false,
+            "playing_handicap": 0,
+            "strokes_off": null,
+            "strokes_by_hole": {
+              "1": 0,
+              "2": 0,
+              "3": 0,
+              "4": 0,
+              "5": 0,
+              "6": 0
+            },
+            "so_by_hole": {}
+          },
+          {
+            "player_id": 103,
+            "name": "Pete Player",
+            "short_name": "PP",
+            "team_number": 2,
+            "is_phantom": false,
+            "playing_handicap": 0,
+            "strokes_off": null,
+            "strokes_by_hole": {
+              "1": 0,
+              "2": 0,
+              "3": 0,
+              "4": 0,
+              "5": 0,
+              "6": 0
+            },
+            "so_by_hole": {}
+          }
+        ],
+        "holes": [
+          {
+            "hole": 1,
+            "par": 4,
+            "stroke_index": 7,
+            "t1_net": 4,
+            "t2_net": 5,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": "T1",
+            "margin": 1,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": 4,
+                "strokes": 0,
+                "net": 4,
+                "won": true
+              },
+              {
+                "player_id": 102,
+                "gross": 5,
+                "strokes": 0,
+                "net": 5,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": 6,
+                "strokes": 0,
+                "net": 6,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": 5,
+                "strokes": 0,
+                "net": 5,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 2,
+            "par": 4,
+            "stroke_index": 3,
+            "t1_net": 4,
+            "t2_net": 4,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": "Halved",
+            "margin": 1,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": 4,
+                "strokes": 0,
+                "net": 4,
+                "won": false
+              },
+              {
+                "player_id": 102,
+                "gross": 5,
+                "strokes": 0,
+                "net": 5,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": 5,
+                "strokes": 0,
+                "net": 5,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": 4,
+                "strokes": 0,
+                "net": 4,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 3,
+            "par": 3,
+            "stroke_index": 15,
+            "t1_net": 4,
+            "t2_net": 3,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": "T2",
+            "margin": 0,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": 4,
+                "strokes": 0,
+                "net": 4,
+                "won": false
+              },
+              {
+                "player_id": 102,
+                "gross": 5,
+                "strokes": 0,
+                "net": 5,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": 4,
+                "strokes": 0,
+                "net": 4,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": 3,
+                "strokes": 0,
+                "net": 3,
+                "won": true
+              }
+            ]
+          },
+          {
+            "hole": 4,
+            "par": 5,
+            "stroke_index": 9,
+            "t1_net": 5,
+            "t2_net": 6,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": "T1",
+            "margin": 1,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": 5,
+                "strokes": 0,
+                "net": 5,
+                "won": true
+              },
+              {
+                "player_id": 102,
+                "gross": 6,
+                "strokes": 0,
+                "net": 6,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": 7,
+                "strokes": 0,
+                "net": 7,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": 6,
+                "strokes": 0,
+                "net": 6,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 5,
+            "par": 4,
+            "stroke_index": 1,
+            "t1_net": 4,
+            "t2_net": 4,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": "Halved",
+            "margin": 1,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": 4,
+                "strokes": 0,
+                "net": 4,
+                "won": false
+              },
+              {
+                "player_id": 102,
+                "gross": 5,
+                "strokes": 0,
+                "net": 5,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": 5,
+                "strokes": 0,
+                "net": 5,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": 4,
+                "strokes": 0,
+                "net": 4,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 6,
+            "par": 4,
+            "stroke_index": 13,
+            "t1_net": 4,
+            "t2_net": 5,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": "T1",
+            "margin": 2,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": 4,
+                "strokes": 0,
+                "net": 4,
+                "won": true
+              },
+              {
+                "player_id": 102,
+                "gross": 5,
+                "strokes": 0,
+                "net": 5,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": 6,
+                "strokes": 0,
+                "net": 6,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": 5,
+                "strokes": 0,
+                "net": 5,
+                "won": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "match_number": 2,
+        "segment": "foursomes",
+        "label": "Foursomes",
+        "start_hole": 7,
+        "end_hole": 12,
+        "display_end_hole": 12,
+        "status": "in_progress",
+        "result": null,
+        "finished_on_hole": null,
+        "holes_to_play": null,
+        "holes_up_final": 1,
+        "winner_label": "—",
+        "team1_first_tee_id": null,
+        "team2_first_tee_id": null,
+        "team1": {
+          "players": [
+            "Paul Lipkin",
+            "Hal Hacker"
+          ],
+          "shorts": [
+            "PL",
+            "HH"
+          ]
+        },
+        "team2": {
+          "players": [
+            "Wendy Weekender",
+            "Pete Player"
+          ],
+          "shorts": [
+            "WW",
+            "PP"
+          ]
+        },
+        "players": [
+          {
+            "player_id": 101,
+            "name": "Paul Lipkin",
+            "short_name": "PL",
+            "team_number": 1,
+            "is_phantom": false,
+            "playing_handicap": 0,
+            "strokes_off": null,
+            "strokes_by_hole": {
+              "7": 0,
+              "8": 0,
+              "9": 0,
+              "10": 0,
+              "11": 0,
+              "12": 0
+            },
+            "so_by_hole": {}
+          },
+          {
+            "player_id": 102,
+            "name": "Hal Hacker",
+            "short_name": "HH",
+            "team_number": 1,
+            "is_phantom": false,
+            "playing_handicap": 0,
+            "strokes_off": null,
+            "strokes_by_hole": {
+              "7": 0,
+              "8": 0,
+              "9": 0,
+              "10": 0,
+              "11": 0,
+              "12": 0
+            },
+            "so_by_hole": {}
+          },
+          {
+            "player_id": 104,
+            "name": "Wendy Weekender",
+            "short_name": "WW",
+            "team_number": 2,
+            "is_phantom": false,
+            "playing_handicap": 0,
+            "strokes_off": null,
+            "strokes_by_hole": {
+              "7": 0,
+              "8": 0,
+              "9": 0,
+              "10": 0,
+              "11": 0,
+              "12": 0
+            },
+            "so_by_hole": {}
+          },
+          {
+            "player_id": 103,
+            "name": "Pete Player",
+            "short_name": "PP",
+            "team_number": 2,
+            "is_phantom": false,
+            "playing_handicap": 0,
+            "strokes_off": null,
+            "strokes_by_hole": {
+              "7": 0,
+              "8": 0,
+              "9": 0,
+              "10": 0,
+              "11": 0,
+              "12": 0
+            },
+            "so_by_hole": {}
+          }
+        ],
+        "holes": [
+          {
+            "hole": 7,
+            "par": 3,
+            "stroke_index": 17,
+            "t1_net": 3,
+            "t2_net": 3,
+            "t1_team_gross": 3,
+            "t2_team_gross": 3,
+            "t1_team_strokes": 0,
+            "t2_team_strokes": 0,
+            "winner": "Halved",
+            "margin": 0,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": 3,
+                "strokes": 0,
+                "net": 3,
+                "won": false
+              },
+              {
+                "player_id": 102,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": 3,
+                "strokes": 0,
+                "net": 3,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 8,
+            "par": 5,
+            "stroke_index": 11,
+            "t1_net": 5,
+            "t2_net": 5,
+            "t1_team_gross": 5,
+            "t2_team_gross": 5,
+            "t1_team_strokes": 0,
+            "t2_team_strokes": 0,
+            "winner": "Halved",
+            "margin": 0,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": 5,
+                "strokes": 0,
+                "net": 5,
+                "won": false
+              },
+              {
+                "player_id": 102,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": 5,
+                "strokes": 0,
+                "net": 5,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 9,
+            "par": 4,
+            "stroke_index": 5,
+            "t1_net": 4,
+            "t2_net": 5,
+            "t1_team_gross": 4,
+            "t2_team_gross": 5,
+            "t1_team_strokes": 0,
+            "t2_team_strokes": 0,
+            "winner": "T1",
+            "margin": 1,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": 4,
+                "strokes": 0,
+                "net": 4,
+                "won": true
+              },
+              {
+                "player_id": 102,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": 5,
+                "strokes": 0,
+                "net": 5,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 10,
+            "par": 4,
+            "stroke_index": 8,
+            "t1_net": null,
+            "t2_net": null,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": 0,
+            "t2_team_strokes": 0,
+            "winner": null,
+            "margin": null,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 102,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 11,
+            "par": 4,
+            "stroke_index": 4,
+            "t1_net": null,
+            "t2_net": null,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": 0,
+            "t2_team_strokes": 0,
+            "winner": null,
+            "margin": null,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 102,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 12,
+            "par": 3,
+            "stroke_index": 16,
+            "t1_net": null,
+            "t2_net": null,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": 0,
+            "t2_team_strokes": 0,
+            "winner": null,
+            "margin": null,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 102,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "match_number": 3,
+        "segment": "singles",
+        "label": "Singles 1",
+        "start_hole": 13,
+        "end_hole": 18,
+        "display_end_hole": 18,
+        "status": "pending",
+        "result": null,
+        "finished_on_hole": null,
+        "holes_to_play": null,
+        "holes_up_final": 0,
+        "winner_label": "—",
+        "team1_first_tee_id": null,
+        "team2_first_tee_id": null,
+        "team1": {
+          "players": [
+            "Paul Lipkin"
+          ],
+          "shorts": [
+            "PL"
+          ]
+        },
+        "team2": {
+          "players": [
+            "Pete Player"
+          ],
+          "shorts": [
+            "PP"
+          ]
+        },
+        "players": [
+          {
+            "player_id": 101,
+            "name": "Paul Lipkin",
+            "short_name": "PL",
+            "team_number": 1,
+            "is_phantom": false,
+            "playing_handicap": 0,
+            "strokes_off": null,
+            "strokes_by_hole": {
+              "13": 0,
+              "14": 0,
+              "15": 0,
+              "16": 0,
+              "17": 0,
+              "18": 0
+            },
+            "so_by_hole": {}
+          },
+          {
+            "player_id": 103,
+            "name": "Pete Player",
+            "short_name": "PP",
+            "team_number": 2,
+            "is_phantom": false,
+            "playing_handicap": 0,
+            "strokes_off": null,
+            "strokes_by_hole": {
+              "13": 0,
+              "14": 0,
+              "15": 0,
+              "16": 0,
+              "17": 0,
+              "18": 0
+            },
+            "so_by_hole": {}
+          }
+        ],
+        "holes": [
+          {
+            "hole": 13,
+            "par": 5,
+            "stroke_index": 10,
+            "t1_net": null,
+            "t2_net": null,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": null,
+            "margin": null,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 14,
+            "par": 4,
+            "stroke_index": 2,
+            "t1_net": null,
+            "t2_net": null,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": null,
+            "margin": null,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 15,
+            "par": 4,
+            "stroke_index": 14,
+            "t1_net": null,
+            "t2_net": null,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": null,
+            "margin": null,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 16,
+            "par": 3,
+            "stroke_index": 18,
+            "t1_net": null,
+            "t2_net": null,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": null,
+            "margin": null,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 17,
+            "par": 5,
+            "stroke_index": 12,
+            "t1_net": null,
+            "t2_net": null,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": null,
+            "margin": null,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 18,
+            "par": 4,
+            "stroke_index": 6,
+            "t1_net": null,
+            "t2_net": null,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": null,
+            "margin": null,
+            "scores": [
+              {
+                "player_id": 101,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 103,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "match_number": 4,
+        "segment": "singles",
+        "label": "Singles 2",
+        "start_hole": 13,
+        "end_hole": 18,
+        "display_end_hole": 18,
+        "status": "pending",
+        "result": null,
+        "finished_on_hole": null,
+        "holes_to_play": null,
+        "holes_up_final": 0,
+        "winner_label": "—",
+        "team1_first_tee_id": null,
+        "team2_first_tee_id": null,
+        "team1": {
+          "players": [
+            "Hal Hacker"
+          ],
+          "shorts": [
+            "HH"
+          ]
+        },
+        "team2": {
+          "players": [
+            "Wendy Weekender"
+          ],
+          "shorts": [
+            "WW"
+          ]
+        },
+        "players": [
+          {
+            "player_id": 102,
+            "name": "Hal Hacker",
+            "short_name": "HH",
+            "team_number": 1,
+            "is_phantom": false,
+            "playing_handicap": 0,
+            "strokes_off": null,
+            "strokes_by_hole": {
+              "13": 0,
+              "14": 0,
+              "15": 0,
+              "16": 0,
+              "17": 0,
+              "18": 0
+            },
+            "so_by_hole": {}
+          },
+          {
+            "player_id": 104,
+            "name": "Wendy Weekender",
+            "short_name": "WW",
+            "team_number": 2,
+            "is_phantom": false,
+            "playing_handicap": 0,
+            "strokes_off": null,
+            "strokes_by_hole": {
+              "13": 0,
+              "14": 0,
+              "15": 0,
+              "16": 0,
+              "17": 0,
+              "18": 0
+            },
+            "so_by_hole": {}
+          }
+        ],
+        "holes": [
+          {
+            "hole": 13,
+            "par": 5,
+            "stroke_index": 10,
+            "t1_net": null,
+            "t2_net": null,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": null,
+            "margin": null,
+            "scores": [
+              {
+                "player_id": 102,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 14,
+            "par": 4,
+            "stroke_index": 2,
+            "t1_net": null,
+            "t2_net": null,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": null,
+            "margin": null,
+            "scores": [
+              {
+                "player_id": 102,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 15,
+            "par": 4,
+            "stroke_index": 14,
+            "t1_net": null,
+            "t2_net": null,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": null,
+            "margin": null,
+            "scores": [
+              {
+                "player_id": 102,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 16,
+            "par": 3,
+            "stroke_index": 18,
+            "t1_net": null,
+            "t2_net": null,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": null,
+            "margin": null,
+            "scores": [
+              {
+                "player_id": 102,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 17,
+            "par": 5,
+            "stroke_index": 12,
+            "t1_net": null,
+            "t2_net": null,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": null,
+            "margin": null,
+            "scores": [
+              {
+                "player_id": 102,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              }
+            ]
+          },
+          {
+            "hole": 18,
+            "par": 4,
+            "stroke_index": 6,
+            "t1_net": null,
+            "t2_net": null,
+            "t1_team_gross": null,
+            "t2_team_gross": null,
+            "t1_team_strokes": null,
+            "t2_team_strokes": null,
+            "winner": null,
+            "margin": null,
+            "scores": [
+              {
+                "player_id": 102,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              },
+              {
+                "player_id": 104,
+                "gross": null,
+                "strokes": 0,
+                "net": null,
+                "won": false
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "overall": {
+      "team1_wins": 1,
+      "team2_wins": 0,
+      "halves": 0,
+      "team1_points": 1.0,
+      "team2_points": 0.0,
+      "points_available": 4
+    },
+    "money": {
+      "bet_unit": 25.0,
+      "by_player": [
+        {
+          "name": "Hal Hacker",
+          "amount": 25.0
+        },
+        {
+          "name": "Paul Lipkin",
+          "amount": 25.0
+        },
+        {
+          "name": "Pete Player",
+          "amount": -25.0
+        },
+        {
+          "name": "Wendy Weekender",
+          "amount": -25.0
+        }
+      ]
+    },
+    "phantom": null,
+    "cup": null
+  },
+  "board": {
+    "tournament": false,
+    "team_names": [
+      "Team 1",
+      "Team 2"
+    ],
+    "team_colours": [
+      null,
+      null
+    ],
+    "thru": 9,
+    "over": false,
+    "cup": {
+      "label": "The cup · thru 9",
+      "team1_points": 1.0,
+      "team2_points": 0.0,
+      "team1": "1",
+      "team2": "0",
+      "of": "4",
+      "total": 4.0,
+      "line": "3 points still out · 2½ wins",
+      "right": "1 of 4 decided",
+      "over": false
+    },
+    "blocks": [
+      {
+        "segment": "fourball",
+        "label": "Fourball",
+        "sub": "holes 1–6 · better ball",
+        "tag": "final",
+        "lines": [
+          {
+            "match_number": 1,
+            "segment": "fourball",
+            "label": "Fourball",
+            "names": [
+              "Paul + Hal",
+              "Pete + Wendy"
+            ],
+            "leader": 1,
+            "head": "Paul + Hal win",
+            "margin": "2 UP",
+            "sub": "1 point to Team 1",
+            "decided": true,
+            "thru": 6,
+            "tiles": [
+              {
+                "hole": 1,
+                "state": "t1"
+              },
+              {
+                "hole": 2,
+                "state": "halved"
+              },
+              {
+                "hole": 3,
+                "state": "t2"
+              },
+              {
+                "hole": 4,
+                "state": "t1"
+              },
+              {
+                "hole": 5,
+                "state": "halved"
+              },
+              {
+                "hole": 6,
+                "state": "t1"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "segment": "foursomes",
+        "label": "Foursomes",
+        "sub": "holes 7–12 · alternate shot",
+        "tag": "playing",
+        "lines": [
+          {
+            "match_number": 2,
+            "segment": "foursomes",
+            "label": "Foursomes",
+            "names": [
+              "Paul + Hal",
+              "Pete + Wendy"
+            ],
+            "leader": 1,
+            "head": "Paul + Hal",
+            "margin": "1 UP",
+            "sub": "thru 3 of 6 · 3 to play",
+            "decided": false,
+            "thru": 3,
+            "tiles": [
+              {
+                "hole": 7,
+                "state": "halved"
+              },
+              {
+                "hole": 8,
+                "state": "halved"
+              },
+              {
+                "hole": 9,
+                "state": "t1"
+              },
+              {
+                "hole": 10,
+                "state": "open"
+              },
+              {
+                "hole": 11,
+                "state": "open"
+              },
+              {
+                "hole": 12,
+                "state": "open"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "segment": "singles",
+        "label": "Singles",
+        "sub": "holes 13–18 · match play",
+        "tag": "to come",
+        "lines": [
+          {
+            "match_number": 3,
+            "segment": "singles",
+            "label": "Singles 1",
+            "names": [
+              "Paul",
+              "Pete"
+            ],
+            "leader": null,
+            "head": "",
+            "margin": "",
+            "sub": "starts 13",
+            "decided": false,
+            "thru": 0,
+            "tiles": [
+              {
+                "hole": 13,
+                "state": "open"
+              },
+              {
+                "hole": 14,
+                "state": "open"
+              },
+              {
+                "hole": 15,
+                "state": "open"
+              },
+              {
+                "hole": 16,
+                "state": "open"
+              },
+              {
+                "hole": 17,
+                "state": "open"
+              },
+              {
+                "hole": 18,
+                "state": "open"
+              }
+            ]
+          },
+          {
+            "match_number": 4,
+            "segment": "singles",
+            "label": "Singles 2",
+            "names": [
+              "Hal",
+              "Wendy"
+            ],
+            "leader": null,
+            "head": "",
+            "margin": "",
+            "sub": "starts 13",
+            "decided": false,
+            "thru": 0,
+            "tiles": [
+              {
+                "hole": 13,
+                "state": "open"
+              },
+              {
+                "hole": 14,
+                "state": "open"
+              },
+              {
+                "hole": 15,
+                "state": "open"
+              },
+              {
+                "hole": 16,
+                "state": "open"
+              },
+              {
+                "hole": 17,
+                "state": "open"
+              },
+              {
+                "hole": 18,
+                "state": "open"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "money": {
+      "final": false,
+      "label": "Winners take all",
+      "stake": "$25 a man",
+      "winner": null,
+      "head": "",
+      "amount": "",
+      "line": "Winners take all. $25 a man, settled on the cup when the last match ends.",
+      "pot": "$100"
+    }
+  }
+}

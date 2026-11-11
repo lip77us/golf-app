@@ -146,24 +146,51 @@ def _margin_text(m) -> str:
 
 
 def _cells(summary) -> list:
-    """Four cells, left to right in play order — no labels; the state slot
-    names which one is live.
+    """The cup as point cells — **blue fills from the left, orange from the
+    right**, and what is still out stays grey between them.
 
-    `blue` / `orange` banked, `halved` for a 50/50 hard-stop gradient, and
-    `out` for a point nobody has yet.
+    Changed 11 Nov 2026 to match the team cup's needle and the score-entry
+    tray (`CupStrip`): the cells no longer follow play order, so the strip
+    reads the same way on every surface. A halved match is half a cell to
+    each side — blue takes the left half of its next cell (`bh`), orange the
+    right half of its next (`oh`) — and `halved` is now only the cell where
+    the two halves MEET, which is what an older build already draws for it.
+
+    No labels; the state slot names which match is live.
     """
-    out = []
-    for m in (summary.get('matches') or []):
-        status = m.get('status')
+    from services.triple_cup import _tc_match_point_value
+    matches = summary.get('matches') or []
+    size = summary.get('group_size') or 4
+    t1 = t2 = 0.0
+    for i, m in enumerate(matches, start=1):
+        if m.get('status') not in ('complete', 'halved') and \
+                m.get('result') is None:
+            continue
+        pv = _tc_match_point_value(size, m.get('match_number') or i)
         result = m.get('result')
-        if status != 'complete' or result is None:
-            out.append('out')
-        elif result == 'halved':
-            out.append('halved')
-        elif result in ('team1', 'T1'):
-            out.append('blue')
+        if result in ('team1', 'T1'):
+            t1 += pv
         elif result in ('team2', 'T2'):
+            t2 += pv
+        elif result == 'halved':
+            t1 += pv / 2
+            t2 += pv / 2
+    n = int((summary.get('overall') or {}).get('points_available')
+            or len(matches) or 4)
+    out = []
+    for i in range(n):
+        blue = min(max(t1 - i, 0.0), 1.0)
+        orange = min(max(t2 - (n - 1 - i), 0.0), 1.0)
+        if blue >= 1:
+            out.append('blue')
+        elif orange >= 1:
             out.append('orange')
+        elif blue and orange:
+            out.append('halved')
+        elif blue:
+            out.append('bh')
+        elif orange:
+            out.append('oh')
         else:
             out.append('out')
     return out
@@ -714,7 +741,11 @@ def triple_cup_final_state(foursome, *, player_id=None) -> dict:
 
     if amount > 0:
         names = ' and '.join(surname(e.get('name', '')).title() for e in losers)
-        line = f'Collect from {names}' if names else ''
+        # Settled the way Fourball settles (decided 11 Nov 2026): one stake
+        # a man, so the card shows what each winner NETS and who pays it.
+        owed = f'${abs(amount):,.0f}'
+        line = ((f'{names} pay {owed} each' if len(losers) > 1
+                 else f'{names} pays {owed}') if names else '')
     elif amount < 0:
         names = ' and '.join(surname(e.get('name', '')).title() for e in winners)
         line = f'Pay {names}' if names else ''
@@ -729,7 +760,9 @@ def triple_cup_final_state(foursome, *, player_id=None) -> dict:
         'closed': True,
         'number': _number(t1, t2, 'blue', 'orange'),
         'sides' : [{'names': line, 'colour': '', 'leading': False}],
-        'state' : {'word': _cash(amount) if amount else 'EVEN',
+        'state' : {'word': (_cash(amount)
+                            + (' each' if amount > 0 and len(winners) > 1
+                               else '')) if amount else 'EVEN',
                    'to_play': 'WINNERS TAKE ALL', 'colour': 'mint'},
         # All four cells filled: **the segments won are readable off the
         # strip**, which is the strip earning its place one last time.

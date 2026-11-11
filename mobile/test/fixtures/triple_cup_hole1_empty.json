@@ -1,0 +1,113 @@
+{
+  "hole": 1,
+  "par": 4,
+  "segment": "fourball",
+  "segment_label": "Fourball",
+  "span": "holes 1–6",
+  "hole_in_segment": 1,
+  "segment_holes": 6,
+  "kind": "best ball",
+  "tournament": false,
+  "team_names": [
+    "Team 1",
+    "Team 2"
+  ],
+  "team_colours": [
+    null,
+    null
+  ],
+  "hole_complete": false,
+  "show_tiles": true,
+  "lines": [
+    {
+      "match_number": 1,
+      "segment": "fourball",
+      "label": "Fourball",
+      "names": [
+        "Paul + Hal",
+        "Pete + Wendy"
+      ],
+      "leader": null,
+      "head": "All square",
+      "margin": "AS",
+      "sub": "holes 1–6",
+      "decided": false,
+      "thru": 0,
+      "tiles": [
+        {
+          "hole": 1,
+          "state": "open"
+        },
+        {
+          "hole": 2,
+          "state": "open"
+        },
+        {
+          "hole": 3,
+          "state": "open"
+        },
+        {
+          "hole": 4,
+          "state": "open"
+        },
+        {
+          "hole": 5,
+          "state": "open"
+        },
+        {
+          "hole": 6,
+          "state": "open"
+        }
+      ],
+      "played": false,
+      "dead": false,
+      "winner": null,
+      "reason": null
+    }
+  ],
+  "cup": {
+    "label": "The cup",
+    "team1_points": 0.0,
+    "team2_points": 0.0,
+    "team1": "0",
+    "team2": "0",
+    "of": "4",
+    "total": 4.0,
+    "line": "4 points still out · 2½ wins"
+  },
+  "cup_total": null,
+  "next": null,
+  "money": null,
+  "last_hole": false,
+  "round_over": false,
+  "players": [
+    {
+      "player_id": 69,
+      "first": "Paul",
+      "side": 1,
+      "strokes": 0,
+      "gross": null
+    },
+    {
+      "player_id": 70,
+      "first": "Hal",
+      "side": 1,
+      "strokes": 0,
+      "gross": null
+    },
+    {
+      "player_id": 71,
+      "first": "Pete",
+      "side": 2,
+      "strokes": 0,
+      "gross": null
+    },
+    {
+      "player_id": 72,
+      "first": "Wendy",
+      "side": 2,
+      "strokes": 0,
+      "gross": null
+    }
+  ]
+}

@@ -2051,11 +2051,23 @@ def triple_cup_summary(foursome, *, with_cup: bool = False) -> dict | None:
                 # disagree when alt-shot mixes player gross with
                 # team handicap.  Prospective: present on unplayed holes too.
                 strokes = expected.get(pid, {}).get(hole_num, 0)
+                # **The ball that won the hole**, so a scorecard tints one
+                # cell rather than a whole side: in the Fourball the better
+                # ball of the side that won (both, where partners tie for
+                # it); in a Single, the winner's. Decided on NET, against the
+                # engine's own stored side figure.
+                _wn = hr.winning_team_number if hr else None
+                _won = False
+                if _wn in (1, 2) and net is not None:
+                    _mine = team1_pids if _wn == 1 else team2_pids
+                    _best = hr.team1_net if _wn == 1 else hr.team2_net
+                    _won = pid in _mine and net == _best
                 scores_for_hole.append({
                     'player_id': pid,
                     'gross'    : gross,
                     'strokes'  : strokes,
                     'net'      : net,
+                    'won'      : _won,
                 })
             holes_out.append({
                 'hole'           : hole_num,
@@ -2396,3 +2408,549 @@ def _cup_context(round_obj) -> dict | None:
     }
 
 
+
+
+# ---------------------------------------------------------------------------
+# The score-entry card — ONE hole
+# ---------------------------------------------------------------------------
+
+_TC_KIND = {'fourball': 'best ball', 'foursomes': 'one ball a side',
+            'singles': 'singles'}
+
+
+def _tc_pts(x) -> str:
+    """`1½`, `½`, `3` — cup points the way a cup writes them, never `1.5`."""
+    x = float(x or 0)
+    whole, half = int(x), (x - int(x)) >= 0.5
+    if half:
+        return f'{whole}½' if whole else '½'
+    return str(whole)
+
+
+def _tc_span(holes: list[int]) -> str:
+    """`holes 1–6` — only for a run that reads as one.
+
+    A shotgun third can wrap the turn (14..1), where `holes 14–1` is not a
+    span anybody can read; it says nothing rather than something wrong, which
+    is the call the Nassau tray made about its own nine.
+    """
+    if not holes:
+        return ''
+    if holes != list(range(holes[0], holes[0] + len(holes))):
+        return ''
+    return (f'holes {holes[0]}–{holes[-1]}' if len(holes) > 1
+            else f'hole {holes[0]}')
+
+
+def _tc_and(names: list[str]) -> str:
+    names = [n for n in names if n]
+    if len(names) <= 1:
+        return ''.join(names)
+    return ', '.join(names[:-1]) + ' and ' + names[-1]
+
+
+def _tc_cup_line(t1: float, t2: float, total: float, names: list[str],
+                 *, group: bool) -> str:
+    """The one line under the cup strip. Every branch is a rule about the
+    cup, so it is written here and the tray renders it."""
+    out = total - t1 - t2
+    half = total / 2
+    lead = abs(t1 - t2)
+    leader = names[0] if t1 > t2 else names[1]
+    if out <= 0:
+        if t1 == t2:
+            return (f'Group halved, {_tc_pts(t1)}–{_tc_pts(t2)}' if group else
+                    f'Cup halved, {_tc_pts(t1)}–{_tc_pts(t2)} · '
+                    'nothing changes hands')
+        if group:
+            return (f'Group final · {names[0]} {_tc_pts(t1)}, '
+                    f'{names[1]} {_tc_pts(t2)}')
+        return f'{leader} wins the cup'
+    pts = f'{_tc_pts(out)} point{"s" if out != 1 else ""} still out'
+    if group:
+        return f'{pts} in this group'
+    if max(t1, t2) > half:
+        return f'{leader} has won it · {_tc_pts(out)} still to play out'
+    if lead and lead >= out:
+        return (f'{leader} cannot lose · '
+                f'{_tc_pts(half)}–{_tc_pts(half)} halves it')
+    return f'{pts} · {_tc_pts(half + 0.5)} wins'
+
+
+_TC_BLOCK_SUB = {'fourball': 'better ball', 'foursomes': 'alternate shot',
+                 'singles': 'match play'}
+
+
+def _tc_state(foursome, summary, pos: int) -> dict:
+    """The round AS OF position `pos` in the group's play order.
+
+    One writer for the two things that draw a Triple Cup: the score-entry
+    tray (as of the hole on screen) and the leaderboard's board (as of the
+    last hole). Each match's line and the cup score are composed here, so the
+    tray and the board cannot say one match two ways.
+
+    **It decides no golf.** A hole's winner, each running margin, the result
+    and the `&M` are the engine's stored answers. What this adds is the cut:
+    a match counts toward the cup only once the hole it was decided on has
+    been reached, which is what keeps a tray reopened on the 4th from
+    reporting the cup as it stands on the 16th.
+    """
+    from services.hole_plan import play_order
+    from services.player_labels import first_names
+
+    order = play_order(foursome.round, foursome) or list(range(1, 19))
+    pos_of = {h: i for i, h in enumerate(order)}
+
+    members = list(foursome.memberships.select_related('player'))
+    by_pid = {m.player_id: m.player for m in members
+              if not m.player.is_phantom}
+    rank = {m.player_id: i for i, m in enumerate(members)}
+    first = first_names(by_pid)
+
+    is_cup = _is_cup_round(foursome.round)
+    team_names = [summary.get('team1_name') or 'Team 1',
+                  summary.get('team2_name') or 'Team 2']
+    group_size = summary.get('group_size') or 4
+
+    def side_ids(m, n):
+        return sorted((p['player_id'] for p in m['players']
+                       if p['team_number'] == n and not p.get('is_phantom')),
+                      key=lambda pid: rank.get(pid, 99))
+
+    def side_name(m, n):
+        return ' + '.join(first.get(pid, '') for pid in side_ids(m, n))
+
+    def decided_pos(m):
+        """Where in the ROUND this match was decided, or None while live."""
+        if m.get('result') is None:
+            return None
+        fin = m.get('finished_on_hole')
+        if fin in pos_of:
+            return pos_of[fin]
+        played = [h['hole'] for h in m['holes'] if h.get('winner')]
+        return pos_of.get(played[-1]) if played else None
+
+    lines = {}
+    t1 = t2 = 0.0
+    n_decided = 0
+    for m in summary['matches']:
+        seg = m['holes']
+        # The last hole of this match reached by `pos`; -1 before it starts.
+        idx = max((i for i, h in enumerate(seg)
+                   if pos_of.get(h['hole'], 99) <= pos), default=-1)
+        pv = _tc_match_point_value(group_size, m['match_number'])
+        dpos = decided_pos(m)
+        decided = dpos is not None and dpos <= pos
+        fin_idx = (next((i for i, h in enumerate(seg)
+                         if pos_of.get(h['hole']) == dpos), None)
+                   if decided else None)
+
+        played = [h for h in seg[:idx + 1] if h.get('winner')]
+        thru = len(played)
+        left = len(seg) - thru
+        margin = (played[-1].get('margin') or 0) if played else 0
+
+        names = [side_name(m, 1), side_name(m, 2)]
+        if decided:
+            n_decided += 1
+            result = m['result']
+            up = abs(m.get('holes_up_final') or 0)
+            to_play = m.get('holes_to_play') or 0
+            if result == 'halved':
+                leader, head, text = None, 'Match halved', '½'
+                sub = f'{_tc_pts(pv / 2)} point each'
+                t1 += pv / 2
+                t2 += pv / 2
+            else:
+                leader = 1 if result == 'team1' else 2
+                plural = len(side_ids(m, leader)) > 1
+                head = f'{names[leader - 1]} {"win" if plural else "wins"}'
+                text = f'{up}&{to_play}' if to_play else f'{up} UP'
+                sub = (f'{_tc_pts(pv)} point{"s" if pv != 1 else ""} '
+                       f'to {team_names[leader - 1]}')
+                dead_holes = [h['hole'] for h in seg[(fin_idx or 0) + 1:]]
+                if dead_holes:
+                    span = (f'{dead_holes[0]}–{dead_holes[-1]}'
+                            if len(dead_holes) > 1 else f'{dead_holes[0]}')
+                    sub += f' · {span} dead'
+                if leader == 1:
+                    t1 += pv
+                else:
+                    t2 += pv
+        else:
+            leader = 1 if margin > 0 else 2 if margin < 0 else None
+            head = names[leader - 1] if leader else 'All square'
+            text = f'{abs(margin)} UP' if margin else 'AS'
+            sub = (f'thru {thru} of {len(seg)} · {left} to play' if thru
+                   else (_tc_span([h['hole'] for h in seg]) or 'not started'))
+
+        tiles = []
+        for i, h in enumerate(seg):
+            w = h.get('winner') if i <= idx else None
+            if decided and fin_idx is not None and i > fin_idx:
+                state = 'dead'
+            elif w == 'T1':
+                state = 't1'
+            elif w == 'T2':
+                state = 't2'
+            elif w == 'Halved':
+                state = 'halved'
+            else:
+                state = 'open'
+            tiles.append({'hole': h['hole'], 'state': state})
+
+        lines[m['match_number']] = {
+            'match_number': m['match_number'],
+            'segment'     : m['segment'],
+            'label'       : m.get('label') or '',
+            'names'       : names,
+            'leader'      : leader,
+            'head'        : head,
+            'margin'      : text,
+            'sub'         : sub,
+            'decided'     : decided,
+            'thru'        : thru,
+            'tiles'       : tiles,
+            '_fin_idx'    : fin_idx,
+        }
+
+    total = float(summary['overall'].get('points_available') or 4)
+    cup = {
+        'label'       : 'This group' if is_cup else 'The cup',
+        'team1_points': t1,
+        'team2_points': t2,
+        'team1'       : _tc_pts(t1),
+        'team2'       : _tc_pts(t2),
+        'of'          : _tc_pts(total),
+        'total'       : total,
+        'line'        : _tc_cup_line(t1, t2, total, team_names, group=is_cup),
+    }
+    return {
+        'order': order, 'pos_of': pos_of, 'by_pid': by_pid, 'rank': rank,
+        'first': first, 'is_cup': is_cup, 'team_names': team_names,
+        'group_size': group_size, 'side_ids': side_ids,
+        'side_name': side_name, 'lines': lines, 'cup': cup,
+        'n_decided': n_decided,
+        'all_decided': n_decided == len(summary['matches']),
+        't1': t1, 't2': t2, 'total': total,
+    }
+
+
+def _tc_money(summary, st, *, final: bool) -> dict | None:
+    """Winners take all — one stake a man (decided 11 Nov 2026: settled the
+    way Fourball settles, so a winner nets `+$25`, never the $50 share of the
+    pot). None in a team cup, where cup money settles in the team room, and
+    on a round played for nothing."""
+    stake = float((summary.get('money') or {}).get('bet_unit') or 0)
+    if st['is_cup'] or not stake:
+        return None
+    amt = f'${stake:g}' if stake == int(stake) else f'${stake:.2f}'
+    first, side_ids = st['first'], st['side_ids']
+    m0 = summary['matches'][0]
+    n_real = len(side_ids(m0, 1)) + len(side_ids(m0, 2))
+    if not final:
+        pot = stake * n_real
+        return {
+            'final' : False,
+            'label' : 'Winners take all',
+            'stake' : f'{amt} a man',
+            'winner': None, 'head': '', 'amount': '',
+            'line'  : (f'Winners take all. {amt} a man, settled on the cup '
+                       'when the last match ends.'),
+            'pot'   : f'${pot:g}' if pot == int(pot) else f'${pot:.2f}',
+        }
+    t1, t2 = st['t1'], st['t2']
+    out = {'final': True, 'label': 'Final · winners take all',
+           'stake': f'{amt} a man', 'pot': ''}
+    if t1 == t2:
+        return {**out, 'winner': None, 'head': '', 'amount': '',
+                'line': 'Cup halved · no money changes hands'}
+    w = 1 if t1 > t2 else 2
+    win = [first.get(p, '') for p in side_ids(m0, w)]
+    lose = [first.get(p, '') for p in side_ids(m0, 3 - w)]
+    return {
+        **out,
+        'winner': w,
+        'head'  : ' & '.join(win),
+        'amount': f'+{amt}' + (' each' if len(win) > 1 else ''),
+        'line'  : (f'{_tc_and(lose)} pay {amt} each' if len(lose) > 1
+                   else f'{_tc_and(lose)} pays {amt}'),
+    }
+
+
+def _tc_public(line: dict) -> dict:
+    return {k: v for k, v in line.items() if not k.startswith('_')}
+
+
+def triple_cup_hole_card(foursome, hole: int) -> dict:
+    """Everything the Triple Cup score-entry tray draws for ONE hole.
+
+    **It renders `triple_cup_summary` and decides no golf** — see
+    `_tc_state`, which it shares with the leaderboard's board. What is added
+    here is the hole itself: who won it and on what figures, what comes next
+    when it ends a segment, and the money when it ends the round.
+
+    **Generic over the format, not written for 2v2.** A hole is reported as
+    one LINE per match that covers it: one in the Fourball and the
+    Foursomes, two in the Singles, and the nine plus the overall in the
+    two-golfer cup. The design draws the four-golfer case; the others are
+    the same lines.
+
+    Every sentence is written here — what a halved match is worth, when a
+    cup can no longer be lost, who pays whom — because each is a rule and a
+    client composing one would be a second opinion about it.
+
+    Returns `{}` when the game is not set up, so a caller can test the key.
+    Gated on the GAME, not its status: no card means no keypad.
+    """
+    summary = triple_cup_summary(foursome, with_cup=True)
+    if not summary:
+        return {}
+    from services.hole_plan import play_order
+    order = play_order(foursome.round, foursome) or list(range(1, 19))
+    if hole not in order:
+        return {}
+    pos = order.index(hole)
+    st = _tc_state(foursome, summary, pos)
+    first, rank, by_pid = st['first'], st['rank'], st['by_pid']
+    side_name, group_size = st['side_name'], st['group_size']
+    is_cup, total = st['is_cup'], st['total']
+
+    on_hole = [m for m in summary['matches']
+               if any(h['hole'] == hole for h in m['holes'])]
+    if not on_hole:
+        return {}
+
+    lines = []
+    for m in on_hole:
+        seg = m['holes']
+        idx = next(i for i, h in enumerate(seg) if h['hole'] == hole)
+        here = seg[idx]
+        base = st['lines'][m['match_number']]
+        fin_idx = base['_fin_idx']
+        w = here.get('winner')
+        lines.append({
+            **_tc_public(base),
+            # The hole itself. Absent on a hole this match never played —
+            # past its close-out, or not yet scored.
+            'played': bool(w),
+            'dead'  : (base['decided'] and fin_idx is not None
+                       and idx > fin_idx),
+            'winner': 1 if w == 'T1' else 2 if w == 'T2' else None,
+            'reason': ({'label': 'net', 'team1': here.get('t1_net'),
+                        'team2': here.get('t2_net')} if w else None),
+        })
+
+    # ── The whole cup (a team cup only). Current, not as-of: nobody can say
+    # what eleven other golfers had done by this group's 4th. ─────────────
+    cup_total = _tc_cup_total(foursome, summary, st)
+
+    # ── What comes next: only on the hole a segment ends ────────────────
+    nxt = None
+    next_hole = order[pos + 1] if pos + 1 < len(order) else None
+    if next_hole is not None:
+        here_ids = {m['match_number'] for m in on_hole}
+        coming = [m for m in summary['matches']
+                  if m['match_number'] not in here_ids
+                  and any(h['hole'] == next_hole for h in m['holes'])]
+        if coming:
+            m0 = coming[0]
+            seg_label = (m0['segment'].title() if len(coming) > 1
+                         or m0['segment'] != 'singles'
+                         else (m0.get('label') or 'Singles'))
+            span = _tc_span([h['hole'] for h in m0['holes']])
+            if m0['segment'] == 'foursomes':
+                title = f'One ball a side from {next_hole}'
+                body = ('Partners alternate shots and tee shots. Pick who '
+                        f'tees off on {next_hole} before you leave the tee.')
+            elif m0['segment'] == 'fourball':
+                title = f'Better ball from {next_hole}'
+                body = ('Everybody plays their own ball and the better net '
+                        'counts for the side.')
+            else:
+                title = ' · '.join(
+                    f'{side_name(m, 1)} v {side_name(m, 2)}' for m in coming)
+                n = len(coming)
+                worth = sum(_tc_match_point_value(group_size,
+                                                  m['match_number'])
+                            for m in coming)
+                body = (f'{"Two" if n == 2 else n} matches, '
+                        f'{_tc_pts(worth)} points, played together.'
+                        if n > 1 else
+                        f'{_tc_pts(worth)} point{"s" if worth != 1 else ""}.')
+                if not is_cup:
+                    body += f' {_tc_pts(total / 2 + 0.5)} wins the cup.'
+            nxt = {'label': seg_label, 'span': span, 'title': title,
+                   'body': body, 'hole': next_hole,
+                   'button': f'{seg_label} · hole {next_hole}'}
+
+    # ── Money: a casual cup, on the hole that ends it ───────────────────
+    last_hole = next_hole is None
+    money = (_tc_money(summary, st, final=True)
+             if last_hole and st['all_decided'] else None)
+
+    # ── The rows the keypad reads ───────────────────────────────────────
+    gross = _gross_index(foursome)
+    players = {}
+    for m in on_hole:
+        here = next(h for h in m['holes'] if h['hole'] == hole)
+        by_score = {s['player_id']: s for s in here.get('scores') or []}
+        for p in m['players']:
+            pid = p['player_id']
+            if p.get('is_phantom') or pid in players or pid not in by_pid:
+                continue
+            # The engine's own allocation for the hole. **In the Foursomes it
+            # is already the SIDE's** — one ball, one allocation, the same
+            # figure on both partners — so nothing is re-derived here.
+            strokes = (by_score.get(pid) or {}).get('strokes') or 0
+            players[pid] = {
+                'player_id': pid,
+                'first'    : first.get(pid, ''),
+                'side'     : p['team_number'],
+                'strokes'  : strokes,
+                'gross'    : gross.get(pid, {}).get(hole),
+            }
+    rows = sorted(players.values(), key=lambda r: rank.get(r['player_id'], 99))
+
+    seg0 = on_hole[0]
+    seg_holes = [h['hole'] for h in seg0['holes']]
+    one_segment = len({m['segment'] for m in on_hole}) == 1
+    seg_label = (seg0['segment'].title() if one_segment and (
+        len(on_hole) > 1 or seg0['segment'] != 'singles')
+        else (seg0.get('label') or seg0['segment'].title()))
+    return {
+        'hole'           : hole,
+        'par'            : seg0['holes'][seg_holes.index(hole)].get('par'),
+        'segment'        : seg0['segment'],
+        'segment_label'  : seg_label,
+        'span'           : _tc_span(seg_holes),
+        'hole_in_segment': seg_holes.index(hole) + 1,
+        'segment_holes'  : len(seg_holes),
+        'kind'           : _TC_KIND.get(seg0['segment'], seg0['segment']),
+        'tournament'     : is_cup,
+        'team_names'     : st['team_names'],
+        'team_colours'   : [summary.get('team1_colour'),
+                            summary.get('team2_colour')],
+        'hole_complete'  : all(l['played'] or l['dead'] for l in lines)
+                           and any(l['played'] for l in lines),
+        # Six tiles a match is the segment; two matches of them would double
+        # the tray, and the leaderboard carries the Singles' strips.
+        'show_tiles'     : len(lines) == 1,
+        'lines'          : lines,
+        'cup'            : st['cup'],
+        'cup_total'      : cup_total,
+        'next'           : nxt,
+        'money'          : money,
+        'last_hole'      : last_hole,
+        'round_over'     : last_hole and st['all_decided'],
+        'players'        : rows,
+    }
+
+
+def _tc_cup_total(foursome, summary, st) -> dict | None:
+    """The whole team cup beside this group's four points, or None."""
+    ctx = summary.get('cup')
+    if not ctx or not ctx.get('points_available'):
+        return None
+    team_names = st['team_names']
+    c1 = float(ctx.get('team1_points') or 0)
+    c2 = float(ctx.get('team2_points') or 0)
+    to_win = float(ctx.get('to_win') or 0)
+    n1 = ctx.get('team1_name') or team_names[0]
+    n2 = ctx.get('team2_name') or team_names[1]
+    cup_name = getattr(getattr(foursome.round, 'tournament', None),
+                       'name', '') or 'The cup'
+    if to_win and max(c1, c2) >= to_win:
+        line = f'{n1 if c1 > c2 else n2} have won the {cup_name}'
+    else:
+        from services.live_activity_triple_cup import _groups_still_out
+        line = (f'{n1} need {_tc_pts(max(to_win - c1, 0))} more, '
+                f'{n2} {_tc_pts(max(to_win - c2, 0))}')
+        out = _groups_still_out(foursome.round)
+        if out:
+            line += f' · {out}'
+    return {
+        'name'        : cup_name,
+        'team1_points': c1,
+        'team2_points': c2,
+        'team1'       : _tc_pts(c1),
+        'team2'       : _tc_pts(c2),
+        'total'       : float(ctx['points_available']),
+        'to_win'      : f'{_tc_pts(to_win)} to win' if to_win else '',
+        'line'        : line,
+    }
+
+
+def triple_cup_board(foursome, summary: dict | None = None) -> dict:
+    """What the leaderboard's `TripleCupBoard` draws for one group.
+
+    The cup, the matches by segment, and the money — the three things that
+    left score entry (`handoff-triple-cup-score-entry`, 11 Nov 2026). Built
+    from `_tc_state` as of the LAST hole, which is the same writer the tray
+    uses as of the hole on screen: the latest tray and the board therefore
+    agree by construction.
+
+    Takes the summary the leaderboard already built, so a board costs no
+    second walk of the round.
+    """
+    summary = summary or triple_cup_summary(foursome)
+    if not summary or not summary.get('matches'):
+        return {}
+    from services.hole_plan import play_order
+    order = play_order(foursome.round, foursome) or list(range(1, 19))
+    st = _tc_state(foursome, summary, len(order) - 1)
+    pos_of = st['pos_of']
+
+    # How far round the group is, in holes PLAYED — never a hole number.
+    played_pos = [pos_of[h['hole']] for m in summary['matches']
+                  for h in m['holes']
+                  if h.get('winner') and h['hole'] in pos_of]
+    thru = len(set(played_pos))
+
+    blocks = []
+    for m in summary['matches']:
+        line = _tc_public(st['lines'][m['match_number']])
+        seg_holes = [h['hole'] for h in m['holes']]
+        if not line['decided'] and not line['thru']:
+            line['sub'] = f'starts {seg_holes[0]}' if seg_holes else ''
+            line['head'], line['margin'] = '', ''
+        tag = ('final' if line['decided']
+               else 'playing' if line['thru'] else 'to come')
+        if blocks and blocks[-1]['segment'] == m['segment']:
+            b = blocks[-1]
+            b['lines'].append(line)
+            tags = {b['tag'], tag}
+            b['tag'] = ('playing' if 'playing' in tags or tags == {
+                'final', 'to come'} else tag)
+            continue
+        span = _tc_span(seg_holes)
+        what = _TC_BLOCK_SUB.get(m['segment'], '')
+        blocks.append({
+            'segment': m['segment'],
+            'label'  : m['segment'].title() if m['segment'] != 'singles'
+                       or summary.get('group_size') != 2
+                       else (m.get('label') or 'Singles'),
+            'sub'    : ' · '.join(x for x in (span, what) if x),
+            'tag'    : tag,
+            'lines'  : [line],
+        })
+
+    over = st['all_decided']
+    n = len(summary['matches'])
+    cup = dict(st['cup'])
+    cup['label'] = (cup['label'] if over or not thru
+                    else f'{cup["label"]} · thru {thru}')
+    cup['right'] = ('Round over' if over
+                    else f'{st["n_decided"]} of {n} decided')
+    cup['over'] = over
+    return {
+        'tournament'  : st['is_cup'],
+        'team_names'  : st['team_names'],
+        'team_colours': [summary.get('team1_colour'),
+                         summary.get('team2_colour')],
+        'thru'        : thru,
+        'over'        : over,
+        'cup'         : cup,
+        'blocks'      : blocks,
+        'money'       : _tc_money(summary, st, final=over),
+    }

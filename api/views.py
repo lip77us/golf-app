@@ -802,7 +802,8 @@ def _build_leaderboard(round_obj: Round) -> dict:
         }
 
     if 'triple_cup' in active_games:
-        from services.triple_cup import triple_cup_summary
+        from services.triple_cup import (triple_cup_summary,
+                                         triple_cup_board)
         games['triple_cup'] = {
             'label'   : 'One Round Ryder Cup',
             'by_group': [
@@ -813,7 +814,10 @@ def _build_leaderboard(round_obj: Round) -> dict:
                  'tee_time': fs.tee_time.strftime('%H:%M') if fs.tee_time else None,
                  'player_ids': list(
                      fs.memberships.values_list('player_id', flat=True)),
-                 'summary': _tcs}
+                 'summary': _tcs,
+                 # What `TripleCupBoard` draws: the cup, the matches and the
+                 # money, composed by the writer the score-entry tray uses.
+                 'board': triple_cup_board(fs, _tcs)}
                 for fs in foursomes
                 for _tcs in (triple_cup_summary(fs),)
                 if _tcs is not None
@@ -4294,7 +4298,15 @@ class CasualRoundListView(APIView):
                 from scoring.models import HoleScore as _HS
                 from django.db.models import Sum as _Sum
                 from services import settlement
-                if chosen_fs is not None:
+                # **No gross on a round with a shared ball** (Paul, 11 Nov
+                # 2026). A Triple Cup plays six holes of alternate shot, so
+                # the eighteen numbers on a golfer's card are not eighteen of
+                # his own — the total is neither a real score nor a postable
+                # one, and `82` on the card says it is. The same set the
+                # board's Stroke Play tab is withheld for.
+                shared_ball = {'triple_cup', 'scramble'} & set(
+                    r.active_games or [])
+                if chosen_fs is not None and not shared_ball:
                     my_gross = (
                         _HS.objects
                         .filter(foursome=chosen_fs, player=requesting_player,
@@ -6249,7 +6261,7 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
     wants = {'annandale_friday', 'sixes', 'rabbit', 'survivor',
              'low_net_round', 'points_531', 'wolf', 'vegas',
              'fourball', 'match_18', 'nassau', 'nassau_nine', 'skins',
-             'sequoya_threes'} & active
+             'sequoya_threes', 'triple_cup'} & active
     # **The skins POOL, only where it owns the entry screen.** A pool rides
     # as a side game on a sixty-player tournament, where its card would be a
     # pool summary computed on every posted score for a tray nobody draws
@@ -6335,6 +6347,13 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
                     out['vegas_hole'] = card
             # …and Fourball's, which reports the best balls, the match and
             # whether the hole still counts.
+            # Triple Cup's tray: the hole, the match it belongs to and the
+            # cup as of that hole.
+            if 'triple_cup' in wants and hole_number:
+                from services.triple_cup import triple_cup_hole_card
+                card = triple_cup_hole_card(foursome, hole_number)
+                if card:
+                    out['triple_cup_hole'] = card
             if 'fourball' in wants and hole_number:
                 from services.fourball import fourball_hole_card
                 card = fourball_hole_card(foursome, hole_number)
@@ -8659,6 +8678,19 @@ class FourballHoleCardView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.fourball import fourball_hole_card
         return Response(fourball_hole_card(foursome, int(hole)))
+
+
+class TripleCupHoleCardView(APIView):
+    """GET /api/foursomes/{id}/triple-cup/hole/{hole}/
+
+    One hole's score-entry card. The POST that saves a score returns the same
+    shape under `triple_cup_hole`, so this is only for a hole the screen opens
+    without posting.
+    """
+    def get(self, request, pk, hole):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.triple_cup import triple_cup_hole_card
+        return Response(triple_cup_hole_card(foursome, int(hole)))
 
 
 class VegasHoleCardView(APIView):

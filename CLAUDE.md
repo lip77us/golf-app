@@ -12600,3 +12600,108 @@ build ipa` line first.
 Paul chose 2.14.1 and it was rebuilt under the same build number, which is
 free because nothing reached App Store Connect. `1e8152ac` (2.15.0+63) is in
 history and names a version that does not exist.
+
+## Triple Cup score entry, TripleCupBoard and the lock-screen strip
+
+`~/Downloads/handoff-for-code 24/` (11 Nov 2026) — two packets:
+`handoff-triple-cup-score-entry` and `handoff-triple-cup-lock`. Built and
+tested; **not seen on a device, and nothing here is in a released build.**
+
+### One writer for the tray and the board — `services/triple_cup._tc_state`
+
+`_tc_state(foursome, summary, pos)` composes every match's line and the cup
+score **as of a position in the group's play order**. Two readers:
+
+- `triple_cup_hole_card(foursome, hole)` — the score-entry tray, as of the
+  hole on screen. Sent WITH the save as `triple_cup_hole`, and by
+  `GET /api/foursomes/{id}/triple-cup/hole/{hole}/`.
+- `triple_cup_board(foursome, summary)` — the leaderboard, as of the last
+  hole. Rides each group of the leaderboard's `triple_cup` block as `board`.
+
+So the tray on the 18th and the board cannot say one match two ways, and a
+tray reopened on the 4th reports the cup as it stood THERE (the Points tray's
+bug). A match counts toward the cup only once the hole it was decided on has
+been reached. It decides no golf: winners, margins, results and the `&M` are
+the engine's stored answers.
+
+**Generic over the format.** A hole is one LINE per match covering it — one in
+the Fourball and Foursomes, two in the Singles, the nine plus the overall in
+the two-golfer cup. Only the four-golfer case was drawn and only it is tested.
+
+Every sentence is the server's (`_tc_cup_line`, `_tc_money`): `Team 1 cannot
+lose · 2–2 halves it`, `½ point each`, `Pete and Wendy pay $25 each`.
+
+**Money: one stake a man** (decided in the packet) — a winner nets `+$25
+each`, never the $50 pot share. That was already what `triple_cup_summary`
+settles; only the wording is new. A halved cup says `no money changes hands`.
+No money in a team cup.
+
+### Score entry
+
+`primary == GameIds.tripleCup` is on the keypad and raises
+`TripleCupHoleTray` (`widgets/triple_cup_entry.dart`). The tray reuses
+`TrayEditHeader`, `TrayLabel` and `TrayResultRow`.
+
+**Off the screen:** the standing ribbon's cup score (`_tripleCupRibbon`,
+deleted), `_TripleCupMatchGrid` / `_TripleCupMatchCard` (deleted) and the
+round's scorecard under the hole.
+
+**Kept, as departures from the packet:**
+- `TripleCupPairings` stays above the rows. The packet groups the Singles
+  rows by match and gives each group a header; the rows are NOT regrouped
+  (the Sequoya call: rows never move), so the pairings strip is still what
+  says who plays whom.
+- Foursomes is still the dimmed-partner rows, not two side rows. `_allScored`
+  already treats the partner who is not hitting as not waited for, which is
+  what lets the tray rise on two scores.
+- The hole card and app bar are not restyled (`HoleHeader` is shared).
+- `holes N on the odd holes` in the next-segment note reads `tees off on 7`.
+
+### `CupStrip` — blue from the left, orange from the right
+
+`CupStrip.fills(t1, t2, cells, i)`: a half point is half a cell and what is
+out stays uncoloured between the sides. It does not follow play order. The
+tray, the board and the lock screen all draw this rule; `CupNeedle` is the
+continuous version for a whole team cup.
+
+**The lock screen's `_cells` changed with it.** New cell names `bh` / `oh`
+(half to blue / orange); `halved` is now only the cell where the two halves
+meet. **An installed build does not know `bh` / `oh` and draws them as its
+default grey**, so until a build with the new Swift ships a halved match shows
+as still out on the lock screen. The final card reads `+$5 each` and
+`Moran and Reid pay $5 each`.
+
+### TripleCupBoard and the Scorecard tab
+
+`widgets/triple_cup_board.dart`. `TripleCupBoard` draws `group['board']` —
+cup, matches by segment with tiles, money — and replaces `_TripleCupGroupCard`
+wherever the server sends a board (`canDraw`); the old card is the fallback
+for an older server. In a team cup it is drawn once a group under the existing
+cup scoreboard, NOT as the packet's one-row-a-group list.
+
+The **Scorecard** is its own tab (`__tc_scorecard__`), straight after the
+board: three `HoleGridScorecard`s, one a segment, for the viewer's group or
+the only group. A spectator of a multi-group cup gets no tab. The casual tab
+is labelled `Triple Cup`; a team cup keeps `Cup Detail`.
+
+`tripleCupScorecardBlocks(summary)` is pure: Foursomes is a row a SIDE
+(synthetic negative ids), the Singles run in match order.
+
+Three additions to shared code:
+- `triple_cup_summary` scores carry **`won`** — the ball that won the hole
+  for its side, decided on net against the engine's stored side figure.
+- `HoleGridScorecard.wonColours` + a per-score **`won_team`**. Per score
+  because the Singles run two matches on one hole, so a hole has no single
+  `winner_team`.
+- `HoleGridScorecard.nineTotals` / `NineSplit.none` — a six-hole block draws
+  no OUT / IN / TOT.
+
+### Not built
+The team cup board's groups list and cup-total card; the hole-card pill; the
+keypad header naming the SIDE in the Foursomes; the Dynamic Island changes.
+
+Tests: `scoring/tests/test_triple_cup_hole_card.py` (61, eight of them
+fixture writers under `REGEN_TC_FIXTURES=1`), `api/test_triple_cup_hole_card.py`
+(7), `mobile/test/triple_cup_entry_test.dart` (23),
+`mobile/test/triple_cup_board_test.dart` (19). Eight server mutations, seven
+killed; the eighth found a redundant branch, which was removed.

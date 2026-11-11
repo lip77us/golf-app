@@ -12532,3 +12532,307 @@ class SkinsLedgerRow {
         money: (j['money'] as num?)?.toDouble() ?? 0,
       );
 }
+
+
+// ---------------------------------------------------------------------------
+// Triple Cup — the score-entry card for ONE hole
+// ---------------------------------------------------------------------------
+
+/// One tile in a match's strip: `t1` / `t2` won it, `halved`, `open` (not
+/// played yet) or `dead` (after the close-out).
+class TripleCupTile {
+  final int hole;
+  final String state;
+  const TripleCupTile({required this.hole, required this.state});
+
+  factory TripleCupTile.fromJson(Map<String, dynamic> j) => TripleCupTile(
+        hole: j['hole'] as int? ?? 0,
+        state: j['state'] as String? ?? 'open',
+      );
+}
+
+/// One match on the hole: the hole's own result, and the match as of it.
+///
+/// One in the Fourball and the Foursomes, two in the Singles.
+class TripleCupLine {
+  final int matchNumber;
+  final String segment;
+  final List<String> names;
+
+  /// This match has a result on this hole. False past its close-out, and
+  /// before the hole is scored.
+  final bool played;
+  final bool dead;
+
+  /// 1 or 2, or null for a halved hole.
+  final int? winner;
+  final String? reasonLabel;
+  final int? figure1;
+  final int? figure2;
+
+  /// 1 or 2 — who is ahead (or won); null when level or halved.
+  final int? leader;
+  final String head;
+  final String margin;
+  final String sub;
+  final bool decided;
+  final List<TripleCupTile> tiles;
+
+  const TripleCupLine({
+    required this.matchNumber,
+    required this.segment,
+    required this.names,
+    required this.played,
+    required this.dead,
+    required this.winner,
+    required this.reasonLabel,
+    required this.figure1,
+    required this.figure2,
+    required this.leader,
+    required this.head,
+    required this.margin,
+    required this.sub,
+    required this.decided,
+    required this.tiles,
+  });
+
+  factory TripleCupLine.fromJson(Map<String, dynamic> j) {
+    final r = j['reason'] as Map<String, dynamic>?;
+    final names = (j['names'] as List? ?? const [])
+        .map((e) => '$e').toList();
+    return TripleCupLine(
+      matchNumber: j['match_number'] as int? ?? 0,
+      segment: j['segment'] as String? ?? '',
+      names: [
+        names.isNotEmpty ? names[0] : '',
+        names.length > 1 ? names[1] : '',
+      ],
+      played: j['played'] as bool? ?? false,
+      dead: j['dead'] as bool? ?? false,
+      winner: j['winner'] as int?,
+      reasonLabel: r?['label'] as String?,
+      figure1: (r?['team1'] as num?)?.toInt(),
+      figure2: (r?['team2'] as num?)?.toInt(),
+      leader: j['leader'] as int?,
+      head: j['head'] as String? ?? '',
+      margin: j['margin'] as String? ?? '',
+      sub: j['sub'] as String? ?? '',
+      decided: j['decided'] as bool? ?? false,
+      tiles: (j['tiles'] as List? ?? const [])
+          .map((e) => TripleCupTile.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+/// A cup score: this group's four points, or the whole team cup.
+///
+/// The figures are the server's STRINGS (`1½`), and the points beside them
+/// are only for the strip's geometry.
+class TripleCupScore {
+  final String label;
+  final double team1Points;
+  final double team2Points;
+  final String team1;
+  final String team2;
+  final double total;
+  final String line;
+
+  /// `of 4` on the group's card; `12½ to win` on the whole cup's.
+  final String aside;
+
+  const TripleCupScore({
+    required this.label,
+    required this.team1Points,
+    required this.team2Points,
+    required this.team1,
+    required this.team2,
+    required this.total,
+    required this.line,
+    required this.aside,
+  });
+
+  factory TripleCupScore.fromJson(Map<String, dynamic> j) => TripleCupScore(
+        label: (j['label'] ?? j['name'] ?? '') as String,
+        team1Points: (j['team1_points'] as num?)?.toDouble() ?? 0,
+        team2Points: (j['team2_points'] as num?)?.toDouble() ?? 0,
+        team1: j['team1'] as String? ?? '0',
+        team2: j['team2'] as String? ?? '0',
+        total: (j['total'] as num?)?.toDouble() ?? 4,
+        line: j['line'] as String? ?? '',
+        aside: j['to_win'] as String? ??
+            (j['of'] == null ? '' : 'of ${j['of']}'),
+      );
+}
+
+class TripleCupNext {
+  final String label;
+  final String span;
+  final String title;
+  final String body;
+  final String button;
+  const TripleCupNext({
+    required this.label,
+    required this.span,
+    required this.title,
+    required this.body,
+    required this.button,
+  });
+
+  factory TripleCupNext.fromJson(Map<String, dynamic> j) => TripleCupNext(
+        label: j['label'] as String? ?? '',
+        span: j['span'] as String? ?? '',
+        title: j['title'] as String? ?? '',
+        body: j['body'] as String? ?? '',
+        button: j['button'] as String? ?? '',
+      );
+}
+
+class TripleCupMoney {
+  final String label;
+  final String stake;
+
+  /// 1 or 2; null when the cup was halved and nothing changes hands.
+  final int? winner;
+  final String head;
+  final String amount;
+  final String line;
+  const TripleCupMoney({
+    required this.label,
+    required this.stake,
+    required this.winner,
+    required this.head,
+    required this.amount,
+    required this.line,
+  });
+
+  factory TripleCupMoney.fromJson(Map<String, dynamic> j) => TripleCupMoney(
+        label: j['label'] as String? ?? '',
+        stake: j['stake'] as String? ?? '',
+        winner: j['winner'] as int?,
+        head: j['head'] as String? ?? '',
+        amount: j['amount'] as String? ?? '',
+        line: j['line'] as String? ?? '',
+      );
+}
+
+class TripleCupCardPlayer {
+  final int playerId;
+  final String first;
+  final int side;
+  final int strokes;
+  final int? gross;
+  const TripleCupCardPlayer({
+    required this.playerId,
+    required this.first,
+    required this.side,
+    required this.strokes,
+    required this.gross,
+  });
+
+  factory TripleCupCardPlayer.fromJson(Map<String, dynamic> j) =>
+      TripleCupCardPlayer(
+        playerId: j['player_id'] as int? ?? 0,
+        first: j['first'] as String? ?? '',
+        side: j['side'] as int? ?? 1,
+        strokes: j['strokes'] as int? ?? 0,
+        gross: j['gross'] as int?,
+      );
+}
+
+/// Everything the Triple Cup tray draws for one hole.
+///
+/// **Every sentence arrives written** — what a halved match is worth, when a
+/// cup can no longer be lost, who pays whom. Each is a rule, and a client
+/// composing one would be a second opinion about it.
+class TripleCupHoleCard {
+  final int hole;
+  final String segment;
+  final String segmentLabel;
+  final String span;
+  final String kind;
+  final bool tournament;
+  final List<String> teamNames;
+
+  /// The cup teams' colour NAMES, null on a casual cup.
+  final List<String?> teamColours;
+  final bool holeComplete;
+  final bool showTiles;
+  final List<TripleCupLine> lines;
+  final TripleCupScore cup;
+  final TripleCupScore? cupTotal;
+  final TripleCupNext? next;
+  final TripleCupMoney? money;
+  final bool lastHole;
+  final bool roundOver;
+  final List<TripleCupCardPlayer> players;
+
+  const TripleCupHoleCard({
+    required this.hole,
+    required this.segment,
+    required this.segmentLabel,
+    required this.span,
+    required this.kind,
+    required this.tournament,
+    required this.teamNames,
+    required this.teamColours,
+    required this.holeComplete,
+    required this.showTiles,
+    required this.lines,
+    required this.cup,
+    required this.cupTotal,
+    required this.next,
+    required this.money,
+    required this.lastHole,
+    required this.roundOver,
+    required this.players,
+  });
+
+  /// This golfer's strokes on the hole — the game's own allocation, and in
+  /// the Foursomes the SIDE's.
+  int? strokesFor(int playerId) {
+    for (final p in players) {
+      if (p.playerId == playerId) return p.strokes;
+    }
+    return null;
+  }
+
+  factory TripleCupHoleCard.fromJson(Map<String, dynamic> j) {
+    Map<String, dynamic>? m(String k) => j[k] as Map<String, dynamic>?;
+    final names = (j['team_names'] as List? ?? const ['Team 1', 'Team 2'])
+        .map((e) => '$e').toList();
+    final cols = (j['team_colours'] as List? ?? const [null, null])
+        .map((e) => e as String?).toList();
+    return TripleCupHoleCard(
+      hole: j['hole'] as int? ?? 0,
+      segment: j['segment'] as String? ?? '',
+      segmentLabel: j['segment_label'] as String? ?? '',
+      span: j['span'] as String? ?? '',
+      kind: j['kind'] as String? ?? '',
+      tournament: j['tournament'] as bool? ?? false,
+      teamNames: [
+        names.isNotEmpty ? names[0] : 'Team 1',
+        names.length > 1 ? names[1] : 'Team 2',
+      ],
+      teamColours: [
+        cols.isNotEmpty ? cols[0] : null,
+        cols.length > 1 ? cols[1] : null,
+      ],
+      holeComplete: j['hole_complete'] as bool? ?? false,
+      showTiles: j['show_tiles'] as bool? ?? true,
+      lines: (j['lines'] as List? ?? const [])
+          .map((e) => TripleCupLine.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      cup: TripleCupScore.fromJson(m('cup') ?? const {}),
+      cupTotal: m('cup_total') == null
+          ? null : TripleCupScore.fromJson(m('cup_total')!),
+      next: m('next') == null ? null : TripleCupNext.fromJson(m('next')!),
+      money: m('money') == null ? null : TripleCupMoney.fromJson(m('money')!),
+      lastHole: j['last_hole'] as bool? ?? false,
+      roundOver: j['round_over'] as bool? ?? false,
+      players: (j['players'] as List? ?? const [])
+          .map((e) => TripleCupCardPlayer.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}

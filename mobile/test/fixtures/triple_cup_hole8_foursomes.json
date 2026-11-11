@@ -1,0 +1,117 @@
+{
+  "hole": 8,
+  "par": 5,
+  "segment": "foursomes",
+  "segment_label": "Foursomes",
+  "span": "holes 7–12",
+  "hole_in_segment": 2,
+  "segment_holes": 6,
+  "kind": "one ball a side",
+  "tournament": false,
+  "team_names": [
+    "Team 1",
+    "Team 2"
+  ],
+  "team_colours": [
+    null,
+    null
+  ],
+  "hole_complete": true,
+  "show_tiles": true,
+  "lines": [
+    {
+      "match_number": 2,
+      "segment": "foursomes",
+      "label": "Foursomes",
+      "names": [
+        "Paul + Hal",
+        "Pete + Wendy"
+      ],
+      "leader": null,
+      "head": "All square",
+      "margin": "AS",
+      "sub": "thru 2 of 6 · 4 to play",
+      "decided": false,
+      "thru": 2,
+      "tiles": [
+        {
+          "hole": 7,
+          "state": "halved"
+        },
+        {
+          "hole": 8,
+          "state": "halved"
+        },
+        {
+          "hole": 9,
+          "state": "open"
+        },
+        {
+          "hole": 10,
+          "state": "open"
+        },
+        {
+          "hole": 11,
+          "state": "open"
+        },
+        {
+          "hole": 12,
+          "state": "open"
+        }
+      ],
+      "played": true,
+      "dead": false,
+      "winner": null,
+      "reason": {
+        "label": "net",
+        "team1": 5,
+        "team2": 5
+      }
+    }
+  ],
+  "cup": {
+    "label": "The cup",
+    "team1_points": 1.0,
+    "team2_points": 0.0,
+    "team1": "1",
+    "team2": "0",
+    "of": "4",
+    "total": 4.0,
+    "line": "3 points still out · 2½ wins"
+  },
+  "cup_total": null,
+  "next": null,
+  "money": null,
+  "last_hole": false,
+  "round_over": false,
+  "players": [
+    {
+      "player_id": 77,
+      "first": "Paul",
+      "side": 1,
+      "strokes": 0,
+      "gross": 5
+    },
+    {
+      "player_id": 78,
+      "first": "Hal",
+      "side": 1,
+      "strokes": 0,
+      "gross": null
+    },
+    {
+      "player_id": 79,
+      "first": "Pete",
+      "side": 2,
+      "strokes": 0,
+      "gross": 5
+    },
+    {
+      "player_id": 80,
+      "first": "Wendy",
+      "side": 2,
+      "strokes": 0,
+      "gross": null
+    }
+  ]
+}

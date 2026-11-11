@@ -104,5 +104,16 @@ class CasualListResultTests(TestCase):
         submit_round(fs, {h: [(self.me, 4), (self.pal, 5)] for h in range(1, 19)})
 
         item = self.client.get(self.url, {'status': 'complete'}).data[0]
-        self.assertEqual(item['my_gross'], 72)
+        # **And no gross either** (Paul, 11 Nov 2026): six of a Triple Cup's
+        # holes are alternate shot, so the total on a golfer's card is not
+        # eighteen of his own and is not a postable score. This asserted 72.
+        self.assertIsNone(item['my_gross'])
         self.assertIsNone(item['my_net'])
+
+    def test_a_scramble_round_has_no_gross_either(self):
+        rnd, fs = self._round('complete')
+        rnd.active_games = ['skins', 'scramble']
+        rnd.save(update_fields=['active_games'])
+        submit_round(fs, {h: [(self.me, 4), (self.pal, 5)] for h in range(1, 19)})
+        item = self.client.get(self.url, {'status': 'complete'}).data[0]
+        self.assertIsNone(item['my_gross'])

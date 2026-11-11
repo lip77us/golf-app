@@ -1,0 +1,166 @@
+{
+  "hole": 16,
+  "par": 3,
+  "segment": "singles",
+  "segment_label": "Singles",
+  "span": "holes 13–18",
+  "hole_in_segment": 4,
+  "segment_holes": 6,
+  "kind": "singles",
+  "tournament": false,
+  "team_names": [
+    "Team 1",
+    "Team 2"
+  ],
+  "team_colours": [
+    null,
+    null
+  ],
+  "hole_complete": true,
+  "show_tiles": false,
+  "lines": [
+    {
+      "match_number": 3,
+      "segment": "singles",
+      "label": "Singles 1",
+      "names": [
+        "Paul",
+        "Pete"
+      ],
+      "leader": 1,
+      "head": "Paul",
+      "margin": "1 UP",
+      "sub": "thru 4 of 6 · 2 to play",
+      "decided": false,
+      "thru": 4,
+      "tiles": [
+        {
+          "hole": 13,
+          "state": "t2"
+        },
+        {
+          "hole": 14,
+          "state": "halved"
+        },
+        {
+          "hole": 15,
+          "state": "t1"
+        },
+        {
+          "hole": 16,
+          "state": "t1"
+        },
+        {
+          "hole": 17,
+          "state": "open"
+        },
+        {
+          "hole": 18,
+          "state": "open"
+        }
+      ],
+      "played": true,
+      "dead": false,
+      "winner": 1,
+      "reason": {
+        "label": "net",
+        "team1": 3,
+        "team2": 4
+      }
+    },
+    {
+      "match_number": 4,
+      "segment": "singles",
+      "label": "Singles 2",
+      "names": [
+        "Hal",
+        "Wendy"
+      ],
+      "leader": 1,
+      "head": "Hal",
+      "margin": "2 UP",
+      "sub": "thru 4 of 6 · 2 to play",
+      "decided": false,
+      "thru": 4,
+      "tiles": [
+        {
+          "hole": 13,
+          "state": "t1"
+        },
+        {
+          "hole": 14,
+          "state": "t1"
+        },
+        {
+          "hole": 15,
+          "state": "halved"
+        },
+        {
+          "hole": 16,
+          "state": "halved"
+        },
+        {
+          "hole": 17,
+          "state": "open"
+        },
+        {
+          "hole": 18,
+          "state": "open"
+        }
+      ],
+      "played": true,
+      "dead": false,
+      "winner": null,
+      "reason": {
+        "label": "net",
+        "team1": 3,
+        "team2": 3
+      }
+    }
+  ],
+  "cup": {
+    "label": "The cup",
+    "team1_points": 1.5,
+    "team2_points": 0.5,
+    "team1": "1½",
+    "team2": "½",
+    "of": "4",
+    "total": 4.0,
+    "line": "2 points still out · 2½ wins"
+  },
+  "cup_total": null,
+  "next": null,
+  "money": null,
+  "last_hole": false,
+  "round_over": false,
+  "players": [
+    {
+      "player_id": 85,
+      "first": "Paul",
+      "side": 1,
+      "strokes": 0,
+      "gross": 3
+    },
+    {
+      "player_id": 86,
+      "first": "Hal",
+      "side": 1,
+      "strokes": 0,
+      "gross": 3
+    },
+    {
+      "player_id": 87,
+      "first": "Pete",
+      "side": 2,
+      "strokes": 0,
+      "gross": 4
+    },
+    {
+      "player_id": 88,
+      "first": "Wendy",
+      "side": 2,
+      "strokes": 0,
+      "gross": 3
+    }
+  ]
+}

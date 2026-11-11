@@ -37,6 +37,14 @@ class NineSplit {
         front.isNotEmpty && back.isNotEmpty);
   }
 
+  /// No summary columns at all: every hole in one run.
+  ///
+  /// For a card that is a SEGMENT rather than a round — a Triple Cup third
+  /// is six holes, where an OUT after the 9th and a TOT of 7–12 are sums of
+  /// nothing anybody is counting.
+  factory NineSplit.none(List<int> holeRange) =>
+      NineSplit._(List<int>.of(holeRange), const [], false, false, false);
+
   /// How many summary columns the card carries.
   int get count => (showOut ? 1 : 0) + (showIn ? 1 : 0) + (showTot ? 1 : 0);
 

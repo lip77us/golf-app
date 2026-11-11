@@ -1,0 +1,124 @@
+{
+  "hole": 6,
+  "par": 4,
+  "segment": "fourball",
+  "segment_label": "Fourball",
+  "span": "holes 1–6",
+  "hole_in_segment": 6,
+  "segment_holes": 6,
+  "kind": "best ball",
+  "tournament": false,
+  "team_names": [
+    "Team 1",
+    "Team 2"
+  ],
+  "team_colours": [
+    null,
+    null
+  ],
+  "hole_complete": true,
+  "show_tiles": true,
+  "lines": [
+    {
+      "match_number": 1,
+      "segment": "fourball",
+      "label": "Fourball",
+      "names": [
+        "Paul + Hal",
+        "Pete + Wendy"
+      ],
+      "leader": 1,
+      "head": "Paul + Hal win",
+      "margin": "2 UP",
+      "sub": "1 point to Team 1",
+      "decided": true,
+      "thru": 6,
+      "tiles": [
+        {
+          "hole": 1,
+          "state": "t1"
+        },
+        {
+          "hole": 2,
+          "state": "halved"
+        },
+        {
+          "hole": 3,
+          "state": "t2"
+        },
+        {
+          "hole": 4,
+          "state": "t1"
+        },
+        {
+          "hole": 5,
+          "state": "halved"
+        },
+        {
+          "hole": 6,
+          "state": "t1"
+        }
+      ],
+      "played": true,
+      "dead": false,
+      "winner": 1,
+      "reason": {
+        "label": "net",
+        "team1": 4,
+        "team2": 5
+      }
+    }
+  ],
+  "cup": {
+    "label": "The cup",
+    "team1_points": 1.0,
+    "team2_points": 0.0,
+    "team1": "1",
+    "team2": "0",
+    "of": "4",
+    "total": 4.0,
+    "line": "3 points still out · 2½ wins"
+  },
+  "cup_total": null,
+  "next": {
+    "label": "Foursomes",
+    "span": "holes 7–12",
+    "title": "One ball a side from 7",
+    "body": "Partners alternate shots and tee shots. Pick who tees off on 7 before you leave the tee.",
+    "hole": 7,
+    "button": "Foursomes · hole 7"
+  },
+  "money": null,
+  "last_hole": false,
+  "round_over": false,
+  "players": [
+    {
+      "player_id": 73,
+      "first": "Paul",
+      "side": 1,
+      "strokes": 0,
+      "gross": 4
+    },
+    {
+      "player_id": 74,
+      "first": "Hal",
+      "side": 1,
+      "strokes": 0,
+      "gross": 5
+    },
+    {
+      "player_id": 75,
+      "first": "Pete",
+      "side": 2,
+      "strokes": 0,
+      "gross": 5
+    },
+    {
+      "player_id": 76,
+      "first": "Wendy",
+      "side": 2,
+      "strokes": 0,
+      "gross": 6
+    }
+  ]
+}

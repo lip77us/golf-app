@@ -7,6 +7,7 @@ import '../config.dart';
 import '../game_catalog.dart';
 import '../game_colors.dart';
 import '../utils/match_notation.dart';
+import '../widgets/triple_cup_board.dart';
 import '../widgets/match_panel.dart';
 import '../widgets/solo_board.dart';
 import '../widgets/forty_balls_board.dart';
@@ -160,6 +161,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     games.addAll(lb.activeGames.where((g) =>
         !(lb.isCupRound && _rawSinglesKeys.contains(g)) &&
         g != 'low_net_round'));
+    // 2.5. Triple Cup's SCORECARD is a tab of its own, straight after the
+    // board (handoff-triple-cup-score-entry, 11 Nov 2026): three blocks of
+    // six holes for one group. It left score entry, and a board carrying the
+    // cup, four matches and three grids is one nobody scrolls.
+    if (games.contains('triple_cup') &&
+        _tripleCupScorecardGroup(lb) != null) {
+      games.insert(games.indexOf('triple_cup') + 1, _kTcScorecardTab);
+    }
 
     // 3. "My Foursome" — only earns a tab in multi-foursome rounds (tournaments,
     //    multi-group play), where it isolates the viewer's group. In a single-
@@ -697,6 +706,18 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
                   tournamentName: lb.cupName ?? lb.tournamentName ?? 'Cup',
                 );
               }
+              if (gameKey == _kTcScorecardTab) {
+                final g = _tripleCupScorecardGroup(lb);
+                if (g == null) return const SizedBox.shrink();
+                return RefreshIndicator(
+                  onRefresh: () => rp.loadLeaderboard(widget.roundId),
+                  child: TripleCupScorecard(
+                    group: g,
+                    heading: lb.tournamentId == null
+                        ? 'Scorecard' : 'Scorecard · your group',
+                  ),
+                );
+              }
               if (gameKey == '__my_foursome__') {
                 final myPid = context.read<AuthProvider>().player?.id;
                 return RefreshIndicator(
@@ -754,6 +775,28 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     );
   }
 
+  static const _kTcScorecardTab = '__tc_scorecard__';
+
+  /// The group the Scorecard tab draws: the viewer's own, else the only one.
+  /// Null when there is none to choose — a spectator of a six-group cup has
+  /// no group, and guessing one would be a card about somebody else.
+  Map<String, dynamic>? _tripleCupScorecardGroup(Leaderboard lb) {
+    final data = lb.games['triple_cup']?.data as Map<String, dynamic>?;
+    final groups = (data?['by_group'] as List? ?? const [])
+        .cast<Map<String, dynamic>>()
+        .where(TripleCupBoard.canDraw)
+        .toList();
+    if (groups.isEmpty) return null;
+    final myPid = context.read<AuthProvider>().player?.id;
+    for (final g in groups) {
+      if (myPid != null &&
+          ((g['player_ids'] as List?)?.contains(myPid) ?? false)) {
+        return g;
+      }
+    }
+    return groups.length == 1 ? groups.first : null;
+  }
+
   String _label(String g, [Leaderboard? lb]) {
     // Cup tab title tracks the cup competition's display name — falls
     // back to a generic "Cup" only when no cup name is set on the
@@ -765,7 +808,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     if (g == 'settlement') return 'Settlement';
     // Triple Cup is one tab now — cup total + clinch bar over the match cards,
     // viewer's own group first.
-    if (g == 'triple_cup') return 'Cup Detail';
+    if (g == _kTcScorecardTab) return 'Scorecard';
+    // A casual cup's tab is the game's name; in a team cup the cup's own tab
+    // already carries the name, so this one is the detail under it.
+    if (g == 'triple_cup') {
+      return lb?.tournamentId == null ? 'Triple Cup' : 'Cup Detail';
+    }
     if (g == 'match_18') return 'Singles Match';
     // The packet's switcher reads "Nassau · Skins": the game's matches ARE
     // Nassaus, and its side games never include a plain Nassau to collide
@@ -979,7 +1027,20 @@ class _GameView extends StatelessWidget {
         };
         return _ByGroupView(
           data: sortedData,
-          builder: _TripleCupGroupCard.new,
+          // `TripleCupBoard` where the server sends one; the older card
+          // otherwise, so a board is never blank against an older server.
+          builder: ({required Map<String, dynamic> group}) =>
+              TripleCupBoard.canDraw(group)
+              ? TripleCupBoard(
+                  group: group,
+                  mine: group['_is_my_group'] == true,
+                  heading: group['_single_group'] == true
+                      ? null
+                      : ['Group ${group['group_number']}',
+                         if (_fmtCupTeeTime(group['tee_time'] as String?)
+                             case final t?) t].join(' · '),
+                )
+              : _TripleCupGroupCard(group: group),
           header: tournamentId != null
               ? _TripleCupScoreboardLoader(
                   tournamentId: tournamentId!,

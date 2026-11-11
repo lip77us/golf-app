@@ -117,8 +117,27 @@ class StripTests(_Base):
             {'status': 'complete', 'result': 'halved'},
             {'status': 'in_progress', 'result': None},
         ]}
+        # Blue from the left, orange from the right: 1½ – 1½ of four.
         self.assertEqual(_cells(summary),
-                         ['blue', 'orange', 'halved', 'out'])
+                         ['blue', 'bh', 'oh', 'orange'])
+
+    def test_the_cells_do_not_follow_play_order(self):
+        """Changed 11 Nov 2026 to match the needle and the score-entry
+        tray: orange's point is on the right even when it came first."""
+        from services.live_activity_triple_cup import _cells
+        live = {'status': 'in_progress', 'result': None}
+        self.assertEqual(
+            _cells({'matches': [
+                {'status': 'complete', 'result': 'team2'}, live, live, live]}),
+            ['out', 'out', 'out', 'orange'])
+
+    def test_the_halves_meet_in_one_cell_at_the_finish(self):
+        from services.live_activity_triple_cup import _cells
+        won = {'status': 'complete', 'result': 'team1'}
+        self.assertEqual(
+            _cells({'matches': [
+                won, {'status': 'complete', 'result': 'halved'}, won, won]}),
+            ['blue', 'blue', 'blue', 'halved'])
 
 
 class SidesLineTests(_Base):
@@ -947,6 +966,19 @@ class CasualFinalTests(_Base):
         st = self._final()['state']
         self.assertEqual(st['to_play'], 'WINNERS TAKE ALL')
         self.assertEqual(st['colour'], 'mint')
+
+    def test_the_money_is_one_stake_a_man(self):
+        """Decided 11 Nov 2026: settled the way Fourball settles, so a
+        winner sees what he NETS (`+$5 each`), never his share of the pot,
+        and who pays it."""
+        self._play_out()
+        s = self._final(who='Tom Hayes')
+        self.assertEqual(s['state']['word'], '+$5 each')
+        self.assertEqual(s['sides'][0]['names'],
+                         'Moran and Reid pay $5 each')
+        loser = self._final(who='Sam Reid')
+        self.assertEqual(loser['state']['word'], '−$5')
+        self.assertEqual(loser['sides'][0]['names'], 'Pay Naylor and Hayes')
 
     def test_all_four_cells_are_readable_at_the_end(self):
         """The segments won are readable off the strip, which is the strip

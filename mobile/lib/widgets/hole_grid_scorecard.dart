@@ -134,6 +134,19 @@ class HoleGridScorecard extends StatefulWidget {
   /// without a header a side.
   final Map<int, Color> teamColours;
 
+  /// The tint for a cell that carries `won_team` — the score that won the
+  /// hole for its side, in that side's colour.
+  ///
+  /// Triple Cup sends it per SCORE because its Singles run two matches on
+  /// one hole, so a hole has no single winning side for `winner_team` to
+  /// name. Falls back to the app's blue and orange. Unused by every card
+  /// whose scores carry no `won_team`.
+  final Map<int, Color> wonColours;
+
+  /// Draw OUT / IN / TOT. False for a card that is a segment of a round
+  /// rather than the round — see [NineSplit.none].
+  final bool nineTotals;
+
   const HoleGridScorecard({
     super.key,
     required this.holes,
@@ -141,6 +154,8 @@ class HoleGridScorecard extends StatefulWidget {
     this.showStrokes = true,
     this.title = 'Scorecard',
     this.teamColours = const {},
+    this.wonColours = const {},
+    this.nineTotals = true,
     this.showPoints = false,
     this.legend = 'green = skin winner',
     this.holesInPlay = const [],
@@ -206,7 +221,8 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
       // pinned outside it — and OUT / IN / TOT sit among them, so the offset
       // comes from the split rather than from a cell count: a back-nine hole
       // is one summary column further right than its position suggests.
-      final split = NineSplit.of(order);
+      final split = widget.nineTotals
+          ? NineSplit.of(order) : NineSplit.none(order);
       final edge  = split.rightEdgeOf(hole, _cellW, _summaryW)
           ?? (pos + 1) * _cellW;
       final target = (edge - _ctrl.position.viewportDimension)
@@ -419,7 +435,13 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
       Color? cellBg;
       Color? cellFg;
       Border? cellBorder;
-      if (teamWin) {
+      final wonTeam = mine['won_team'] as int?;
+      if (wonTeam != null) {
+        final c = widget.wonColours[wonTeam] ??
+            (wonTeam == 1 ? GameColors.team1 : GameColors.team2);
+        cellBg = c.withValues(alpha: 0.14);
+        cellFg = c;
+      } else if (teamWin) {
         cellBg = winnerTeam == 1 ? GameColors.team1Bg : GameColors.team2Bg;
         cellFg = winnerTeam == 1 ? GameColors.team1   : GameColors.team2;
       } else if (isWinner) {
@@ -472,7 +494,8 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
       );
     }
 
-    final split = NineSplit.of(visibleHoles);
+    final split = widget.nineTotals
+        ? NineSplit.of(visibleHoles) : NineSplit.none(visibleHoles);
 
     Widget summaryCell(String text) => SizedBox(
           width: _summaryW, height: _rowH,
