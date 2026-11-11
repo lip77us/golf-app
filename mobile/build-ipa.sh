@@ -42,16 +42,19 @@ if [[ ! -f "$pkg" ]]; then
   echo "FAIL: $pkg was not generated — cannot raise its platform." >&2
   exit 1
 fi
-if grep -q '\.iOS("13' "$pkg"; then
-  sed -i '' 's/\.iOS("13\.[0-9]*")/.iOS("15.0")/' "$pkg"
-  echo "Raised the generated Swift package to iOS 15.0."
-fi
-if ! grep -q '\.iOS("15' "$pkg"; then
-  echo "FAIL: the generated Swift package is not at iOS 15 and could not be" >&2
-  echo "      raised — its platform line has changed shape:" >&2
-  grep -A3 'platforms:' "$pkg" | sed 's/^/      /' >&2
-  exit 1
-fi
+raise_pkg() {
+  if grep -q '\.iOS("13' "$pkg"; then
+    sed -i '' 's/\.iOS("13\.[0-9]*")/.iOS("15.0")/' "$pkg"
+    echo "Raised the generated Swift package to iOS 15.0."
+  fi
+  if ! grep -q '\.iOS("15' "$pkg"; then
+    echo "FAIL: the generated Swift package is not at iOS 15 and could not be" >&2
+    echo "      raised — its platform line has changed shape:" >&2
+    grep -A3 'platforms:' "$pkg" | sed 's/^/      /' >&2
+    exit 1
+  fi
+}
+raise_pkg
 
 # 2. Build WITHOUT pub. Editing in place was the third answer and it is also
 #    wrong on its own: `flutter build ipa` re-runs pub resolution after a
@@ -68,7 +71,47 @@ fi
 # than after.
 rm -rf build/ios/ipa
 
-flutter build ipa --no-pub
+# 4. The fourth way this fails, and the first that is not this script's
+#    doing (2.14.1+63, 10 Nov 2026 — three failed archives in one evening).
+#    The package was raised to 15.0, the build ran with --no-pub, and Xcode
+#    still archived it at 13.0: a SECOND `pub get` ran while the archive was
+#    starting and regenerated it. `pubspec.lock` moves during the build,
+#    which `--no-pub` never does on its own.
+#
+#    It follows a change the IDE can see — `flutter clean` wiping
+#    `.dart_tool`, or `pubspec.yaml` being edited for the version bump — by
+#    up to forty seconds, which is long enough to land inside the archive.
+#    VS Code was open with the Dart extension's `flutter daemon` running;
+#    that is the likely author, inferred from timestamps rather than caught.
+#    Both times the same tree built first try once the lockfile had settled.
+#
+#    Nothing here can stop another process running pub, so the script does
+#    what a person would: raise the package again and build once more. By
+#    then the stray fetch has happened and there is nothing left to trigger
+#    another. One retry only — a second failure is something else.
+for attempt in 1 2; do
+  lock_before="$(stat -f %m pubspec.lock 2>/dev/null || echo 0)"
+  if flutter build ipa --no-pub; then
+    break
+  fi
+  lock_after="$(stat -f %m pubspec.lock 2>/dev/null || echo 0)"
+  echo
+  if [[ "$attempt" == 1 ]] && grep -q '\.iOS("13' "$pkg" 2>/dev/null \
+       && [[ "$lock_after" != "$lock_before" ]]; then
+    echo "The generated Swift package went back to iOS 13 DURING the build:"
+    echo "pubspec.lock changed while it ran, so something else ran \`pub get\`"
+    echo "(most likely an open IDE). Raising it again and building once more."
+    echo
+    raise_pkg
+    rm -rf build/ios/ipa
+    continue
+  fi
+  if grep -q '\.iOS("13' "$pkg" 2>/dev/null; then
+    echo "FAIL: the generated Swift package is at iOS 13 after the build."
+    echo "      Close the IDE and run:   ./build-ipa.sh --no-clean"
+  fi
+  exit 1
+done
 
 # Re-check AFTER the archive: if the build regenerated the package despite the
 # above, this is where we find out, and the failure names the cause.

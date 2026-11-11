@@ -12559,3 +12559,44 @@ the tray's `banks next` line cover both) and a `Settle up` app-bar button
 Tests: the `one screen, however you arrive` group in
 `mobile/test/banker_entry_test.dart` (5). Four mutations, all killed. **Not
 seen on a device.**
+
+### `build-ipa.sh` — a fourth way to archive at iOS 13, and not the script's
+
+2.14.1+63, 10 Nov 2026, three failed archives in one evening. The script
+raised the generated package to 15.0 (`Raised …` in the log), built with
+`--no-pub`, and Xcode still refused it: *"requires minimum platform version
+15.0 … this target supports 13.0"*.
+
+**A second `pub get` ran while the archive was starting.** `pubspec.lock`,
+`.dart_tool/package_config.json` and the generated `Package.swift` all carry
+one timestamp inside the build window — and `flutter build ipa --no-pub`
+never writes a lockfile (the tool's only `pub.get` is behind `shouldRunPub`).
+It follows a change the IDE can see by up to forty seconds:
+
+| run | what had just changed | result |
+| --- | --- | --- |
+| 1 | version bump, then `flutter clean` | lock rewritten mid-build, archived at 13 |
+| 2 | nothing (`--no-clean`) | built |
+| 3 | `pubspec.yaml` edited 27s earlier (2.15.0 → 2.14.1) | lock rewritten mid-build, archived at 13 |
+| 4 | nothing (`--no-clean`) | built |
+
+VS Code was open with the Dart extension's `flutter daemon` running, and it
+fetches packages on its own when `pubspec.yaml` changes or the package
+config goes missing. **Inferred, not caught**: a watcher on the file during
+runs 2 and 4 saw only the build itself touch it.
+
+**The script retries once now.** It stamps `pubspec.lock` before the build;
+a failed build that leaves the package at 13 with the lockfile moved raises
+the package again and builds once more — by then the stray fetch has
+happened and nothing is left to trigger another. A second failure exits
+with the old message. `raise_pkg` is a function because it runs twice.
+
+Two things worth knowing next time: **do not edit `pubspec.yaml` and start
+the build in the same minute**, and the post-archive re-check had never been
+reachable on a FAILED build — `set -e` killed the script at the `flutter
+build ipa` line first.
+
+**2.15.0 was never uploaded.** The first IPA of the evening was 2.15.0+63;
+Paul chose 2.14.1 and it was rebuilt under the same build number, which is
+free because nothing reached App Store Connect. `1e8152ac` (2.15.0+63) is in
+history and names a version that does not exist.
