@@ -1,0 +1,37 @@
+HALVED 2.14.1 (63) — APP STORE CONNECT
+Paste each block exactly as it is. Nothing here is hard-wrapped.
+
+Only these two fields change. Description, name, subtitle, keywords,
+both URLs, category and App Privacy are unchanged from 2.14.0.
+
+
+==== PROMOTIONAL TEXT (166 of 170) ====
+
+New: finish a round and Halved writes one receipt — who owes whom, in the fewest payments — ready to text to the group. Plus the new score entry on eleven more games.
+
+
+==== WHAT'S NEW IN THIS VERSION (2387 of 4000) ====
+
+THE ROUND ENDS IN A RECEIPT. Finish a round and Halved nets every game into one ticket: where each golfer finished, what each game did, and the fewest payments that square the group. One tap opens a single text to the golfers who are not on Halved yet, with a link that shows the same receipt on any phone — no app needed. Played for fun? The same link goes out as the results.
+
+THE NEW SCORE ENTRY, ON ELEVEN MORE GAMES. The big keypad and the box that tells you what the hole just did are now on NASSAU, NASSAU NINE, SKINS, MULTI-GROUP SKINS, WOLF, LAS VEGAS, FOURBALL, SINGLES MATCH, POINTS 5-3-1, BANKER and SEQUOYA 3s. Each reports the hole in its own terms: the presses riding in a Nassau, what a skin is worth and who took it, the two numbers in Las Vegas and what a birdie did to them, the three matches against the banker.
+
+WOLF: THE CALL NO LONGER HOLDS UP THE SCORES. Pick the partner on the tee, after the drives, or once everyone has holed out. When the hole is settled the call locks, so a tap meant for the next hole cannot change the last one.
+
+BANKER ON ONE SCREEN. The maximum, the three stakes, the doubles and the scores are all on the score screen now, stakes first. A golfer who has not chosen a stake shows a button to set one, not a number nobody picked.
+
+NASSAU PRESSES. Press by hand when you are one down, before the automatic press arrives at two. In Claremont the bottom game can be pressed by hand too.
+
+LAS VEGAS. When both teams go under par on a hole, the flips cancel.
+
+SCORECARDS ARE ON THE LEADERBOARD. The round's card moved off the score screen and onto each game's board, with "gets 10" beside every name so you can see who is stroking and how many.
+
+ALSO
+• Finish round waits for scores that are still sending, so the receipt is right the first time
+• Sixes: when a match ends early, the next hole belongs to the next match and asks for its teams
+• A Nassau that closes out early reads correctly on a shotgun start, and a press over one hole settles
+• A skins pool across a round's groups settles, with its own line on the receipt
+• Golfers who have not teed off are no longer shown tied for first
+• A golfer playing in a linked round shows his scores on the Stroke Play board, and his seat is not listed as a group still out
+• Skins: a golfer keeps his color on the board when he wins a skin
+• A side's two names read in the same order every time

@@ -1,4 +1,4 @@
-# Store listing copy — Halved (v2.14.0)
+# Store listing copy — Halved (v2.14.1)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -21,6 +21,103 @@ sweep rather than reading this line, which is only true of today's catalog.
 **App Store copy is everything above `## Google Play`; the Play half is its
 own section further down.** They are different fields with different limits
 and the Android build omits two features, so the two are never the same text.
+
+## Submitting 2.14.1 — everything that changes
+
+| Field | 2.14.1 |
+| --- | --- |
+| What's New | NEW — below |
+| Promotional text | NEW — below (editable later without review) |
+| Description | unchanged — 3,984 of 4,000, and see the note below |
+| App Privacy · Privacy policy page | unchanged |
+| Name · Subtitle · Keywords · Privacy URL · Support URL · Category | unchanged since 2.11.0 |
+
+**A paste-ready copy is `docs/app-store-2.14.1.txt`** — the same two fields
+with no hard wraps, which is how App Store Connect keeps them (the live
+2.14.0 notes are one line a paragraph). The What's New below is wrapped for
+reading; pasting it would put a line break every 78 characters.
+
+**2.14.0 reached the App Store on 10 Nov 2026**, so this What's New carries
+one version's work: everything after the `v2.14.0` tag.
+
+**The backend for all of it is already live** (checked 10 Nov 2026: the hole
+card routes this build calls answer 401 in production rather than 404), so
+nothing has to be deployed before submitting.
+
+**After 2.14.1 is LIVE, set `RECEIPT_UNIVERSAL_LINK=1` on Railway.** Until
+then a texted receipt link opens the web page in the browser, which is what
+the copy below promises ("on any phone — no app needed"). The app claim is
+held off deliberately: iOS reads the association file for every installed
+build, and 2.14.0 cannot route `/r/<code>`, so claiming the path while it is
+the public version would open the app and show nothing. Checked the same day:
+the live file still lists `/watch/*` alone.
+
+**The copy says "a single text to the golfers who are not on Halved yet"**,
+not "to everyone", because that is who the composer is addressed to — a
+golfer on Halved is sent the receipt by push instead. It does NOT mention the
+push: production holds no iOS device tokens, so on an iPhone that half does
+not arrive, and the listing must not promise it.
+
+**The description is left alone on purpose.** SETTLE UP still reads "the
+Settlement tab nets every game into one summary", which is still true, and at
+16 characters of headroom naming the receipt there means cutting something.
+Worth doing with the next description pass rather than squeezed in here.
+
+**Gambling-trigger words:** Banker's bets are "stakes" throughout, and a
+Nassau's are "presses" and "matches". The script that wrote both files
+refuses the copy if one of the five words is in it.
+
+## Promotional text (170 max, editable without review) — 2.14.1, 166 chars
+New: finish a round and Halved writes one receipt — who owes whom, in the fewest payments — ready to text to the group. Plus the new score entry on eleven more games.
+
+## What's New (v2.14.1)
+
+THE ROUND ENDS IN A RECEIPT. Finish a round and Halved nets every game into
+one ticket: where each golfer finished, what each game did, and the fewest
+payments that square the group. One tap opens a single text to the golfers who
+are not on Halved yet, with a link that shows the same receipt on any phone —
+no app needed. Played for fun? The same link goes out as the results.
+
+THE NEW SCORE ENTRY, ON ELEVEN MORE GAMES. The big keypad and the box that
+tells you what the hole just did are now on NASSAU, NASSAU NINE, SKINS, MULTI-
+GROUP SKINS, WOLF, LAS VEGAS, FOURBALL, SINGLES MATCH, POINTS 5-3-1, BANKER
+and SEQUOYA 3s. Each reports the hole in its own terms: the presses riding in
+a Nassau, what a skin is worth and who took it, the two numbers in Las Vegas
+and what a birdie did to them, the three matches against the banker.
+
+WOLF: THE CALL NO LONGER HOLDS UP THE SCORES. Pick the partner on the tee,
+after the drives, or once everyone has holed out. When the hole is settled the
+call locks, so a tap meant for the next hole cannot change the last one.
+
+BANKER ON ONE SCREEN. The maximum, the three stakes, the doubles and the
+scores are all on the score screen now, stakes first. A golfer who has not
+chosen a stake shows a button to set one, not a number nobody picked.
+
+NASSAU PRESSES. Press by hand when you are one down, before the automatic
+press arrives at two. In Claremont the bottom game can be pressed by hand too.
+
+LAS VEGAS. When both teams go under par on a hole, the flips cancel.
+
+SCORECARDS ARE ON THE LEADERBOARD. The round's card moved off the score screen
+and onto each game's board, with "gets 10" beside every name so you can see
+who is stroking and how many.
+
+ALSO
+• Finish round waits for scores that are still sending, so the receipt is
+  right the first time
+• Sixes: when a match ends early, the next hole belongs to the next match and
+  asks for its teams
+• A Nassau that closes out early reads correctly on a shotgun start, and a
+  press over one hole settles
+• A skins pool across a round's groups settles, with its own line on the
+  receipt
+• Golfers who have not teed off are no longer shown tied for first
+• A golfer playing in a linked round shows his scores on the Stroke Play
+  board, and his seat is not listed as a group still out
+• Skins: a golfer keeps his color on the board when he wins a skin
+• A side's two names read in the same order every time
+
+---
 
 ## Submitting 2.14.0 — everything that changes
 
