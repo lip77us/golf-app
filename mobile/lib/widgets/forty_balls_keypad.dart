@@ -219,6 +219,11 @@ class FortyBallsKeypad extends StatefulWidget {
   /// does not apply.
   final int? capMax;
 
+  /// Stableford's place in the same slot: where the points table bottoms
+  /// out for this golfer (`0 pts from 6`). There is no maximum to state —
+  /// anything from there down scores the same — so it says that instead.
+  final String? floorText;
+
   /// Marks this golfer as not scoring the hole and moves on.
   ///
   /// **Fourball, after a close-out, and nowhere else.** The match is over,
@@ -238,6 +243,7 @@ class FortyBallsKeypad extends StatefulWidget {
     this.netStyle = false,
     this.onDone,
     this.capMax,
+    this.floorText,
     this.onNoScore,
   });
 
@@ -297,6 +303,7 @@ class _FortyBallsKeypadState extends State<FortyBallsKeypad> {
                     _strokeWord(widget.strokes),
                     'par ${widget.par}',
                     if (widget.capMax != null) 'max ${widget.capMax}',
+                    if ((widget.floorText ?? '').isNotEmpty) widget.floorText!,
                   ].join(' · '),
             style: const TextStyle(fontSize: 12, color: Halved.muted),
             overflow: TextOverflow.ellipsis,

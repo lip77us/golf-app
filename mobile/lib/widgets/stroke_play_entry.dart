@@ -194,7 +194,9 @@ class StrokePlayHoleTray extends StatelessWidget {
             onEdit: onEdit,
           ),
           _labelRow(
-            card.isFinal ? 'ROUND OVER' : 'HOLE ${card.hole} · STROKE PLAY',
+            card.isFinal
+                ? 'ROUND OVER'
+                : 'HOLE ${card.hole} · ${card.label.toUpperCase()}',
             // The field when it is bigger than this card, and otherwise the
             // basis — a `GROUP OF 4` beside four rows says nothing.
             card.field > card.group
@@ -241,6 +243,27 @@ class StrokePlayHoleTray extends StatelessWidget {
 
   static const double _posW = 56;
   static const double _holeW = 74;
+
+  /// Stableford's Hole column carries the points as well: `3 · net 3 · 3 pts`.
+  static const double _holeWPoints = 118;
+  double get _holeWidth => card.points ? _holeWPoints : _holeW;
+
+  /// The Hole column's two text cells on a points card.
+  static const double _netW = 36;
+  static const double _ptsNumW = 18;
+  static const double _ptsUnitW = 22;
+
+  /// `3 pts` → `3`, `pts`. The server writes the phrase; this only cuts it
+  /// at its last space so the two halves can sit in their own columns.
+  static String _pointsNumber(String text) {
+    final i = text.lastIndexOf(' ');
+    return i < 0 ? text : text.substring(0, i);
+  }
+
+  static String _pointsUnit(String text) {
+    final i = text.lastIndexOf(' ');
+    return i < 0 ? '' : text.substring(i + 1);
+  }
   static const double _totW = 46;
 
   Widget _labelRow(String left, String right) => Row(children: [
@@ -274,17 +297,18 @@ class StrokePlayHoleTray extends StatelessWidget {
       ),
       padding: const EdgeInsets.fromLTRB(11, 4, 11, 6),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const SizedBox(
+        SizedBox(
           height: 24,
           child: Row(children: [
-            SizedBox(width: _posW, child: Text('POS', style: head)),
-            Expanded(child: Text('PLAYER', style: head)),
+            const SizedBox(width: _posW, child: Text('POS', style: head)),
+            const Expanded(child: Text('PLAYER', style: head)),
             SizedBox(
-                width: _holeW,
+                width: _holeWidth,
                 child: Text('HOLE', style: head, textAlign: TextAlign.right)),
             SizedBox(
                 width: _totW,
-                child: Text('TOT', style: head, textAlign: TextAlign.right)),
+                child: Text(card.points ? 'PTS' : 'TOT',
+                    style: head, textAlign: TextAlign.right)),
           ]),
         ),
         for (var i = 0; i < card.standing.length; i++)
@@ -312,9 +336,10 @@ class StrokePlayHoleTray extends StatelessWidget {
                   fontSize: 14,
                   fontWeight: FontWeight.w600)),
         ),
-        SizedBox(width: _holeW, child: _hole(r)),
+        SizedBox(width: _holeWidth, child: _hole(r)),
         SizedBox(width: _totW, child: Align(
-            alignment: Alignment.centerRight, child: _tot(r.toPar))),
+            alignment: Alignment.centerRight,
+            child: card.points ? _pts(r) : _tot(r.toPar))),
       ]),
     );
   }
@@ -358,6 +383,56 @@ class StrokePlayHoleTray extends StatelessWidget {
           alignment: Alignment.centerRight,
           child: Text('–', style: TextStyle(color: _dim)));
     }
+    // Stableford: the shape, then `net N` in a net game, then the points
+    // the hole scored — `3 · net 3 · 3 pts`.
+    if (card.points) {
+      return FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerRight,
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          TrayScoreMark(
+              score: r.gross!,
+              par: r.par,
+              strokes: card.showNet ? r.strokes : 0),
+          // **Fixed columns, so the nets line up down the card** (Paul, 11
+          // Nov 2026). `1 pt` is narrower than `3 pts`, and in a row that
+          // hugs its text the `net N` beside it moved with the points.
+          if (card.showNet) ...[
+            const SizedBox(width: 6),
+            SizedBox(
+              width: _netW,
+              child: Text(r.net == null ? '' : 'net ${r.net}',
+                  maxLines: 1,
+                  style: const TextStyle(
+                      color: _dim, fontSize: 12,
+                      fontWeight: FontWeight.w600)),
+            ),
+          ],
+          const SizedBox(width: 4),
+          // **The NUMBER is its own right-aligned cell and the unit its own
+          // left-aligned one**, so the figures line up down the card (Paul,
+          // 11 Nov 2026). Right-aligning the whole `1 pt` beside `3 pts`
+          // lines up the letters and leaves the digits a character apart.
+          SizedBox(
+            width: _ptsNumW,
+            child: Text(_pointsNumber(r.pointsText),
+                maxLines: 1, textAlign: TextAlign.right,
+                style: const TextStyle(
+                    color: Colors.white, fontSize: 12.5,
+                    fontWeight: FontWeight.w700)),
+          ),
+          const SizedBox(width: 3),
+          SizedBox(
+            width: _ptsUnitW,
+            child: Text(_pointsUnit(r.pointsText),
+                maxLines: 1,
+                style: const TextStyle(
+                    color: Colors.white, fontSize: 12.5,
+                    fontWeight: FontWeight.w700)),
+          ),
+        ]),
+      );
+    }
     return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
       TrayScoreMark(
           score: r.gross!,
@@ -373,6 +448,27 @@ class StrokePlayHoleTray extends StatelessWidget {
                 fontWeight: FontWeight.w700)),
       ],
     ]);
+  }
+
+  /// Stableford's running total: **mint ahead of par pace, white on it,
+  /// grey behind** — the Tot box's three states, read against the par value
+  /// of the table rather than against par.
+  Widget _pts(StrokePlayStandingRow r) {
+    final (Color fill, Color ink) = switch (r.pace) {
+      'ahead' => (Halved.brightMint, Halved.deepPine),
+      'on' => (Colors.white, Halved.deepPine),
+      _ => (const Color(0x24FFFFFF), Colors.white),
+    };
+    return Container(
+      constraints: const BoxConstraints(minWidth: 42),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration:
+          BoxDecoration(color: fill, borderRadius: BorderRadius.circular(7)),
+      child: Text(r.totalText.isEmpty ? '—' : r.totalText,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+              color: ink, fontSize: 14.5, fontWeight: FontWeight.w700)),
+    );
   }
 
   /// The filled to-par box: mint under, white level, translucent over — the
@@ -421,7 +517,7 @@ class StrokePlayHoleTray extends StatelessWidget {
                     fontWeight: FontWeight.w700)),
           ),
           const SizedBox(width: 8),
-          Text(strokeToPar(l.toPar),
+          Text(l.text.isNotEmpty ? l.text : strokeToPar(l.toPar),
               style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12.5,

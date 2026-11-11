@@ -12789,3 +12789,53 @@ Tests: `scoring/tests/test_mini_singles_hole_card.py` (35, seven fixture
 writers under `REGEN_MS_FIXTURES=1`), `api/test_mini_singles_hole_card.py`
 (5), `mobile/test/mini_singles_entry_test.dart` (22). Eight mutations killed;
 one first survived and exposed a sort that did nothing, which was removed.
+
+## Stableford score entry — Stroke Play's, with points
+
+`~/Downloads/handoff-stableford-score-entry` (11 Nov 2026), whose instruction
+is the whole build: *"Stableford score entry is Stroke Play score entry with
+points."* Built and tested; **not seen on a device.**
+
+**No new model and no new tray.** `services.stableford.stableford_hole_card`
+emits the Stroke Play card's own shape plus the points figures, the client
+reads it into `StrokePlayHoleCard`, and `StrokePlayHoleTray` draws it
+(`card.points`). `test_the_card_is_the_stroke_play_shape` fails a key one card
+carries and the other does not. On the screen `_strokePlayCard` returns the
+Stableford card when Stableford is the primary, so the tray, the keypad's
+strokes and the auto-post serve both with no second branch.
+
+- Sent with the save as **`stableford_hole`** (its own key — a round can play
+  both) and by `GET /api/foursomes/{id}/stableford/hole/{hole}/`.
+- **The table is read from the game** (`governing_config`: the round's own, or
+  the tournament's championship table). Nothing is hard-coded to standard.
+- **Signed when the table goes negative**: `+2 pts`, `−1 pts`, totals `+4`.
+- **Pace is the par value of the table × holes played** — mint ahead, white
+  on it, grey behind. Two a hole on standard, nothing on Modified.
+- **Places rank HIGHER points first**, across the round's field; the leader is
+  named only when he is on another card.
+- **No cap, and a sentence instead** (in the `cap_notes` slot): `Mike’s 9
+  scores 0 pts, the same as a 7. The card keeps the 9.` The floor is
+  `par + strokes + 2`, which is also the keypad's `0 pts from 6`
+  (`FortyBallsKeypad.floorText`, beside `capMax`).
+
+**Off score entry:** `_StablefordProgressGrid` (deleted). **Off the board:**
+the strokes table under the Stableford scorecard.
+
+### Departures
+- **The per-row points pill is not built.** `_StablefordStrip`, under the
+  hole, still shows each golfer's points for the hole; the rows have no pill
+  slot and the strip is the server's own figure.
+- **The group header** (`Your group · standard points`) is not drawn;
+  `table_label` ships for it.
+- **Multi-round carry** (`R2 21 pts` under the name) is not built — the card
+  is the ROUND's, as Stroke Play's is.
+
+**Found on the way:** the Mini Singles banner (committed in `69d6fed2`) broke
+a Banker source guard that anchored on `aboveRows: (_bankerRound(rp)` — the
+slot's first branch. I had run only the Mini Singles tests before that
+commit. Re-anchored on the slot's name. **Run the full Flutter suite before
+committing a change to `score_entry_screen`, not the feature's own file.**
+
+Tests: `scoring/tests/test_stableford_hole_card.py` (26),
+`api/test_stableford_hole_card.py` (5), `mobile/test/stableford_entry_test.dart`
+(17).

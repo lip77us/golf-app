@@ -681,8 +681,13 @@ void main() {
 
     test('the bets card is ABOVE the golfers', () {
       // Handed to the hole card's slot…
-      final at = src.indexOf('aboveRows: (_bankerRound(rp)');
+      // Anchored on the slot's own name, not on what its first branch
+      // happens to be: Mini Singles' matches banner shares the slot (the
+      // two can never be on one round), and a guard keyed on Banker being
+      // FIRST reported that addition as a regression.
+      final at = src.indexOf('aboveRows: ');
       expect(at, greaterThan(0));
+      expect('aboveRows: '.allMatches(src).length, 1);
       // Bounded by the slot's own `: null,` — a window measured in
       // characters reports edits, not regressions.
       expect(src.substring(at, src.indexOf(': null,', at)),

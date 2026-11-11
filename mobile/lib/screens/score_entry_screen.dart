@@ -1625,6 +1625,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         // every individual-ball round, and a Nassau round must not have its
         // entry changed by it.
         primary == GameIds.strokePlay ||
+        // Stableford is Stroke Play score entry with points
+        // (`handoff-stableford-score-entry`, 11 Nov 2026).
+        primary == GameIds.stableford ||
         // Las Vegas, per `~/Downloads/handoff-vegas-score-entry`.
         primary == GameIds.vegas ||
         // Fourball, per `~/Downloads/handoff-fourball-score-entry`.
@@ -1768,6 +1771,22 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// because they can be stale, and that races the fetch the forward button
   /// started — so without this the keypad is simply not drawn.
   void _ensureStrokePlayCard(RoundProvider rp) {
+    // Stableford's card is the same shape from its own endpoint, and it is
+    // fetched only where Stableford owns the entry.
+    if (_stablefordPrimary(rp)) {
+      if (rp.stablefordHole(_selectedHole) != null) {
+        _strokePlayCardAsked = null;
+        return;
+      }
+      if (_strokePlayCardAsked == _selectedHole) return;
+      _strokePlayCardAsked = _selectedHole;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.read<RoundProvider>()
+            .loadStablefordHole(widget.foursomeId, _selectedHole);
+      });
+      return;
+    }
     if (!_activeGames(rp.round).contains(GameIds.strokePlay)) return;
     if (rp.strokePlayHole(_selectedHole) != null) {
       _strokePlayCardAsked = null;
@@ -1782,8 +1801,19 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     });
   }
 
-  /// The Stroke Play card for the hole on screen, when it is the primary.
+  bool _stablefordPrimary(RoundProvider rp) =>
+      resolvePrimary(rp.round?.primaryGame, _activeGames(rp.round)) ==
+      GameIds.stableford;
+
+  /// The Stroke Play card for the hole on screen, when it is the primary —
+  /// **or the Stableford card**, which is the same model and the same tray
+  /// with points. Everything that reads this (the tray, the keypad's
+  /// strokes, the auto-post) therefore serves both without a second branch.
   StrokePlayHoleCard? _strokePlayCard(RoundProvider rp) {
+    if (_stablefordPrimary(rp)) {
+      if (_miniSinglesRound(rp)) return null;
+      return rp.stablefordHole(_selectedHole);
+    }
     final games = _activeGames(rp.round);
     if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.strokePlay) {
       return null;
@@ -4129,6 +4159,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               // The net double bogey ceiling, when Stroke Play is in force.
               // Null everywhere else, so no other game grows a maximum.
               capMax    : spCard?.player(fbMember.player.id)?.capMax,
+              floorText : spCard?.player(fbMember.player.id)?.floorText,
               // **Only past a Fourball close-out.** Null everywhere else, so
               // no other game grows a way to skip a golfer.
               onNoScore : (fourCard?.countsForCard ?? false)
@@ -7412,18 +7443,11 @@ class _GameStatusSection extends StatelessWidget {
         // own grid is points: the gross card under the hole is the only one
         // it has.
 
-        // Stableford — per-player per-hole points grid + running total.
-        // Only when it's the primary (a side game shows on the leaderboard).
-        if (primaryGame == 'stableford' && stablefordResult != null) ...[
-          _StablefordProgressGrid(
-            players:     players,
-            scorecard:   scorecard,
-            result:      stablefordResult!,
-            currentHole: currentHole,
-            onTapHole:   onTapHole,
-          ),
-          const SizedBox(height: 12),
-        ],
+        // **The Stableford points grid left this screen**
+        // (handoff-stableford-score-entry, 11 Nov 2026): empty rows from
+        // hole one. The points are on the strip under the hole and in the
+        // tray; the table is the setup screen's and the board's.
+
 
         // Match Play bracket status — only show when match_play or cup singles
         // is an active game for this foursome to prevent stale data bleeding
@@ -7995,157 +8019,6 @@ class _StablefordStrip extends StatelessWidget {
           ),
         ),
       ]),
-    );
-  }
-}
-
-/// Stableford per-hole points grid below the score card — modelled on
-/// StrokePlayProgressGrid. Each cell is the authoritative (config-aware)
-/// points for that hole; the last column is the running total. Shows the
-/// player rows with empty cells immediately, so it's visible before any score.
-class _StablefordProgressGrid extends StatelessWidget {
-  final List<Membership>     players;
-  final Scorecard            scorecard;
-  final Map<String, dynamic> result;
-  final int                  currentHole;
-  final void Function(int hole)? onTapHole;
-
-  const _StablefordProgressGrid({
-    required this.players,
-    required this.scorecard,
-    required this.result,
-    required this.currentHole,
-    this.onTapHole,
-  });
-
-  static const double _labelColW = 60.0;
-  static const double _cellW     = 28.0;
-  static const double _rowH      = 26.0;
-  static const double _totW      = 36.0;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme     = Theme.of(context);
-    final holeRange = List.generate(18, (i) => i + 1);
-    final byId = <int, Map<String, dynamic>>{
-      for (final e in (result['results'] as List? ?? []))
-        (e as Map<String, dynamic>)['player_id'] as int: e,
-    };
-
-    Widget holeCell(int h, {required Widget child}) {
-      final isCurrent = h == currentHole;
-      return GestureDetector(
-        onTap: onTapHole == null ? null : () => onTapHole!(h),
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: _cellW, height: _rowH, alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isCurrent
-                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.35)
-                : null,
-            border: isCurrent
-                ? Border.all(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.6),
-                    width: 1.2)
-                : null,
-          ),
-          child: child,
-        ),
-      );
-    }
-
-    Widget labelCell(String s, {bool bold = false, bool italic = false}) =>
-        SizedBox(
-          width: _labelColW, height: _rowH,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(s,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-                    fontStyle: italic ? FontStyle.italic : FontStyle.normal)),
-          ),
-        );
-
-    Widget totCell(Widget child) =>
-        SizedBox(width: _totW, height: _rowH, child: Center(child: child));
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Stableford points',
-                style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary)),
-            const SizedBox(height: 4),
-            PinnedHoleGrid(
-              labelWidth  : _labelColW,
-              cellWidth   : _cellW,
-              holeCount   : holeRange.length,
-              currentIndex: holeRange.indexOf(currentHole),
-              // A Total column rides at the far right, so the rule has to
-              // reach past the holes to underline it.
-              contentWidth: _cellW * holeRange.length + _totW,
-              bands: [
-                  // Hole numbers + Total
-                  HoleGridBand(
-                    labelCell('Hole', bold: true),
-                    [
-                    for (final h in holeRange)
-                      holeCell(h,
-                          child: Text('$h',
-                              style: const TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.bold))),
-                    totCell(const Text('Tot',
-                        style: TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.bold))),
-                  ]),
-                  // Par
-                  HoleGridBand(
-                    labelCell('Par', italic: true),
-                    [
-                    for (final h in holeRange)
-                      holeCell(h,
-                          child: Text('${scorecard.holeData(h)?.par ?? "-"}',
-                              style: theme.textTheme.bodySmall)),
-                    totCell(const SizedBox.shrink()),
-                  ]),
-                  const HoleGridBand.rule(),
-                  // Per-player points
-                  for (final m in players)
-                    () {
-                      final r     = byId[m.player.id];
-                      final holes = (r?['holes'] as Map<String, dynamic>?) ?? {};
-                      final total = r?['total_points'] ?? 0;
-                      return HoleGridBand(
-                        labelCell(m.player.shortName.isNotEmpty
-                            ? m.player.shortName
-                            : m.player.name.split(' ').first),
-                        [
-                        for (final h in holeRange)
-                          holeCell(h,
-                              child: Text(
-                                  holes['$h'] == null ? '' : '${holes['$h']}',
-                                  style: theme.textTheme.bodySmall)),
-                        totCell(Text('$total',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold))),
-                      ]);
-                    }(),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

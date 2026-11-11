@@ -10627,6 +10627,14 @@ class StrokePlayHolePlayer {
   /// maximum nothing enforces.
   final int? capMax;
 
+  /// **Stableford only** — empty on a Stroke Play card. The hole's points as
+  /// the server writes them (`3 pts`, `−1 pts`, `– pts` before a score),
+  /// whether they wear the bogey tint (zero or worse), and where the table
+  /// bottoms out for this golfer (`0 pts from 6`), for the keypad.
+  final String pointsText;
+  final bool pointsLow;
+  final String floorText;
+
   const StrokePlayHolePlayer({
     required this.playerId,
     required this.name,
@@ -10639,6 +10647,9 @@ class StrokePlayHolePlayer {
     required this.net,
     required this.capped,
     required this.capMax,
+    this.pointsText = '',
+    this.pointsLow = false,
+    this.floorText = '',
   });
 
   factory StrokePlayHolePlayer.fromJson(Map<String, dynamic> j) =>
@@ -10654,6 +10665,9 @@ class StrokePlayHolePlayer {
         net: (j['net'] as num?)?.toInt(),
         capped: j['capped'] as bool? ?? false,
         capMax: (j['cap_max'] as num?)?.toInt(),
+        pointsText: (j['points_text'] as String?) ?? '',
+        pointsLow: j['points_low'] as bool? ?? false,
+        floorText: (j['floor_text'] as String?) ?? '',
       );
 }
 
@@ -10681,6 +10695,13 @@ class StrokePlayStandingRow {
   final int strokes;
   final int? par;
 
+  /// **Stableford only** — empty on a Stroke Play card. This hole's points,
+  /// the running total as the server writes it (`18`, `+4`), and how that
+  /// total stands against par pace: `ahead`, `on` or `behind`.
+  final String pointsText;
+  final String totalText;
+  final String? pace;
+
   const StrokePlayStandingRow({
     required this.playerId,
     required this.name,
@@ -10695,6 +10716,9 @@ class StrokePlayStandingRow {
     required this.capped,
     required this.strokes,
     required this.par,
+    this.pointsText = '',
+    this.totalText = '',
+    this.pace,
   });
 
   factory StrokePlayStandingRow.fromJson(Map<String, dynamic> j) =>
@@ -10712,6 +10736,9 @@ class StrokePlayStandingRow {
         capped: j['capped'] as bool? ?? false,
         strokes: (j['strokes'] as num?)?.toInt() ?? 0,
         par: (j['par'] as num?)?.toInt(),
+        pointsText: (j['points_text'] as String?) ?? '',
+        totalText: (j['total_text'] as String?) ?? '',
+        pace: j['pace'] as String?,
       );
 }
 
@@ -10721,14 +10748,20 @@ class StrokePlayLeader {
   final int? toPar;
   final int thru;
 
+  /// Stableford's figure, written by the server (`40 pts`, `+9`). Empty on
+  /// a Stroke Play card, which formats [toPar].
+  final String text;
+
   const StrokePlayLeader(
-      {required this.name, required this.toPar, required this.thru});
+      {required this.name, required this.toPar, required this.thru,
+       this.text = ''});
 
   factory StrokePlayLeader.fromJson(Map<String, dynamic> j) =>
       StrokePlayLeader(
         name: (j['name'] as String?) ?? '',
         toPar: (j['to_par'] as num?)?.toInt(),
         thru: (j['thru'] as num?)?.toInt() ?? 0,
+        text: (j['text'] as String?) ?? '',
       );
 }
 
@@ -10860,7 +10893,22 @@ class StrokePlayHoleCard {
     required this.leader,
     this.ball,
     this.rumble,
+    this.points = false,
+    this.label = 'Stroke Play',
+    this.tableLabel = '',
   });
+
+  /// **This is the Stableford card.** Stableford score entry is Stroke Play
+  /// score entry with points, so it is this model and this tray: the rows
+  /// rank on points, the total is a points total against par pace, and the
+  /// cap note is the sentence about the bottom of the table.
+  final bool points;
+
+  /// The game the tray names in its label.
+  final String label;
+
+  /// `standard points` / `Modified points` — Stableford only.
+  final String tableLabel;
 
   StrokePlayHolePlayer? player(int pid) {
     for (final p in players) {
@@ -10892,6 +10940,9 @@ class StrokePlayHoleCard {
         leader: leader,
         ball: b,
         rumble: rumble,
+        points: points,
+        label: label,
+        tableLabel: tableLabel,
       );
 
   factory StrokePlayHoleCard.fromJson(Map<String, dynamic> j) =>
@@ -10928,6 +10979,9 @@ class StrokePlayHoleCard {
             ? null
             : RumbleOnHole.fromJson(
                 (j['rumble'] as Map).cast<String, dynamic>()),
+        points: j['points'] as bool? ?? false,
+        label: (j['label'] as String?) ?? 'Stroke Play',
+        tableLabel: (j['table_label'] as String?) ?? '',
       );
 }
 

@@ -553,3 +553,260 @@ def stableford_summary(round_obj) -> dict:
         # show it alongside the points (a modified table makes points ambiguous).
         'scorecard'     : _stableford_scorecard(round_obj, standings),
     }
+
+
+# ---------------------------------------------------------------------------
+# The score-entry card — ONE hole
+# ---------------------------------------------------------------------------
+
+def plays_stableford(round_obj) -> bool:
+    """Stableford is a game this round is scored on — its own, or the
+    tournament's when an individual-play Stableford event leaves the round's
+    `active_games` saying nothing."""
+    if 'stableford' in (round_obj.active_games or []):
+        return True
+    from services.low_net_round import unstated_scoring_game
+    return unstated_scoring_game(round_obj) == 'stableford'
+
+
+def _table_of(config) -> list:
+    """The six buckets, −3 or better … +2 or worse."""
+    if config is None:
+        return [5, 4, 3, 2, 1, 0]
+    return [config.pts_albatross, config.pts_eagle, config.pts_birdie,
+            config.pts_par, config.pts_bogey, config.pts_double]
+
+
+def _pts_text(n, signed: bool) -> str:
+    """`3 pts`, `1 pt` — and `+2 pts`, `−1 pts` on a table that goes
+    negative, where an unsigned 2 beside a −1 reads as a different unit."""
+    if n is None:
+        return '– pts'
+    if signed:
+        sign = '+' if n > 0 else '−' if n < 0 else ''
+        return f'{sign}{abs(n)} pts'
+    return f'{n} pt' if n == 1 else f'{n} pts'
+
+
+def _total_text(n, signed: bool) -> str:
+    if not signed:
+        return str(n)
+    return f'{"+" if n > 0 else "−" if n < 0 else ""}{abs(n)}'
+
+
+def stableford_hole_card(foursome, hole: int) -> dict:
+    """Everything the Stableford score-entry tray draws for ONE hole
+    (`~/Downloads/handoff-stableford-score-entry`, 11 Nov 2026).
+
+    **Stableford score entry is Stroke Play score entry with points**, so
+    this emits the Stroke Play card's own shape — the client reads it into
+    the same model and draws it with the same tray — plus the figures that
+    are points rather than strokes. A key added to one and not the other
+    fails `test_the_card_is_the_stroke_play_shape`.
+
+    Built from :func:`stableford_standings`, the board the tray's places open
+    through: the points, the totals and the ranks are the engine's, scored on
+    the game's OWN table (the TD's, in a tournament). What is derived is
+    where this hole left each golfer against where he stood before it.
+
+    **There is no cap, and the card says so in a sentence instead**: anything
+    from the bottom bucket down scores the same, so a 9 is told it scored
+    what a 7 would have and that the card keeps the 9.
+
+    **Pace is the par value of the table × holes played** — two a hole on
+    standard points, nothing on Modified — which is the only thing that makes
+    a running total readable at a glance.
+
+    Returns `{}` when the round plays no Stableford.
+    """
+    from scoring.handicap import make_strokes_fn
+    from services.hole_plan import play_order as _play_order
+    from services.low_net_round import _first_name, ball_on_hole, _rumble_block
+
+    round_obj = foursome.round
+    if not plays_stableford(round_obj):
+        return {}
+
+    config = governing_config(round_obj)
+    mode = config.handicap_mode if config else round_obj.handicap_mode
+    npct = (config.net_percent if config else round_obj.net_percent) or 100
+    gross_game = mode == 'gross'
+    table = _table_of(config)
+    signed = min(table) < 0
+    par_pts, floor_pts = table[3], table[5]
+    table_label = ('standard points' if table == [5, 4, 3, 2, 1, 0]
+                   else 'Modified points' if table == [8, 5, 2, 0, -1, -3]
+                   else 'custom points')
+
+    rows = {r['player_id']: r for r in stableford_standings(round_obj)}
+    subset = set(getattr(config, 'participant_player_ids', None) or []) \
+        if config else set()
+
+    order = _play_order(round_obj, foursome) or list(range(1, 19))
+    members = [m for m in foursome.memberships.select_related('player', 'tee')
+               if not m.player.is_phantom]
+    if not members:
+        return {}
+    strokes_fn = make_strokes_fn(foursome)
+
+    def _strokes(m):
+        if gross_game or m.tee_id is None:
+            return 0
+        eff = round_half_up((m.playing_handicap or 0) * npct / 100)
+        return strokes_fn(eff, m.tee, hole)
+
+    # ── This hole, per golfer on this card ──────────────────────────────
+    par_here = None
+    players = []
+    for m in members:
+        r = rows.get(m.player_id) or {}
+        par = (m.tee.hole(hole).get('par') if m.tee_id else None) or 4
+        if par_here is None:
+            par_here = par
+        gross = (r.get('gross') or {}).get(hole)
+        strokes = (r.get('strokes') or {}).get(hole) if gross is not None \
+            else None
+        if strokes is None:
+            strokes = _strokes(m)
+        in_game = not subset or m.player_id in subset
+        pts = (r.get('holes') or {}).get(hole) if gross is not None else None
+        # The gross from which the table bottoms out for THIS golfer.
+        floor_gross = par + strokes + 2
+        players.append({
+            'player_id'      : m.player_id,
+            'name'           : m.player.name,
+            'first'          : _first_name(m.player.name),
+            'short'          : (m.player.short_name or '').strip()
+                               or m.player.name,
+            'course_handicap': m.course_handicap,
+            'par'            : par,
+            'strokes'        : strokes,
+            'gross'          : gross,
+            'net'            : None if gross is None else gross - strokes,
+            'capped'         : False,
+            'cap_max'        : None,
+            'points'         : pts,
+            'points_text'    : _pts_text(pts, signed) if in_game else '',
+            # Zero or worse wears the bogey tint.
+            'points_low'     : pts is not None and pts <= 0,
+            'floor_gross'    : floor_gross,
+            # `0 pts from 6` — where the table bottoms out, for the keypad.
+            'floor_text'     : (f'{_total_text(floor_pts, signed)}'
+                                f'{"" if signed else " pts"} from '
+                                f'{floor_gross}') if in_game else '',
+        })
+
+    # ── Places, before and after: HIGHER points rank first ──────────────
+    after = {pid: r['total_points'] for pid, r in rows.items()
+             if r.get('holes_played')}
+    before = dict(after)
+    for p in players:
+        pid = p['player_id']
+        if p['points'] is None or pid not in after:
+            continue
+        if (rows[pid].get('holes_played') or 0) <= 1:
+            # His first hole: there is no place to have moved from.
+            before.pop(pid, None)
+            continue
+        before[pid] = after[pid] - p['points']
+
+    def _place(tbl, pid):
+        if pid not in tbl:
+            return None, False
+        v = tbl[pid]
+        higher = sum(1 for x in tbl.values() if x > v)
+        same = sum(1 for x in tbl.values() if x == v)
+        return higher + 1, same > 1
+
+    final = bool(order) and hole == order[-1]
+    standing = []
+    for p in sorted(players, key=lambda p: (
+            (1, 0) if p['player_id'] not in after
+            else (0, -after[p['player_id']]))):
+        pid = p['player_id']
+        if not p['points_text'] and pid not in rows:
+            continue                       # on the card, not in the game
+        r = rows.get(pid) or {}
+        pa, tied = _place(after, pid)
+        pb, _ = _place(before, pid)
+        thru = r.get('holes_played') or 0
+        total = r.get('total_points') if thru else None
+        pace_at = par_pts * thru
+        standing.append({
+            'player_id' : pid,
+            'name'      : p['name'],
+            'short'     : p['short'],
+            'place'     : pa,
+            'place_text': None if pa is None else ('T' if tied else '') + str(pa),
+            'moved'     : None if (final or pa is None or pb is None)
+                          else pb - pa,
+            'to_par'    : None,
+            'thru'      : thru,
+            'gross'     : p['gross'],
+            'net'       : p['net'],
+            'capped'    : False,
+            'strokes'   : p['strokes'],
+            'par'       : p['par'],
+            'points_text': p['points_text'] if p['points'] is not None else '',
+            'total'     : total,
+            'total_text': '' if total is None else _total_text(total, signed),
+            'pace'      : (None if total is None
+                           else 'ahead' if total > pace_at
+                           else 'on' if total == pace_at else 'behind'),
+        })
+
+    # ── Past the bottom of the table, in words ──────────────────────────
+    notes = []
+    for p in players:
+        if p['gross'] is None or p['points'] is None:
+            continue
+        if p['gross'] > p['floor_gross']:
+            notes.append(
+                f"{p['first']}’s {p['gross']} scores "
+                f"{_pts_text(p['points'], signed)}, the same as a "
+                f"{p['floor_gross']}. The card keeps the {p['gross']}.")
+
+    # ── The leader, when he is not on this card ─────────────────────────
+    leader = None
+    started = [r for r in rows.values() if r.get('holes_played')]
+    here_ids = {p['player_id'] for p in players}
+    if started:
+        top = max(started, key=lambda r: r['total_points'])
+        if top['player_id'] not in here_ids:
+            thru = top.get('holes_played') or 0
+            leader = {
+                'name'  : top['player_name'],
+                'to_par': None,
+                'thru'  : thru,
+                'text'  : (_total_text(top['total_points'], signed)
+                           + ('' if signed else ' pts')),
+            }
+
+    field = len({
+        m.player_id
+        for fs in round_obj.foursomes.prefetch_related('memberships__player')
+        for m in fs.memberships.all()
+        if not m.player.is_phantom and (not subset or m.player_id in subset)
+    })
+    return {
+        'hole'         : hole,
+        'par'          : par_here,
+        'handicap_mode': mode,
+        'net_percent'  : npct,
+        'show_net'     : not gross_game,
+        'cap'          : False,
+        'final'        : final,
+        'group'        : len(players),
+        'field'        : field,
+        'players'      : players,
+        'standing'     : standing,
+        'cap_notes'    : notes,
+        'leader'       : leader,
+        'ball'         : ball_on_hole(foursome, hole),
+        'rumble'       : _rumble_block(foursome, hole),
+        # What makes this the points card.
+        'points'       : True,
+        'label'        : 'Stableford',
+        'table_label'  : table_label,
+        'signed'       : signed,
+    }

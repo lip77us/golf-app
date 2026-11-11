@@ -149,6 +149,7 @@ class RoundProvider extends ChangeNotifier {
   final Map<int, SkinsHoleCard>    _poolHoles     = {};
   final Map<int, SurvivorHoleCard> _survivorHoles = {};
   final Map<int, StrokePlayHoleCard> _strokePlayHoles = {};
+  final Map<int, StrokePlayHoleCard> _stablefordHoles = {};
   Points531Summary? _points531Summary;
   VegasSummary?    _vegasSummary;
   FourballSummary? _fourballSummary;
@@ -233,6 +234,7 @@ class RoundProvider extends ChangeNotifier {
   SkinsHoleCard?    poolHole(int hole)     => _poolHoles[hole];
   SurvivorHoleCard? survivorHole(int hole)  => _survivorHoles[hole];
   StrokePlayHoleCard? strokePlayHole(int hole) => _strokePlayHoles[hole];
+  StrokePlayHoleCard? stablefordHole(int hole) => _stablefordHoles[hole];
   Points531Summary? get points531Summary   => _points531Summary;
   VegasSummary?     get vegasSummary        => _vegasSummary;
   FourballSummary?  get fourballSummary     => _fourballSummary;
@@ -308,6 +310,7 @@ class RoundProvider extends ChangeNotifier {
     _sixesSummary            = null;
     _sixesHoles.clear();
     _strokePlayHoles.clear();
+    _stablefordHoles.clear();
     _rabbitHoles.clear();
     _pointsHoles.clear();
     _wolfHoles.clear();
@@ -459,6 +462,7 @@ class RoundProvider extends ChangeNotifier {
       _sixesSummary     = null;
       _sixesHoles.clear();
       _strokePlayHoles.clear();
+      _stablefordHoles.clear();
       _rabbitHoles.clear();
       _pointsHoles.clear();
       _wolfHoles.clear();
@@ -546,7 +550,8 @@ class RoundProvider extends ChangeNotifier {
            || _singlesHoles.isNotEmpty
            || _tripleCupHoles.isNotEmpty
            || _miniSinglesHoles.isNotEmpty
-           || _survivorHoles.isNotEmpty || _strokePlayHoles.isNotEmpty)) {
+           || _survivorHoles.isNotEmpty || _strokePlayHoles.isNotEmpty
+           || _stablefordHoles.isNotEmpty)) {
         _annandaleResults.hold(holeNumber);
       }
 
@@ -878,6 +883,21 @@ class RoundProvider extends ChangeNotifier {
       // Offline — keep whatever is on screen.
     } catch (e) {
       debugPrint('loadSixesHole error: $e');
+    }
+  }
+
+  /// Fetch one hole's Stableford card. Silent on failure, like the others.
+  Future<void> loadStablefordHole(int foursomeId, int hole) async {
+    try {
+      final card = await _client.getStablefordHoleCard(foursomeId, hole);
+      if (card != null) {
+        _stablefordHoles[hole] = card;
+        notifyListeners();
+      }
+    } on NetworkException {
+      // Offline — keep whatever is on screen.
+    } catch (e) {
+      debugPrint('loadStablefordHole error: $e');
     }
   }
 
@@ -1827,6 +1847,16 @@ class RoundProvider extends ChangeNotifier {
       // a total that is one hole behind.
       _pointsHoles.clear();
       _pointsHoles[holeNumber] = PointsHoleCard.fromJson(pts);
+      _annandaleResults.answer(holeNumber);
+      notifyListeners();
+    }
+
+    final stb = response['stableford_hole'];
+    if (stb is Map<String, dynamic>) {
+      // Same staleness as Stroke Play's: a posted hole moves the places of
+      // golfers in other groups too.
+      _stablefordHoles.clear();
+      _stablefordHoles[holeNumber] = StrokePlayHoleCard.fromJson(stb);
       _annandaleResults.answer(holeNumber);
       notifyListeners();
     }

@@ -6261,7 +6261,8 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
     wants = {'annandale_friday', 'sixes', 'rabbit', 'survivor',
              'low_net_round', 'points_531', 'wolf', 'vegas',
              'fourball', 'match_18', 'nassau', 'nassau_nine', 'skins',
-             'sequoya_threes', 'triple_cup', 'match_play'} & active
+             'sequoya_threes', 'triple_cup', 'match_play',
+             'stableford'} & active
     # **The skins POOL, only where it owns the entry screen.** A pool rides
     # as a side game on a sixty-player tournament, where its card would be a
     # pool summary computed on every posted score for a tray nobody draws
@@ -6347,6 +6348,12 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
                     out['vegas_hole'] = card
             # …and Fourball's, which reports the best balls, the match and
             # whether the hole still counts.
+            # Stableford's tray is Stroke Play's, with points.
+            if 'stableford' in wants and hole_number:
+                from services.stableford import stableford_hole_card
+                card = stableford_hole_card(foursome, hole_number)
+                if card:
+                    out['stableford_hole'] = card
             # Mini Singles' tray: the matches live on this hole and the
             # bracket as of it. Empty for a group with no four-golfer
             # bracket (a threesome plays a different game under this slug).
@@ -8687,6 +8694,19 @@ class FourballHoleCardView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.fourball import fourball_hole_card
         return Response(fourball_hole_card(foursome, int(hole)))
+
+
+class StablefordHoleCardView(APIView):
+    """GET /api/foursomes/{id}/stableford/hole/{hole}/
+
+    One hole's score-entry card. The POST that saves a score returns the same
+    shape under `stableford_hole`, so this is only for a hole the screen
+    opens without posting.
+    """
+    def get(self, request, pk, hole):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.stableford import stableford_hole_card
+        return Response(stableford_hole_card(foursome, int(hole)))
 
 
 class MiniSinglesHoleCardView(APIView):

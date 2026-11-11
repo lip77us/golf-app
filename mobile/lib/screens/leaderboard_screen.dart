@@ -7,6 +7,7 @@ import '../config.dart';
 import '../game_catalog.dart';
 import '../game_colors.dart';
 import '../utils/match_notation.dart';
+import '../widgets/stableford_standings.dart';
 import '../widgets/triple_cup_board.dart';
 import '../widgets/match_panel.dart';
 import '../widgets/solo_board.dart';
@@ -1395,6 +1396,15 @@ class _StablefordView extends StatelessWidget {
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
         ],
+        const SizedBox(height: 10),
+        // The order, with the points and how far round each golfer is.
+        StablefordStandings(
+          results: results.cast<Map<String, dynamic>>(),
+          holesInRound: (((data['scorecard'] as Map?)?['holes_in_play']
+                      as List?)
+                  ?.length) ??
+              18,
+        ),
         const SizedBox(height: 8),
         // **One card, not two grids.** `_StablefordPointsGrid` drew the
         // per-hole points over its own hole columns and the scorecard drew the
@@ -1437,6 +1447,10 @@ class _StablefordView extends StatelessWidget {
                   // ambiguous nor a second grid.
                   showPoints: true,
                   legend: null,
+                  // No strokes table (handoff-stableford-score-entry): the
+                  // board ranks on points, and the dots on this card are
+                  // where the strokes show.
+                  showStrokes: false,
                 ),
               ),
             ),

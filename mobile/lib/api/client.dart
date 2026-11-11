@@ -2117,6 +2117,18 @@ class ApiClient {
     return StrokePlayHoleCard.fromJson(map);
   }
 
+  /// GET /api/foursomes/{id}/stableford/hole/{hole}/
+  ///
+  /// The Stableford card — the Stroke Play card's shape, with points. A save
+  /// brings the same shape back under `stableford_hole`.
+  Future<StrokePlayHoleCard?> getStablefordHoleCard(
+      int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/stableford/hole/$hole/');
+    final map = (data as Map).cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    return StrokePlayHoleCard.fromJson(map);
+  }
+
   /// POST /api/foursomes/{id}/pink-ball/lost/
   ///
   /// The ball game ends for this group on [hole] — or, with `lost: false`, it
