@@ -47,6 +47,48 @@ List<double> maxChipsFor(BankerSummary s) {
   return out;
 }
 
+/// `banker net 5`, or `banker net 5/4/5` — the banker's score, for the
+/// tray's label.
+///
+/// It read `banker 5`, which beside a column of dollar figures looked like
+/// five dollars (Paul, 10 Nov 2026). The rows under it say `net 5 v 5`, so
+/// the label says NET too and the two can be read against each other.
+///
+/// **A banker has no single net.** Strokes are settled inside each
+/// one-on-one, so he can hold a different net in each of the three matches —
+/// which is why `BankerHoleState` carries his gross and no `bankerNet`. When
+/// the three agree it is one number; when they do not it is all three, **in
+/// the order of the rows beneath it**, so the first figure is his net against
+/// the first golfer listed (Paul: "Banker Net 5/4/5 in order if it is
+/// different for different golfers and a single number if it is the same").
+///
+/// His gross is the fallback only for a hole whose rows carry no net at all.
+String? bankerScoreLabel(BankerHoleState h) {
+  final nets = [
+    for (final l in h.lines)
+      if (l.bankerNet != null) l.bankerNet!,
+  ];
+  if (nets.isNotEmpty) {
+    return nets.toSet().length == 1
+        ? 'banker net ${nets.first}'
+        : 'banker net ${nets.join('/')}';
+  }
+  if (h.bankerGross != null) return 'banker gross ${h.bankerGross}';
+  return null;
+}
+
+/// Why a tied bank went to the golfer it went to — **the SERVER's words**.
+///
+/// `BankerAdvanceSerializer.tie_reason` is a choice field (`holed_first`,
+/// `drawn`, `kept`) and refuses anything else with a 400. The tray sent
+/// `holed-out-first`, which it had made up, so picking a golfer on a tied
+/// hole could not be confirmed and the round could not move on (Paul,
+/// 10 Nov 2026: "I seem to have gotten stuck"). `Draw` worked only because
+/// its word happened to match. One constant each, used by every screen that
+/// sends one, and a test reads the serializer to check they are still in it.
+const String kBankerTieHoledFirst = 'holed_first';
+const String kBankerTieDrawn      = 'drawn';
+
 /// Gold — the bank's colour, on a light card and on the dark tray.
 const Color kBankGold     = Color(0xFFB7791F);
 const Color kBankGoldInk  = Color(0xFF8A5A12);
@@ -113,6 +155,15 @@ class BankerBetsCard extends StatelessWidget {
   // ── On the tee ───────────────────────────────────────────────────────
   Widget _open(BuildContext context, BankerHoleState h) {
     final opponents = roster.where((r) => r.id != h.bankerId).toList();
+    // **Nothing on this card may show a number nobody chose.** The hole
+    // opens with no maximum and no bets, and the engine refuses to invent
+    // either (`lock_bets`: "a silent floor bet would be the app choosing
+    // somebody's stake for him"). This card used to draw both anyway — the
+    // round's ceiling lit as the hole's max, and `$5` beside a golfer who had
+    // not bet — so the screen read as finished while the button said `2 bets
+    // to go`, and the only way to place the floor was up a step and back
+    // down, because the minus is dead at the floor (Paul, 10 Nov 2026).
+    final maxSet = h.maxBet != null;
     final max = h.maxBet ?? summary.maxBet;
     final placed = {for (final l in h.lines) l.playerId: l.bet};
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -131,7 +182,8 @@ class BankerBetsCard extends StatelessWidget {
         for (final v in maxChipsFor(summary)) ...[
           _MaxChip(
             amount: v,
-            on: max == v,
+            // The HOLE's max, never the round's ceiling standing in for it.
+            on: h.maxBet == v,
             onTap: busy ? null : () => onMax(v),
           ),
           const SizedBox(width: 6),
@@ -142,15 +194,20 @@ class BankerBetsCard extends StatelessWidget {
         _BetRow(
           first: o.first,
           amount: placed[o.id] ?? summary.minBet,
+          placed: placed.containsKey(o.id),
           min: summary.minBet,
           max: max,
-          onChange: busy ? null : (v) => onBet(o.id, v),
+          // No bet before the max: the server refuses one, and a stepper
+          // that answers with an error is worse than one that waits.
+          onChange: busy || !maxSet ? null : (v) => onBet(o.id, v),
         ),
       const SizedBox(height: 8),
       SizedBox(
         width: double.infinity, height: 44,
         child: FilledButton(
-          onPressed: busy || h.lines.length < opponents.length ? null : onLock,
+          onPressed: busy || !maxSet || h.lines.length < opponents.length
+              ? null
+              : onLock,
           style: FilledButton.styleFrom(
             backgroundColor: Halved.deepPine,
             foregroundColor: Colors.white,
@@ -162,7 +219,9 @@ class BankerBetsCard extends StatelessWidget {
           // not have — the existing board's own note. The button names what
           // the lock DOES: nothing can come down again, only up.
           child: Text(
-              h.lines.length < opponents.length
+              !maxSet
+                  ? 'Set the max first'
+                  : h.lines.length < opponents.length
                   ? '${opponents.length - h.lines.length} '
                       '${opponents.length - h.lines.length == 1
                           ? 'bet' : 'bets'} to go'
@@ -236,33 +295,46 @@ class _Head extends StatelessWidget {
   final String? sub;
   const _Head({required this.title, this.sub});
 
+  // **One flexible child.** Title and sub were both loose `Flexible`s, which
+  // split the row evenly whatever either needs: `Tyler banks` used a third
+  // of its half and the sub was ellipsised (`then the th…`) beside empty
+  // space. The title takes what it needs, up to 60% of the row; the sub is
+  // `Expanded` and gets the rest.
   @override
-  Widget build(BuildContext context) => Row(children: [
-        Container(
-          width: 10, height: 10,
-          decoration: BoxDecoration(
-              color: kBankGold, borderRadius: BorderRadius.circular(3)),
-        ),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Text(title,
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, box) {
+          final name = Text(title,
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   fontSize: 14, fontWeight: FontWeight.w800,
-                  color: Halved.deepPine)),
-        ),
-        if (sub != null) ...[
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(sub!,
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                    color: Halved.muted, fontSize: 11.5,
-                    fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ]);
+                  color: Halved.deepPine));
+          return Row(children: [
+            Container(
+              width: 10, height: 10,
+              decoration: BoxDecoration(
+                  color: kBankGold, borderRadius: BorderRadius.circular(3)),
+            ),
+            const SizedBox(width: 8),
+            if (sub == null)
+              Flexible(child: name)
+            else ...[
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: box.maxWidth * 0.6),
+                child: name,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(sub!,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                        color: Halved.muted, fontSize: 11.5,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ]);
+        },
+      );
 }
 
 class _MaxChip extends StatelessWidget {
@@ -294,16 +366,28 @@ class _MaxChip extends StatelessWidget {
 }
 
 /// `Dave  − $10 +` — his own bet, in $5 steps between the floor and the max.
+///
+/// **A bet nobody has placed is a button, not a figure.** It reads `Bet $5`
+/// in the bank's gold and one tap places the floor; the plus beside it
+/// places a step above. Once placed it is the plain `$5` the stepper moves.
 class _BetRow extends StatelessWidget {
   final String first;
   final double amount;
+
+  /// False until this golfer has a bet on the hole. [amount] is then the
+  /// floor, offered and not yet his.
+  final bool placed;
   final double min;
   final double max;
   final void Function(double)? onChange;
   const _BetRow({required this.first, required this.amount, required this.min,
-                 required this.max, this.onChange});
+                 required this.max, this.placed = true, this.onChange});
 
   static const double step = 5;
+
+  /// Wide enough for `Bet $50`, and the same in both states so the steppers
+  /// do not move when a bet lands.
+  static const double amountW = 84;
 
   @override
   Widget build(BuildContext context) {
@@ -322,11 +406,15 @@ class _BetRow extends StatelessWidget {
               onTap: onChange == null || down == null
                   ? null : () => onChange!(down)),
         SizedBox(
-          width: 56,
-          child: Text('\$${_amt(amount)}',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 15,
-                  fontWeight: FontWeight.w800)),
+          width: amountW,
+          child: placed
+              ? Text('\$${_amt(amount)}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 15,
+                      fontWeight: FontWeight.w800))
+              : _PlaceBet(
+                  amount: amount,
+                  onTap: onChange == null ? null : () => onChange!(amount)),
         ),
         _Step(icon: Icons.add,
               onTap: onChange == null || up == null
@@ -334,6 +422,49 @@ class _BetRow extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// `Bet $5` — the floor, offered. One tap places it.
+class _PlaceBet extends StatelessWidget {
+  final double amount;
+  final VoidCallback? onTap;
+  const _PlaceBet({required this.amount, this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Opacity(
+        opacity: onTap == null ? 0.45 : 1,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(10),
+              child: Ink(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: kBankGold.withValues(alpha: 0.12),
+                  border: Border.all(color: kBankGold),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Text('Bet \$${_amt(amount)}',
+                          maxLines: 1,
+                          style: const TextStyle(
+                              color: kBankGoldInk, fontSize: 13.5,
+                              fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class _Step extends StatelessWidget {
@@ -528,11 +659,10 @@ class BankerHoleTray extends StatelessWidget {
                           ? 'Round over'
                           : 'Hole ${h.hole} · '
                               '${_firstOf(h.bankerId ?? 0)} banks',
-                      trailing: h.bankerGross == null
-                          ? null : 'banker ${h.bankerGross}',
+                      trailing: bankerScoreLabel(h),
                     ),
                     const SizedBox(height: 6),
-                    _Bets(hole: h, bankerFirst: _firstOf(h.bankerId ?? 0)),
+                    _Bets(hole: h),
                     const SizedBox(height: 10),
                     _NextBanker(
                       summary: summary,
@@ -574,8 +704,7 @@ class BankerHoleTray extends StatelessWidget {
 /// One row a bet, with the chain the SERVER composed underneath it.
 class _Bets extends StatelessWidget {
   final BankerHoleState hole;
-  final String bankerFirst;
-  const _Bets({required this.hole, required this.bankerFirst});
+  const _Bets({required this.hole});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -586,32 +715,11 @@ class _Bets extends StatelessWidget {
         ),
         child: Column(children: [
           for (final l in hole.lines) _row(l),
-          Container(
-            margin: const EdgeInsets.only(top: 6),
-            padding: const EdgeInsets.fromLTRB(7, 7, 7, 2),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: Color(0x14FFFFFF))),
-            ),
-            child: Row(children: [
-              Container(
-                width: 10, height: 10,
-                decoration: BoxDecoration(
-                    color: kBankGoldDark,
-                    borderRadius: BorderRadius.circular(3)),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text('$bankerFirst on the hole',
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 13.5,
-                        fontWeight: FontWeight.w700)),
-              ),
-              Text('${hole.bankerGross ?? '–'}',
-                  style: const TextStyle(
-                      color: kBankGoldDark, fontSize: 18, height: 1.0,
-                      fontWeight: FontWeight.w700)),
-            ]),
-          ),
+          // **No `Paul on the hole  5` line under the bets.** It was the
+          // banker's gross in gold, alone on a row of money figures, and it
+          // read as five DOLLARS (Paul, 10 Nov 2026: "sounds like a $, not
+          // a score"). The banker's score is already in every row above it
+          // — `net 5 v 5` — which is the only place it means anything.
         ]),
       );
 
@@ -725,7 +833,7 @@ class _NextBanker extends StatelessWidget {
           _TiePill(
             label: _firstOf(id),
             on: tiePick == id,
-            onTap: () => onPick(id, 'holed-out-first'),
+            onTap: () => onPick(id, kBankerTieHoledFirst),
           ),
         TextButton(
           onPressed: () {
@@ -734,7 +842,7 @@ class _NextBanker extends StatelessWidget {
             // **Random, and the reason travels.** `drawn` reaches the
             // receipt, so a hole settled by chance says so months later.
             ids.shuffle();
-            onPick(ids.first, 'drawn');
+            onPick(ids.first, kBankerTieDrawn);
           },
           style: TextButton.styleFrom(
               foregroundColor: Colors.white,

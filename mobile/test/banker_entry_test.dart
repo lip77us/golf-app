@@ -195,6 +195,96 @@ void main() {
     });
   });
 
+  group('nothing shows a number nobody chose', () {
+    // Paul, 10 Nov 2026: "no way to make bets register without hitting plus
+    // and then back to -." The row drew `$5` beside a golfer who had not
+    // bet, with the minus dead at the floor, under a button reading `2 bets
+    // to go`.
+    testWidgets('an unplaced bet is a button, not a figure', (t) async {
+      await _pumpCard(t, _summary(current: _hole(maxBet: 20, lines: [
+        _line(2, 'Dave', 10),
+      ])));
+      // Sam and Lee have not bet: two offers, and no bare `$5` anywhere.
+      expect(find.text('Bet \$5'), findsNWidgets(2));
+      expect(find.text('\$5'), findsNothing);
+    });
+
+    testWidgets('one tap places the floor', (t) async {
+      final sent = <(int, double)>[];
+      await _pumpCard(t, _summary(current: _hole(maxBet: 20, lines: [
+        _line(2, 'Dave', 10),
+      ])), onBet: (p, a) => sent.add((p, a)));
+      await t.tap(find.text('Bet \$5').first);
+      await t.pump();
+      expect(sent, [(3, 5.0)], reason: 'Sam, at the floor, in one tap');
+    });
+
+    testWidgets('the plus beside it places a step above', (t) async {
+      final sent = <(int, double)>[];
+      await _pumpCard(t, _summary(current: _hole(maxBet: 20)),
+          onBet: (p, a) => sent.add((p, a)));
+      await t.tap(find.byIcon(Icons.add).first);
+      await t.pump();
+      expect(sent, [(2, 10.0)]);
+    });
+
+    testWidgets('a placed bet is the plain figure', (t) async {
+      await _pumpCard(t, _summary(current: _hole(maxBet: 20, lines: [
+        _line(2, 'Dave', 5), _line(3, 'Sam', 5), _line(4, 'Lee', 5),
+      ])));
+      expect(find.textContaining('Bet '), findsNothing);
+      expect(find.text('\$5'), findsNWidgets(3));
+    });
+
+    testWidgets('the steppers do not move when a bet lands', (t) async {
+      // The amount slot is one width in both states.
+      await _pumpCard(t, _summary(current: _hole(maxBet: 20)));
+      final before = t.getTopLeft(find.byIcon(Icons.remove).first).dx;
+      await _pumpCard(t, _summary(current: _hole(maxBet: 20, lines: [
+        _line(2, 'Dave', 5),
+      ])));
+      expect(t.getTopLeft(find.byIcon(Icons.remove).first).dx, before);
+    });
+
+    Iterable<Ink> litChips(WidgetTester t) => t
+        .widgetList<Ink>(find.byType(Ink))
+        .where((i) => (i.decoration as BoxDecoration?)?.color == kBankGold);
+
+    testWidgets('no max chip is lit until the banker names one', (t) async {
+      // A hole opens with no maximum. The round's ceiling used to light up
+      // as though it were the hole's.
+      await _pumpCard(t, _summary(current: _hole()));
+      expect(litChips(t), isEmpty);
+      await _pumpCard(t, _summary(current: _hole(maxBet: 20)));
+      expect(litChips(t), hasLength(1));
+    });
+
+    testWidgets('and no bet can be placed before it', (t) async {
+      // The server refuses one; a control that answers with an error is
+      // worse than one that waits.
+      final sent = <(int, double)>[];
+      await _pumpCard(t, _summary(current: _hole()),
+          onBet: (p, a) => sent.add((p, a)));
+      await t.tap(find.text('Bet \$5').first, warnIfMissed: false);
+      await t.tap(find.byIcon(Icons.add).first, warnIfMissed: false);
+      await t.pump();
+      expect(sent, isEmpty);
+      expect(find.text('Set the max first'), findsOneWidget);
+      expect(find.textContaining('to go'), findsNothing);
+    });
+
+    testWidgets('the sub line takes the room the title leaves', (t) async {
+      // Two loose Flexibles split the row evenly, so the sub was ellipsised
+      // beside empty space. Measured wide, where half the row and the rest
+      // of the row are far apart.
+      await _pumpCard(t, _summary(current: _hole(maxBet: 20)),
+          size: const Size(700, 900));
+      final sub = t.getSize(find.text('sets the max, then the three bet'));
+      expect(sub.width, greaterThan(360),
+          reason: 'half the row is about 310');
+    });
+  });
+
   group('in the air', () {
     testWidgets('the calls are a double, and a triple on a par 3', (t) async {
       await _pumpCard(t, _summary(current: _hole(
@@ -284,8 +374,81 @@ void main() {
     testWidgets('it names the hole and the bank', (t) async {
       await _pumpTray(t, _settled());
       expect(find.text('HOLE 7 · PAUL BANKS'), findsOneWidget);
-      expect(find.text('BANKER 4'), findsOneWidget);
-      expect(find.text('Paul on the hole'), findsOneWidget);
+    });
+
+    testWidgets('no bare score sits among the money', (t) async {
+      // `Paul on the hole  5` in gold under three dollar figures, and
+      // `BANKER 5` in the label above them, both read as five dollars. The
+      // line is gone; the label says what its number IS, in the word the
+      // rows under it use (`net 5 v 4`).
+      await _pumpTray(t, _settled());
+      expect(find.textContaining('on the hole'), findsNothing);
+      expect(find.text('BANKER 4'), findsNothing);
+      expect(find.text('BANKER NET 4'), findsOneWidget);
+      expect(find.textContaining('net 5 v 4'), findsWidgets);
+    });
+
+    test('a banker holding different nets shows each, in row order', () {
+      // Strokes are settled inside each one-on-one, so he can be net 5
+      // against one opponent and net 4 against another. The figures follow
+      // the rows beneath the label, so the first is his net against the
+      // first golfer listed.
+      final h = _summary(
+        current: _hole(
+          locked: true, resolved: true, bankerGross: 5,
+          lines: [
+            _line(2, 'Dave', 10, net: 5, bankerNet: 5),
+            _line(3, 'Sam', 10, net: 5, bankerNet: 4),
+            _line(4, 'Lee', 10, net: 6, bankerNet: 5),
+          ],
+        ),
+      ).current!;
+      expect(bankerScoreLabel(h), 'banker net 5/4/5');
+    });
+
+    test('the order is the ROWS\', not sorted', () {
+      // 4/5/5 and 5/4/5 are different statements about who gave whom a
+      // stroke; a sorted or de-duplicated list would lose which is which.
+      final h = _summary(
+        current: _hole(
+          locked: true, resolved: true, bankerGross: 5,
+          lines: [
+            _line(2, 'Dave', 10, net: 5, bankerNet: 4),
+            _line(3, 'Sam', 10, net: 5, bankerNet: 5),
+            _line(4, 'Lee', 10, net: 6, bankerNet: 5),
+          ],
+        ),
+      ).current!;
+      expect(bankerScoreLabel(h), 'banker net 4/5/5');
+    });
+
+    test('the same net in every match is one number', () {
+      final h = _summary(
+        current: _hole(
+          locked: true, resolved: true, bankerGross: 5,
+          lines: [
+            _line(2, 'Dave', 10, net: 5, bankerNet: 5),
+            _line(3, 'Sam', 10, net: 5, bankerNet: 5),
+            _line(4, 'Lee', 10, net: 6, bankerNet: 5),
+          ],
+        ),
+      ).current!;
+      expect(bankerScoreLabel(h), 'banker net 5');
+    });
+
+    test('his gross is the fallback only when no row has a net', () {
+      final h = _summary(
+        current: _hole(locked: true, bankerGross: 5,
+            lines: [_line(2, 'Dave', 10)]),
+      ).current!;
+      expect(bankerScoreLabel(h), 'banker gross 5');
+    });
+
+    test('and with no score at all the label says nothing', () {
+      final h = _summary(
+        current: _hole(locked: true, lines: [_line(2, 'Dave', 10)]),
+      ).current!;
+      expect(bankerScoreLabel(h), isNull);
     });
 
     testWidgets('each bet carries the SERVER\'s chain', (t) async {
@@ -350,7 +513,10 @@ void main() {
       await t.tap(find.descendant(
           of: find.byType(InkWell), matching: find.text('Sam')).first);
       await t.pump();
-      expect(picked, [(3, 'holed-out-first')]);
+      // The SERVER's word. This asserted `holed-out-first`, which the tray
+      // had made up and the server refuses — so the test agreed with the
+      // bug. See `the tie reasons are the server's` below.
+      expect(picked, [(3, kBankerTieHoledFirst)]);
     });
 
     testWidgets('Draw picks one of the tied, and says it was drawn',
@@ -464,6 +630,222 @@ void main() {
     test('a changed score clears a tie pick', () {
       // The pick answers a result that no longer stands.
       expect(src, contains('_bankerTiePick = null'));
+    });
+  });
+  group('the bets come before the scores', () {
+    // Paul, 10 Nov 2026: "The score entry screen appears before setting the
+    // bets. Also, I don't want the scorecard showing underneath when we get
+    // to the bet entry stage." The bets card sat UNDER the golfers, behind a
+    // keypad that was up from the moment the hole opened.
+    final src =
+        File('lib/screens/score_entry_screen.dart').readAsStringSync();
+
+    String body(String signature) {
+      final at = src.indexOf(signature);
+      expect(at, greaterThan(0), reason: signature);
+      return src.substring(at, src.indexOf('\n  }\n', at));
+    }
+
+    test('betting is open until the bets are LOCKED', () {
+      final b = body('bool _bankerBetsOpen(RoundProvider rp, '
+          'Map<int, int> scores)');
+      expect(b, contains('h.locked'));
+      expect(b, contains('h.resolved'));
+      expect(b, contains('h.hole != _selectedHole'),
+          reason: 'only the hole being bought — an earlier hole reopened to '
+              'fix a score has nothing to bet');
+    });
+
+    test('a score already on the hole ends it', () {
+      // A round under way from a build that let scores in first must not be
+      // left with a keypad that never comes.
+      expect(body('bool _bankerBetsOpen(RoundProvider rp, '
+          'Map<int, int> scores)'), contains('return scores.isEmpty;'));
+    });
+
+    test('and while it is open there is no keypad', () {
+      expect(src, contains('final betting = _bankerBetsOpen(rp, scores);'));
+      expect(src, contains(
+          'var fbIdx = fbActive && !betting ? _hotSpotIdx(players, scores)'
+          ' : -1;'));
+      // The tap-a-row override must not put one back.
+      expect(src, contains('if (fbActive && !betting && _editHotPid != null)'));
+    });
+
+    test('the line under the pager says what is being waited for', () {
+      // `4 scores to go` over a screen with no way to enter one reads as a
+      // fault.
+      expect(body('Widget _missingScoresNote('),
+          contains("'Lock the bets on hole \$_selectedHole to enter scores'"));
+    });
+
+    test('the bets card is ABOVE the golfers', () {
+      // Handed to the hole card's slot…
+      final at = src.indexOf('aboveRows: (_bankerRound(rp)');
+      expect(at, greaterThan(0));
+      // Bounded by the slot's own `: null,` — a window measured in
+      // characters reports edits, not regressions.
+      expect(src.substring(at, src.indexOf(': null,', at)),
+          contains('BankerBetsCard('),
+          reason: 'the slot is handed the bets card');
+      expect('BankerBetsCard('.allMatches(src).length, 1,
+          reason: 'and it is drawn nowhere else on this screen');
+      // …which draws it before the first golfer's row.
+      final slot = src.indexOf('if (aboveRows != null) aboveRows!,');
+      final rows = src.indexOf('...players.asMap().entries.expand(', slot);
+      expect(slot, greaterThan(0));
+      expect(rows, greaterThan(slot));
+    });
+
+    test('nothing sits under the golfers at the betting stage', () {
+      final at = src.indexOf('BankerEntryStrip(');
+      expect(at, greaterThan(0));
+      final gate = src.lastIndexOf('if (', at);
+      expect(src.substring(gate, at), contains('!_bankerBetsOpen(rp, scores)'));
+    });
+
+    test('and no Banker scorecard is drawn on score entry at all', () {
+      // There were two: the round's grid above the bets and a second inside
+      // the strip. Both are the leaderboard's.
+      expect(src.contains('rp.bankerSummary!.grid'), isFalse);
+      final strip =
+          File('lib/widgets/banker_entry_strip.dart').readAsStringSync();
+      expect(strip.contains('HoleGridScorecard('), isFalse);
+      expect(strip.contains('hole_grid_scorecard.dart'), isFalse);
+    });
+
+    test('the leaderboard still draws it', () {
+      // The other half of a move: without this the round's hole-by-hole
+      // card would exist on no screen at all.
+      expect(File('lib/widgets/banker_board.dart').readAsStringSync(),
+          contains('HoleGridScorecard('));
+    });
+  });
+  group('one screen, however you arrive', () {
+    // Paul, 10 Nov 2026: "you get to 2 different screens if you come from
+    // the hub or just finish entering the score and going to the next hole."
+    // The hub and setup still opened the old `/banker` board.
+    String read(String f) => File(f).readAsStringSync();
+
+    test('the hub opens score entry for a configured Banker round', () {
+      final src = read('lib/screens/round_screen.dart');
+      final at = src.indexOf("} else if (fsGames.contains('banker')) {");
+      expect(at, greaterThan(0));
+      final branch = src.substring(at, src.indexOf('} else if', at + 10));
+      expect(branch, contains("route = '/score-entry';"));
+    });
+
+    test('and so does finishing setup', () {
+      final src = read('lib/screens/banker_setup_screen.dart');
+      expect(
+          RegExp(r"pushReplacementNamed\('/score-entry',\s*"
+                  r'arguments: widget\.foursomeId\)')
+              .hasMatch(src),
+          isTrue);
+    });
+
+    test('nothing in the app opens the old board', () {
+      // The route stays registered in main.dart; no screen pushes it.
+      for (final f in Directory('lib')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart') &&
+              !f.path.endsWith('main.dart'))) {
+        expect(RegExp(r"Named\(\s*'/banker'").hasMatch(f.readAsStringSync()),
+            isFalse, reason: f.path);
+        expect(f.readAsStringSync().contains("route = '/banker'"), isFalse,
+            reason: f.path);
+      }
+    });
+
+    final entry = read('lib/screens/score_entry_screen.dart');
+
+    test('it lands on the hole the bank is on', () {
+      // Not the first hole without scores: a scored hole is still in play
+      // until the bank has passed, and the hole after it has no banker.
+      final at = entry.indexOf('void _jumpToFirstUnplayed(RoundProvider rp)');
+      expect(at, greaterThan(0));
+      final body = entry.substring(at, entry.indexOf('\n  }\n', at));
+      expect(
+          RegExp(r'if \(_bankerRound\(rp\)\) \{\s*'
+                  r'final hole = rp\.bankerSummary\?\.currentHole;\s*'
+                  r'if \(hole != null\) \{\s*'
+                  r'setState\(\(\) => _selectedHole = hole\);\s*'
+                  r'return;')
+              .hasMatch(body),
+          isTrue);
+      // BEFORE the walk for the first unscored hole.
+      expect(body.indexOf('bankerSummary?.currentHole'),
+          lessThan(body.indexOf('for (final h in order)')));
+    });
+
+    test('and waits for the summary that says which', () {
+      expect(entry,
+          contains('final waitForBanker = '
+              '_bankerRound(rp) && rp.bankerSummary == null;'));
+      final at = entry.indexOf('if (!_initialJumpDone &&');
+      expect(entry.substring(at, entry.indexOf('{', at)),
+          contains('!waitForBanker'));
+    });
+  });
+
+  group('the Banker screen', () {
+    test('its scorecard draws no strokes table', () {
+      // Paul, 10 Nov 2026: "remove the strokes table from the first banker
+      // screen." The dots are on the cells.
+      final src = File('lib/screens/banker_screen.dart').readAsStringSync();
+      expect('HoleGridScorecard('.allMatches(src).length, 1);
+      final at = src.indexOf('HoleGridScorecard(');
+      expect(RegExp(r'showStrokes:\s*false')
+          .hasMatch(src.substring(at, src.indexOf(');', at))), isTrue);
+    });
+  });
+  group('the tie reasons are the server\'s', () {
+    // Paul, 10 Nov 2026: "I seem to have gotten stuck." Picking who holed
+    // out first sent `holed-out-first`; `BankerAdvanceSerializer` is a
+    // choice field and answered 400, so a tied bank could not be confirmed
+    // and the round could not move on. The widget test above it asserted
+    // what the tray SENT, which is how a made-up word passed.
+    //
+    // So this reads the serializer. The two halves are in different
+    // languages and nothing else checks them against each other.
+    // Read inside each test: an `expect` at group-declaration time is
+    // outside any test and fails the whole file to load.
+    Set<String> choices() {
+      final src = File('../api/serializers.py').readAsStringSync();
+      final at = src.indexOf('tie_reason = serializers.ChoiceField(');
+      expect(at, greaterThan(0), reason: 'the field moved — find it again');
+      final list = RegExp(r'choices=\[([^\]]*)\]')
+          .firstMatch(src.substring(at))!
+          .group(1)!;
+      return RegExp(r"'([^']+)'").allMatches(list).map((m) => m.group(1)!)
+          .toSet();
+    }
+
+    test('the server still accepts a closed list', () {
+      expect(choices(), containsAll(['holed_first', 'drawn']));
+    });
+
+    test('everything the app can send is on it', () {
+      expect(choices(), contains(kBankerTieHoledFirst));
+      expect(choices(), contains(kBankerTieDrawn));
+    });
+
+    test('no screen spells a reason of its own', () {
+      // Three places send one: the tray, the score screen's default, and
+      // the Banker screen. A literal in any of them is how this happened.
+      for (final f in [
+        'lib/widgets/banker_entry.dart',
+        'lib/screens/score_entry_screen.dart',
+        'lib/screens/banker_screen.dart',
+      ]) {
+        final src = File(f).readAsStringSync();
+        expect(src.contains("'holed-out-first'"), isFalse, reason: f);
+        expect(RegExp(r"tieReason:[^,;]*'[a-z_-]+'").hasMatch(src), isFalse,
+            reason: '$f passes a literal tie reason');
+        expect(RegExp(r"onPick\([^)]*'[a-z_-]+'\)").hasMatch(src), isFalse,
+            reason: '$f picks with a literal tie reason');
+      }
     });
   });
 }

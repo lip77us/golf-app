@@ -19,7 +19,6 @@ import 'package:flutter/material.dart';
 
 import '../api/models.dart';
 import '../theme/halved_brand.dart';
-import 'hole_grid_scorecard.dart';
 
 const _gold      = Color(0xFFB8860B);
 const _goldLine  = Color(0xFFE4D3A8);
@@ -40,7 +39,6 @@ class BankerEntryStrip extends StatelessWidget {
     required this.hole,
     required this.scoredCount,
     required this.fieldSize,
-    this.pendingGross = const {},
   });
 
   final BankerSummary summary;
@@ -48,12 +46,6 @@ class BankerEntryStrip extends StatelessWidget {
   /// How many of the group have a gross score on this hole yet.
   final int scoredCount;
   final int fieldSize;
-  /// Scores TYPED on this hole but not yet posted, by player id. The card
-  /// fills in as the group calls their numbers rather than staying blank
-  /// until the hole is posted — which is exactly when a reader wants to check
-  /// what he just tapped against everyone else's.
-  final Map<int, int?> pendingGross;
-
   @override
   Widget build(BuildContext context) {
     final h = summary.holes
@@ -68,44 +60,14 @@ class BankerEntryStrip extends StatelessWidget {
       _bankerLine(banker, h),
       const SizedBox(height: 8),
       for (final l in h.lines) _betRow(l, h.resolved),
-      const SizedBox(height: 14),
-      // The SHARED grid every other game's entry screen draws — header
-      // shading, a stroke-index row, a pinned label column. Its dots are the
-      // pairwise ones: an opponent's own match, and the banker's off the low
-      // golfer. No green: green means "won the hole" everywhere else, and a
-      // Banker hole has three results rather than one winner.
-      HoleGridScorecard(
-        // A progress read-out under a keypad: a second table here would push
-        // the entry card off the screen. See `HoleGridScorecard.showStrokes`.
-        showStrokes: false,
-        holes: _gridWithPending(),
-        participants: summary.gridPlayers,
-        legend: null,
-      ),
       const SizedBox(height: 8),
     ]);
   }
 
-  /// The server's grid with this hole's typed-but-unposted scores dropped in.
-  ///
-  /// Only the hole being entered is touched, and only where the server has no
-  /// score of its own — a posted score always wins, so a stale local edit can
-  /// never paint over what the round actually holds.
-  List<Map<String, dynamic>> _gridWithPending() {
-    if (pendingGross.isEmpty) return summary.grid;
-    return summary.grid.map((row) {
-      if (row['hole'] != hole) return row;
-      final scores = ((row['scores'] as List?) ?? []).map((e) {
-        final sc =
-            Map<String, dynamic>.from((e as Map).cast<String, dynamic>());
-        if (sc['gross'] == null && pendingGross.containsKey(sc['player_id'])) {
-          sc['gross'] = pendingGross[sc['player_id']];
-        }
-        return sc;
-      }).toList();
-      return {...row, 'scores': scores};
-    }).toList();
-  }
+  // **No scorecard.** The round's grid was drawn here, under the bets, with
+  // the hole's typed-but-unposted scores dropped in. It is the leaderboard's
+  // (`widgets/banker_board.dart`), like every other game's — Paul, 10 Nov
+  // 2026: "I don't want the scorecard showing underneath."
 
   /// The whole card is read against the banker, so he is named above it rather
   /// than left to be found among four alphabetical rows.

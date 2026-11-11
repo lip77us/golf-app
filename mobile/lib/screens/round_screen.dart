@@ -596,10 +596,14 @@ class _RoundScreenState extends State<RoundScreen> {
                       // action rules before a hole can be declared.
                       route = '/banker-setup';
                     } else if (fsGames.contains('banker')) {
-                      // Every hole is declared before it is played — a
-                      // maximum, three bets, a lock — so Banker owns its own
-                      // screen and hands off to score entry mid-hole.
-                      route = '/banker';
+                      // **Score entry, like the hole after it.** The bets
+                      // are a card above the golfers there now, and the
+                      // tray's forward button stays on that screen — so a
+                      // hub that opened the old `/banker` board put a group
+                      // on one screen for the first hole and another for
+                      // the rest (Paul, 10 Nov 2026: "you get to 2
+                      // different screens").
+                      route = '/score-entry';
                     } else if (fsGames.contains('sequoya_threes') &&
                         !fs.configuredGames.contains('sequoya_threes')) {
                       // Sequoya 3s needs match 1's pairing before play — the

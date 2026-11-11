@@ -12362,3 +12362,200 @@ Client-only. The server still accepts a call on a scored hole, which is what
 
 Tests: the `a settled hole locks the call` group in
 `mobile/test/wolf_entry_test.dart` (10). Seven mutations, all killed.
+
+## Banker: the bets come before the scores
+
+Reported from a phone, 10 Nov 2026: *"The score entry screen appears before
+setting the bets. Also, I don't want the scorecard showing underneath when we
+get to the bet entry stage."*
+
+The Banker score-entry note above says the betting "sits above the golfers".
+**It did not.** `BankerBetsCard` was built in the body AFTER the hole card —
+under the four rows, under a scorecard, and behind a keypad that was up from
+the moment the hole opened. So the first thing a group saw on the tee was a
+score pad for a hole nobody had bet on, and the card that had to be answered
+first was the one thing they could not see.
+
+- **`_bankerBetsOpen(rp, scores)`** — Banker is the primary, this is the hole
+  being bought (`current.hole == _selectedHole`), it has a banker, and the
+  bets are not locked or resolved. While it is true **no keypad is drawn**
+  (`fbActive && !betting`), and the tap-a-row override cannot put one back.
+  The pager stays, so the group can still go back a hole.
+- **A score already on the hole ends it**, whatever the lock says: a round
+  under way from a build that let scores in first must not be left with a
+  keypad that never comes.
+- **The bets card rides the hole card** (`_HoleScoreCard.aboveRows`), between
+  the hole's header and the first golfer — at both stages: the max and the
+  three bets on the tee, the doubles and the counter once they are locked.
+- The line under the pager reads `Lock the bets on hole 2 to enter scores`
+  at the betting stage. `4 scores to go` over a screen with no way to enter
+  one read as a fault.
+- **No scorecard on score entry.** There were TWO: the round's grid above the
+  bets and a second inside `BankerEntryStrip`. Both are gone; the
+  leaderboard's `BankerGroupCard` draws it. The strip (the three stakes, held
+  UNRESOLVED) is drawn only once the bets are locked, so nothing sits under
+  the golfers at the betting stage.
+
+Client-only. The lock itself is still the server's; this only stops the
+screen offering a score before it.
+
+Tests: the `the bets come before the scores` group in
+`mobile/test/banker_entry_test.dart` (8, source guards — the screen has no
+widget harness). Five mutations, all killed. **Not rendered and not seen on a
+device.**
+
+### The Banker tray: a score among money has to say it is one
+
+Same sitting, from the tray. Two bare numbers read as dollars because every
+other figure on that tray is money:
+
+- **`Paul on the hole  5`** — the banker's gross, in gold, on its own row
+  under three dollar figures (*"sounds like a $, not a score"*). Removed.
+- **`BANKER 5`** in the tray label. Kept, and it says what it is:
+  **`BANKER NET 5`**, the word the rows under it use (`net 5 v 5`).
+
+**A banker has no single net** — strokes are settled inside each one-on-one,
+which is why `BankerHoleState` carries his gross and no `bankerNet`. So
+`bankerScoreLabel(h)` reads the rows: one number when the three matches agree,
+and **`BANKER NET 5/4/5`** when they do not, in the order of the rows beneath
+it (Paul's wording). Row order, never sorted — `4/5/5` and `5/4/5` are
+different statements about who gave whom a stroke. His gross is the fallback
+only for a hole whose rows carry no net at all.
+
+Tests: five in the `the tray` group of `mobile/test/banker_entry_test.dart`.
+
+### A tied bank could not be confirmed — the tray had invented a word
+
+Reported from the 3rd hole, 10 Nov 2026: *"I seem to have gotten stuck."*
+Two golfers tied low, he picked who holed out first, and the forward button
+answered `["holed-out-first" is not a valid choice.]` every time.
+
+`BankerAdvanceSerializer.tie_reason` is a ChoiceField — `holed_first`,
+`drawn`, `kept`. The score-entry tray (8 Nov, `aff107e5`) sent
+**`holed-out-first`**, a string it made up; the older `banker_screen` has
+always sent `holed_first`. `Draw` worked only because its word happened to
+match, which is why a tied bank was passable by chance and not by choice.
+
+**No released build has it** — it went in two days after `v2.14.0`. Client
+fix only, no server alias.
+
+`kBankerTieHoledFirst` / `kBankerTieDrawn` (`widgets/banker_entry.dart`) are
+the one spelling, used by the tray, the score screen's default and
+`banker_screen`.
+
+**The widget test had pinned the bug**: it asserted what the tray SENT
+(`(3, 'holed-out-first')`), which agrees with any string. A value that
+crosses to the server can only be checked against the server, so
+`the tie reasons are the server's` READS `api/serializers.py` from the Dart
+test and asserts both constants are in the field's choices — and that no
+screen passes a literal reason. Checked by putting the old value back.
+
+Worth a sweep some day: any other client string posted into a server
+ChoiceField is the same shape, and a test that only asserts what the client
+sends cannot see it.
+
+### The Banker keypad read the round's strokes, not Banker's
+
+Paul, 10 Nov 2026, with Tyler banking a par 3: *"Why does Tyler Law get 1
+stroke on this hole?"* He does not.
+
+Banker's strokes are PAIRWISE — an opponent strokes against the banker, and
+the banker strokes off the low golfer (never, if he is the low golfer). The
+golfer's ROW has used that rule since Banker shipped (`_bankerStrokes`). The
+KEYPAD under it had no Banker branch, so `_keypadStrokes` fell through to
+`HoleScore.handicap_strokes` — the round's full-handicap allocation — and read
+`1 stroke · par 3` over a row showing no dot. With Net Style Entry on the
+keys were also coloured against a par he does not have.
+
+**The fifth landing of that one fallback**: Sixes, Stroke Play, Skins and
+Nassau each have a branch in `_keypadStrokes` for the same reason, each added
+after a report. Banker was missed because its strokes never came from a hole
+card — they come from the summary's `stroke_plan`.
+
+`utils/banker_strokes.dart` `bankerStrokesOnHole(summary, playerId, hole)` is
+the one rule now; the row delegates to it and the keypad calls it before the
+fallback. Null when the summary cannot say (no plan, no banker on the hole),
+so a caller falls back rather than drawing a wrong zero.
+
+**A guard that passed against the bug it was written for**: the first
+version asserted that `_keypadStrokes` CONTAINS the call, and
+`if (false) { …call… }` satisfied it. It matches the gate, the call and the
+return together now. Mutation-checking is what found it.
+
+Tests: `mobile/test/banker_strokes_test.dart` (11).
+
+### The bets card showed a bet nobody had placed
+
+Paul, 10 Nov 2026: *"no way to make bets register without hitting plus and
+then back to -."* Max `$10` lit, Paul `$10`, Larry and Gilbert each reading
+`$5` — under a button saying `2 bets to go`.
+
+`_BetRow` drew `placed[id] ?? summary.minBet` as a plain figure, so an
+UNPLACED bet looked identical to a placed one at the floor, and the minus is
+dead at the floor — up a step and back down was the only way to place it.
+
+**The engine was right and stays as it is.** `lock_bets` refuses a missing
+bet on purpose: *"a silent floor bet would be the app choosing somebody's
+stake for him."* So the lock does not fill them in; the card stops lying
+instead. One rule, stated on the widget: **nothing on this card may show a
+number nobody chose.**
+
+- **An unplaced bet is a button** — `Bet $5` in the bank's gold, one tap
+  places the floor, and the plus beside it places a step above. Once placed
+  it is the plain `$5` the stepper moves. The amount slot is one width
+  (`_BetRow.amountW`) in both states, so the steppers do not jump when a bet
+  lands.
+- **The max chips had the same fault.** A hole opens with `max_bet` NULL, and
+  the chip was lit by `h.maxBet ?? summary.maxBet` — the ROUND's ceiling,
+  shown as though the banker had named it — while `place_bet` refuses any
+  bet until he does. A chip is lit by the hole's own max only; until then the
+  bet rows are inert and the button reads `Set the max first`.
+- **`_Head` was the loose-`Flexible` trap a fifth time**: title and sub split
+  the row evenly, so `sets the max, then the th…` was ellipsised beside empty
+  space. The title takes what it needs (capped at 60%) and the sub is
+  `Expanded`.
+
+Tests: the `nothing shows a number nobody chose` group in
+`mobile/test/banker_entry_test.dart` (8). Seven mutations, all killed.
+Rendered with a real font at 390; **not seen on a device.**
+
+**Not done, and Paul's call:** letting the LOCK place the floor for anybody
+who has not bet. It would be fewer taps when all three play the minimum, and
+it reverses the engine's stated rule.
+
+### Banker: one screen, however you arrive
+
+Paul, 10 Nov 2026: *"you get to 2 different screens if you come from the hub
+or just finish entering the score and going to the next hole. Is that
+intentional?"* It was not. The score-entry rework moved the bets onto the
+shared screen and left the tray's forward button there, but **the hub and
+`banker_setup_screen` still pushed `/banker`** — the old board, with its own
+older betting UI (chips, its own lock button) and an `Enter scores` hand-off.
+So the first hole of a visit was bought on one screen and every hole after
+it on another. The Banker note above had already flagged it as "its own
+question"; this answers it.
+
+- **The hub and setup both open `/score-entry`** for a configured Banker
+  round. No screen pushes `/banker` any more; a test walks `lib/` for it.
+- **A Banker round lands on the hole the BANK is on**
+  (`bankerSummary.currentHole`), not the first hole without scores. Those
+  differ exactly when it matters: a hole whose four scores are in is still
+  the hole in play until the bank has passed — its tray is where a tie is
+  answered and the next hole opened — and the hole after it has no banker,
+  no maximum and no bets. Landing there would offer a keypad for a hole
+  nobody can bet on. The old board papered over this by being the place you
+  always landed.
+- **The initial jump waits for the Banker summary** (`waitForBanker`), the
+  way it already waits for Triple Cup's: nothing loads it before this screen
+  now that the hub comes straight here.
+
+**`banker_screen.dart` (1251 lines) is now unreachable**, like
+`skins_screen.dart`: the route is still registered in `main.dart` and
+nothing pushes it. Not deleted here. What it had that score entry does not:
+the standings card and the rotation note (the leaderboard's Banker card and
+the tray's `banks next` line cover both) and a `Settle up` app-bar button
+(still on the leaderboard's Banker card).
+
+Tests: the `one screen, however you arrive` group in
+`mobile/test/banker_entry_test.dart` (5). Four mutations, all killed. **Not
+seen on a device.**

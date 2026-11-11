@@ -42,6 +42,7 @@ import '../widgets/vegas_entry.dart';
 import '../widgets/fourball_entry.dart';
 import '../widgets/nassau_entry.dart';
 import '../widgets/skins_entry.dart';
+import '../utils/banker_strokes.dart';
 import '../widgets/banker_entry.dart';
 import '../widgets/banker_entry_strip.dart';
 import '../widgets/triple_cup_pairings.dart';
@@ -203,6 +204,16 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     if (sp != null) {
       final s = sp.player(m.player.id)?.strokes;
       if (s != null) return s;
+    }
+
+    // **Banker's strokes are pairwise**, and the keypad had no branch for
+    // it — so it fell to the round's full-handicap allocation at the bottom
+    // and told a banker he had `1 stroke` over a row showing none. The same
+    // function the row reads, so the two cannot disagree again.
+    if (_bankerRound(rp)) {
+      final b = bankerStrokesOnHole(
+          rp.bankerSummary, m.player.id, _selectedHole);
+      if (b != null) return b;
     }
 
     // **And Skins**, which carries its own handicap mode and allowance —
@@ -1152,6 +1163,19 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   void _jumpToFirstUnplayed(RoundProvider rp) {
     final sc = rp.scorecard;
     if (sc == null) return;
+    // **A Banker round lands on the hole the BANK is on**, which is not
+    // always the first hole without scores. A hole whose four scores are in
+    // is still the hole in play until the bank has passed — its tray is
+    // where a tie for the bank is answered and the next hole is opened — and
+    // the hole after it has no banker, no maximum and no bets yet. Landing
+    // there would offer a keypad for a hole nobody can bet on.
+    if (_bankerRound(rp)) {
+      final hole = rp.bankerSummary?.currentHole;
+      if (hole != null) {
+        setState(() => _selectedHole = hole);
+        return;
+      }
+    }
     final realIds = _orderedPlayers(sc, rp.round, rp.nassauSummary)
         .map((m) => m.player.id)
         .toSet();
@@ -1273,9 +1297,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     if (waiting.isEmpty) return const SizedBox.shrink();
 
     final theme = Theme.of(ctx);
-    final text = waiting.length <= 2
-        ? 'Waiting on ${waiting.join(" and ")}'
-        : '${waiting.length} scores to go on hole $_selectedHole';
+    // At Banker's betting stage the thing being waited for is the bets, and
+    // `4 scores to go` over a screen with no way to enter one reads as a
+    // fault.
+    final text = _bankerBetsOpen(ctx.read<RoundProvider>(), scores)
+        ? 'Lock the bets on hole $_selectedHole to enter scores'
+        : waiting.length <= 2
+            ? 'Waiting on ${waiting.join(" and ")}'
+            : '${waiting.length} scores to go on hole $_selectedHole';
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Text(
@@ -1779,6 +1808,27 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     return rp.singlesHole(_selectedHole);
   }
 
+  /// **The bets on this hole are still being made.**
+  ///
+  /// A Banker hole is bought before it is played: the banker sets the max,
+  /// the three bet, the bets are LOCKED, and only then is there anything to
+  /// score. The keypad used to be up from the moment the hole opened, with
+  /// the bets card under the golfers and behind it — so the first thing a
+  /// group saw on the tee was a score pad for a hole nobody had bet on
+  /// (Paul, 10 Nov 2026: "the score entry screen appears before setting the
+  /// bets"). While this is true the keypad is not drawn at all.
+  ///
+  /// **A score already on the hole ends it**, whatever the lock says: a
+  /// round under way from a build that let scores in first must not be left
+  /// with a keypad that never comes.
+  bool _bankerBetsOpen(RoundProvider rp, Map<int, int> scores) {
+    if (!_bankerRound(rp)) return false;
+    final h = rp.bankerSummary?.current;
+    if (h == null || h.hole != _selectedHole) return false;
+    if (h.bankerId == null || h.locked || h.resolved) return false;
+    return scores.isEmpty;
+  }
+
   /// This hole ends in Banker's tray.
   ///
   /// **Deliberately NOT `_bankerTrayState`**, which requires the hole to be
@@ -1810,7 +1860,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// Who the group picked on a tie for the bank, and why. Cleared whenever a
   /// score changes — the pick belongs to a result that no longer stands.
   int? _bankerTiePick;
-  String _bankerTieReason = 'holed-out-first';
+  String _bankerTieReason = kBankerTieHoledFirst;
 
   /// The card's golfers as `(id, first)`, for the bets card and the tray.
   List<({int id, String first})> _bankerRoster(List<Membership> players) => [
@@ -3174,11 +3224,16 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // hole count to build the play order. On a cold restart the scorecard can
     // arrive first; without this the play order defaults to 1-18 and a back-9 /
     // shotgun round opens on hole 1 instead of the first unplayed hole.
+    // And for Banker's summary, which says which hole the bank is on — see
+    // `_jumpToFirstUnplayed`. The hub opens this screen directly now, so
+    // nothing has loaded it beforehand.
+    final waitForBanker = _bankerRound(rp) && rp.bankerSummary == null;
     if (!_initialJumpDone &&
         sc != null &&
         rp.round != null &&
         rp.activeFoursomeId == widget.foursomeId &&
-        !waitForTc) {
+        !waitForTc &&
+        !waitForBanker) {
       _initialJumpDone = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _jumpToFirstUnplayed(context.read<RoundProvider>());
@@ -3615,8 +3670,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // a golfer under the keypad) until Edit stopped choosing one — then the
     // flag with no cursor was a state nothing drew. Rabbit hit exactly that.
     final afTray = af != null && fbActive && allDone && _editHotPid == null;
-    var fbIdx = fbActive ? _hotSpotIdx(players, scores) : -1;
-    if (fbActive && _editHotPid != null) {
+    // **No keypad while a Banker hole's bets are open** — see
+    // `_bankerBetsOpen`. The pager stays, so the group can still go back.
+    final betting = _bankerBetsOpen(rp, scores);
+    var fbIdx = fbActive && !betting ? _hotSpotIdx(players, scores) : -1;
+    if (fbActive && !betting && _editHotPid != null) {
       // The same override the inline picker uses when a scorer taps back to
       // a golfer already scored — reused rather than reinvented, so the two
       // controls cannot disagree about whose row is live.
@@ -4394,6 +4452,33 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     : null,
                 ball:   _sideGameMarks(rp)?.ball,
                 rumble: _sideGameMarks(rp)?.rumble,
+                // **Banker's bets, above the golfers** — the max and the
+                // three bets on the tee, then the doubles and the counter
+                // once they are locked. Above, because the hole is bought
+                // before it is played and a card under four rows and a
+                // keypad is a card nobody finds.
+                aboveRows: (_bankerRound(rp) &&
+                        rp.bankerSummary?.current?.hole == _selectedHole)
+                    ? BankerBetsCard(
+                        summary: rp.bankerSummary!,
+                        roster: _bankerRoster(players),
+                        // The engine closes the calls at the first gross;
+                        // this asks the same question of what is on screen
+                        // so the toggles dim the moment a key lands rather
+                        // than after a round trip.
+                        scoreIn: scores.isNotEmpty,
+                        busy: _bankerBusy,
+                        onMax: (v) => _bankerDeclare(rp, maxBet: v),
+                        onBet: (pid, amt) => _bankerDeclare(rp, bets: [
+                          {'player_id': pid, 'amount': amt}
+                        ]),
+                        onLock: () => _bankerDeclare(rp, lock: true),
+                        onDouble: (pid, on) => _bankerDeclare(rp,
+                            double_: on ? pid : null,
+                            undouble: on ? null : pid),
+                        onCounter: (on) => _bankerDeclare(rp, counter: on),
+                      )
+                    : null,
                 holeData:        holeData,
                 holeNumber:      _selectedHole,
                 courseName:      rp.round?.course.name ?? '',
@@ -4580,68 +4665,21 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 ),
               const SizedBox(height: 12),
 
-              // Banker's surround: the three bets for the hole being entered,
-              // holding their stakes with the word UNRESOLVED until all four
-              // scores are in, then the group's net card. Entry itself stays
-              // the shared card every game uses — only what sits under it is
-              // Banker's.
+              // **Banker's strip, once the bets are locked.** The three
+              // stakes, held with the word UNRESOLVED until all four scores
+              // are in. The bets card itself is ABOVE the golfers now (the
+              // hole card's `aboveRows`), and at the betting stage nothing
+              // sits under them at all.
+              //
+              // **No scorecard here.** There were two — the round's grid
+              // above the bets and a second inside the strip — and both are
+              // the leaderboard's (`widgets/banker_board.dart`). Paul,
+              // 10 Nov 2026: "I don't want the scorecard showing underneath
+              // when we get to the bet entry stage."
               if (resolvePrimary(rp.round?.primaryGame, games) ==
                       GameIds.banker &&
-                  rp.bankerSummary != null) ...[
-                // **The card, ABOVE the bets.** Banker splits a hole across
-                // two screens, and this is the one where the numbers are
-                // called; the bets below are what those numbers are worth, so
-                // the scores they were drawn from belong first. A reader going
-                // the other way has to scroll back up to check a stake he has
-                // just been handed.
-                //
-                // Same shared grid, same gold banker cells and stroke plan the
-                // Banker screen draws — one implementation is what keeps the
-                // two halves of the hole agreeing.
-                if (rp.bankerSummary!.grid.isNotEmpty) ...[
-                  HoleGridScorecard(
-                    // A progress read-out under a keypad: a second table here would push
-                    // the entry card off the screen. See `HoleGridScorecard.showStrokes`.
-                    showStrokes: false,
-                    holes:        rp.bankerSummary!.grid,
-                    participants: rp.bankerSummary!.gridPlayers,
-                    legend:       null,
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                // **The money on the hole, above the golfers.** The max
-                // and three bets on the tee, the calls in the air — which
-                // is what this packet folds into the score screen, so the
-                // group no longer walks to another screen and back to place
-                // a bet it is about to score.
-                if (_bankerRound(rp) &&
-                    (rp.bankerSummary!.current?.hole == _selectedHole))
-                  BankerBetsCard(
-                    summary: rp.bankerSummary!,
-                    roster: _bankerRoster(players),
-                    // The engine closes the calls at the first gross; this
-                    // asks the same question of what is on screen so the
-                    // toggles dim the moment a key lands rather than after
-                    // a round trip.
-                    scoreIn: players.any((m) {
-                      final typed = _pending[_selectedHole]?[m.player.id];
-                      if (typed == _kClearedScore) return false;
-                      return (typed ??
-                              sc.holeData(_selectedHole)
-                                  ?.scoreFor(m.player.id)
-                                  ?.grossScore) != null;
-                    }),
-                    busy: _bankerBusy,
-                    onMax: (v) => _bankerDeclare(rp, maxBet: v),
-                    onBet: (pid, amt) => _bankerDeclare(rp, bets: [
-                      {'player_id': pid, 'amount': amt}
-                    ]),
-                    onLock: () => _bankerDeclare(rp, lock: true),
-                    onDouble: (pid, on) => _bankerDeclare(rp,
-                        double_: on ? pid : null,
-                        undouble: on ? null : pid),
-                    onCounter: (on) => _bankerDeclare(rp, counter: on),
-                  ),
+                  rp.bankerSummary != null &&
+                  !_bankerBetsOpen(rp, scores)) ...[
                 BankerEntryStrip(
                   summary: rp.bankerSummary!,
                   hole: _selectedHole,
@@ -4658,12 +4696,6 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                         null;
                   }).length,
                   fieldSize: players.length,
-                  // What has been typed on this hole but not posted, so the
-                  // card below fills in as the group calls their numbers.
-                  pendingGross: {
-                    for (final e in (_pending[_selectedHole] ?? {}).entries)
-                      if (e.value != _kClearedScore) e.key: e.value,
-                  },
                 ),
                 const SizedBox(height: 4),
               ],
@@ -4877,6 +4909,10 @@ class _HoleScoreCard extends StatelessWidget {
   final BallOnHole?   ball;
   final RumbleOnHole? rumble;
 
+  /// A card between the hole's header and the golfers' rows. Banker's bets:
+  /// the one thing on this screen that has to be done BEFORE a score.
+  final Widget? aboveRows;
+
   /// Las Vegas' hole card, for the side headers — the live half of that
   /// game, because what a golfer watches is the number forming. Null on
   /// every other round, which is what keeps the headers absent rather than
@@ -4914,6 +4950,7 @@ class _HoleScoreCard extends StatelessWidget {
     this.fortyBallsNet,
     this.ball,
     this.rumble,
+    this.aboveRows,
     this.vegasHole,
     this.fourballHole,
     this.nassauCard,
@@ -5178,39 +5215,12 @@ class _HoleScoreCard extends StatelessWidget {
 
   /// Banker's per-row stroke for a hole, or null when this is not a Banker
   /// round (or the hole has no banker yet).
-  int? _bankerStrokes(Membership m, ScorecardHole? h) {
-    final s = bankerSummary;
-    if (s == null || h == null || s.strokePlan.isEmpty) return null;
-    final row = s.holes
-        .where((x) => x.hole == h.holeNumber && x.bankerId != null)
-        .firstOrNull;
-    if (row == null) return null;
-
-    // The reference is the banker for an opponent, and the lowest-index
-    // golfer for the banker himself.
-    var reference = row.bankerId!;
-    if (m.player.id == row.bankerId) {
-      final low = (List<BankerPlayerTotal>.from(s.players)
-            ..sort((a, b) => a.handicapIndex.compareTo(b.handicapIndex)))
-          .firstOrNull;
-      if (low == null || low.playerId == m.player.id) return 0;
-      reference = low.playerId;
-    }
-    final signed =
-        _planStrokes(s.strokePlan, reference, m.player.id, h.holeNumber);
-    // Negative means the reference receives from him — he strokes nowhere.
-    return signed > 0 ? signed : 0;
-  }
-
-  int _planStrokes(
-      Map<String, dynamic> plan, int banker, int player, int hole) {
-    final forBanker = plan['$banker'] ?? plan[banker];
-    if (forBanker is! Map) return 0;
-    final forPlayer = forBanker['$player'] ?? forBanker[player];
-    if (forPlayer is! Map) return 0;
-    final v = forPlayer['$hole'] ?? forPlayer[hole];
-    return v is int ? v : 0;
-  }
+  /// The pairwise rule lives in `utils/banker_strokes.dart`, which the
+  /// keypad reads too — two copies of it is how the keypad came to say
+  /// `1 stroke` over a row showing none.
+  int? _bankerStrokes(Membership m, ScorecardHole? h) => h == null
+      ? null
+      : bankerStrokesOnHole(bankerSummary, m.player.id, h.holeNumber);
 
   int _strokesForHole(Membership m, ScorecardHole? h) {
     // **A skins POOL states the strokes for this hole outright.** Strokes-
@@ -5600,6 +5610,8 @@ class _HoleScoreCard extends StatelessWidget {
           if (rumble != null)
             RumbleCountStrip(
                 count: rumble!.count, allCount: rumble!.allCount),
+
+          if (aboveRows != null) aboveRows!,
 
           // Skins hole outcome + carry chip — off once the tray says it,
           // with the nets that decided it and what rides on. Rabbit's grid

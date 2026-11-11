@@ -298,7 +298,8 @@ class _BankerSetupScreenState extends State<BankerSetupScreen> {
         Navigator.of(context).pop(true);
       } else {
         Navigator.of(context)
-            .pushReplacementNamed('/banker', arguments: widget.foursomeId);
+            .pushReplacementNamed('/score-entry',
+                arguments: widget.foursomeId);
       }
     } catch (e) {
       if (mounted) setState(() => _error = e);

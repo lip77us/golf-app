@@ -28,6 +28,8 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../theme/halved_brand.dart';
+import '../widgets/banker_entry.dart'
+    show kBankerTieHoledFirst;
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/hole_grid_scorecard.dart';
@@ -121,7 +123,7 @@ class _BankerScreenState extends State<BankerScreen> {
         widget.foursomeId,
         afterHole: s.currentHole!,
         bankerId : bankerId,
-        tieReason: bankerId == null ? null : 'holed_first',
+        tieReason: bankerId == null ? null : kBankerTieHoledFirst,
       );
       if (!mounted) return;
       context.read<RoundProvider>().setBankerSummary(next);
@@ -250,11 +252,17 @@ class _BankerScreenState extends State<BankerScreen> {
                 // the group loses sight of the round exactly when the bets
                 // are being argued over. Same shared grid, same gold banker
                 // cells, same stroke plan.
+                //
+                // No strokes table under it (Paul, 10 Nov 2026): the dots
+                // are on the cells, and in Banker a golfer's strokes are a
+                // different number in each one-on-one — a single row of them
+                // a golfer says less than the card above it.
                 if (s.grid.isNotEmpty)
                   HoleGridScorecard(
                     holes: s.grid,
                     participants: s.gridPlayers,
                     legend: null,
+                    showStrokes: false,
                   ),
               ],
             ),
