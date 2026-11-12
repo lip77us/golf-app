@@ -193,4 +193,18 @@ void main() {
       });
     }
   });
+
+  test('the Survivor board draws no strokes table', () {
+    // Paul, 11 Nov 2026. The dots are on the cells and `gets N` is beside
+    // each name, the call Stroke Play, Nassau, Las Vegas, Fourball, Skins
+    // and Wolf each got.
+    final src = File('lib/screens/leaderboard_screen.dart').readAsStringSync();
+    final at = src.indexOf('class _SurvivorGroupCardState');
+    final end = src.indexOf('\nclass ', at + 1);
+    final card = src.substring(at, end);
+    final grid = card.indexOf('HoleGridScorecard(');
+    expect(grid, greaterThan(0));
+    final call = card.substring(grid, card.indexOf('),', grid));
+    expect(call, matches(RegExp(r'showStrokes:\s*false')));
+  });
 }

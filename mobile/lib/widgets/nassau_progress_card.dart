@@ -36,9 +36,14 @@ class NassauProgressCard extends StatelessWidget {
     required this.side0Colour,
     required this.side1Colour,
     this.holesInPlay = const [],
+    this.title,
   });
 
   final NassauSummary nassau;
+
+  /// Overrides `Nassau progress` / `Match progress` — Triple Nassau draws one
+  /// card per pair and names it (`Paul v Dave`).
+  final String? title;
 
   /// The summary's `scorecard.holes` / `.players` / `.holes_in_play`.
   final List<Map<String, dynamic>> holes;
@@ -83,7 +88,8 @@ class NassauProgressCard extends StatelessWidget {
     }
 
     return HoleGridScorecard(
-      title: nassau.isEighteenHoleMatch ? 'Match progress' : 'Nassau progress',
+      title: title ??
+          (nassau.isEighteenHoleMatch ? 'Match progress' : 'Nassau progress'),
       // The row underneath says who won the hole, so the cells stay plain.
       holes: [
         for (final h in holes) {...h}..remove('winner_team'),

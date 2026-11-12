@@ -197,8 +197,9 @@ void main() {
     final se = File('lib/screens/score_entry_screen.dart').readAsStringSync();
 
     test('every Nassau card on the board draws it', () {
-      // The casual match, the cup match and the Singles Match.
-      expect('NassauProgressCard('.allMatches(lb).length, 3);
+      // The casual match, the cup match, the Singles Match — and Triple
+      // Nassau's, which draws one a pair.
+      expect('NassauProgressCard('.allMatches(lb).length, 4);
     });
 
     test('no Nassau card still draws the plain scorecard', () {

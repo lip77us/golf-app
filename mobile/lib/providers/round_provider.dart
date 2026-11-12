@@ -136,6 +136,7 @@ class RoundProvider extends ChangeNotifier {
   final Map<int, SixesHoleCard> _sixesHoles = {};
   /// The same, per hole, for Rabbit.
   final Map<int, RabbitHoleCard> _rabbitHoles = {};
+  final Map<int, TripleNassauHoleCard> _tripleNassauHoles = {};
   final Map<int, PointsHoleCard> _pointsHoles = {};
   final Map<int, WolfHoleCard> _wolfHoles = {};
   final Map<int, SequoyaHoleCard> _sequoyaHoles = {};
@@ -219,6 +220,7 @@ class RoundProvider extends ChangeNotifier {
   SixesSummary?     get sixesSummary       => _sixesSummary;
   SixesHoleCard?    sixesHole(int hole)    => _sixesHoles[hole];
   RabbitHoleCard?   rabbitHole(int hole)   => _rabbitHoles[hole];
+  TripleNassauHoleCard? tripleNassauHole(int hole) => _tripleNassauHoles[hole];
   PointsHoleCard?   pointsHole(int hole)   => _pointsHoles[hole];
   WolfHoleCard?     wolfHole(int hole)     => _wolfHoles[hole];
   SequoyaHoleCard?  sequoyaHole(int hole)  => _sequoyaHoles[hole];
@@ -312,6 +314,7 @@ class RoundProvider extends ChangeNotifier {
     _strokePlayHoles.clear();
     _stablefordHoles.clear();
     _rabbitHoles.clear();
+    _tripleNassauHoles.clear();
     _pointsHoles.clear();
     _wolfHoles.clear();
     _sequoyaHoles.clear();
@@ -464,6 +467,7 @@ class RoundProvider extends ChangeNotifier {
       _strokePlayHoles.clear();
       _stablefordHoles.clear();
       _rabbitHoles.clear();
+      _tripleNassauHoles.clear();
       _pointsHoles.clear();
       _wolfHoles.clear();
       _sequoyaHoles.clear();
@@ -542,6 +546,7 @@ class RoundProvider extends ChangeNotifier {
       if (foursomeId == _activeFoursomeId &&
           (_annandaleFridaySummary != null
            || _sixesHoles.isNotEmpty || _rabbitHoles.isNotEmpty
+           || _tripleNassauHoles.isNotEmpty
            || _pointsHoles.isNotEmpty || _wolfHoles.isNotEmpty
            || _sequoyaHoles.isNotEmpty
            || _vegasHoles.isNotEmpty || _fourballHoles.isNotEmpty
@@ -1672,6 +1677,30 @@ class RoundProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Fetch one hole's Triple Nassau card. Silent on failure: a card that
+  /// cannot be fetched must not stop a group entering scores.
+  Future<void> loadTripleNassauHole(int foursomeId, int hole) async {
+    try {
+      final card = await _client.getTripleNassauHoleCard(foursomeId, hole);
+      if (card != null) {
+        _tripleNassauHoles[hole] = card;
+        notifyListeners();
+      }
+    } on NetworkException {
+      // Offline — keep whatever is on screen.
+    } catch (e) {
+      debugPrint('loadTripleNassauHole error: $e');
+    }
+  }
+
+  /// A press came back with its card: every other hole's is stale.
+  void setTripleNassauHole(TripleNassauHoleCard card) {
+    _tripleNassauHoles
+      ..clear()
+      ..[card.hole] = card;
+    notifyListeners();
+  }
+
   // ── Annandale Friday ───────────────────────────────────────────────────────
 
   late final ResultHold _annandaleResults = ResultHold(
@@ -1714,6 +1743,14 @@ class RoundProvider extends ChangeNotifier {
       _sixesHoles[holeNumber] = SixesHoleCard.fromJson(six);
       // The card IS the answer, so the hold ends here rather than running
       // its full wait — which is what made the result look slow.
+      _annandaleResults.answer(holeNumber);
+      notifyListeners();
+    }
+
+    final tn = response['triple_nassau_hole'];
+    if (tn is Map<String, dynamic>) {
+      _tripleNassauHoles.clear();    // same staleness — see `sixes_hole`
+      _tripleNassauHoles[holeNumber] = TripleNassauHoleCard.fromJson(tn);
       _annandaleResults.answer(holeNumber);
       notifyListeners();
     }

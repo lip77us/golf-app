@@ -229,3 +229,197 @@ def triple_nassau_summary(foursome) -> dict | None:
         'matches'      : matches,   # each: player ids + full NassauSummary
         'scorecard'    : {'holes': [sc_by_hole[hn] for hn in hole_order]},
     }
+
+
+# ---------------------------------------------------------------------------
+# Score-entry card — `~/Downloads/handoff-triple-nassau-score-entry`
+# ---------------------------------------------------------------------------
+
+def _money(v: float) -> str:
+    a = abs(v)
+    return f'${a:g}' if a == int(a) else f'${a:.2f}'
+
+
+def triple_nassau_hole_card(foursome, hole: int) -> dict:
+    """Everything the Triple Nassau score-entry screen draws for ONE hole.
+
+    **Three Nassau cards, composed.** Each match is an ordinary child Nassau,
+    so each block here is `services.nassau.nassau_hole_card` for that child —
+    its nets on that pair's strokes, its bets, its presses and whether a
+    manual press is on offer. Nothing about a match is decided here; what
+    this adds is the roster (who strokes against whom, on this hole and over
+    the round) and each golfer's money across his two matches.
+
+    Returns `{}` when no Triple Nassau is set up.
+    """
+    from services.hole_plan import play_order
+    from services.nassau import nassau_hole_card
+    from services.player_labels import first_names
+
+    container = _container_for(foursome)
+    if container is None:
+        return {}
+    seat = [int(p) for p in (container.player_order or [])]
+    order = play_order(foursome.round, foursome) or list(range(1, 19))
+    if hole not in order or len(seat) != 3:
+        return {}
+    pos = order.index(hole)
+    back = pos >= len(order) // 2
+
+    members = {m.player_id: m
+               for m in foursome.memberships.select_related('player')
+               if not m.player.is_phantom}
+    if any(pid not in members for pid in seat):
+        return {}
+    first = first_names({pid: members[pid].player for pid in seat})
+
+    cards = []
+    for child in container.matches.all().order_by('game_type'):
+        c = nassau_hole_card(foursome, hole, child.game_type)
+        if not c:
+            return {}
+        cards.append((child, c))
+    if len(cards) != 3:
+        return {}
+
+    mode = cards[0][0].handicap_mode
+    pairwise = mode == HandicapMode.STROKES_OFF
+
+    gross = {pid: None for pid in seat}
+    par = {}
+    # strokes[pid][opponent] on THIS hole, and over the round
+    here = {pid: {} for pid in seat}
+    gets = {pid: {} for pid in seat}
+    matches, net = [], {pid: 0.0 for pid in seat}
+    for child, c in cards:
+        ids = [s['player_ids'][0] for s in c['sides']]
+        rows = {r['player_id']: r for r in c['players']}
+        totals = {p['player_id']: (p.get('phcp_in_play') or 0)
+                  for p in (nassau_summary(foursome, child.game_type) or {})
+                  .get('scorecard', {}).get('players', [])}
+        for me, other in ((ids[0], ids[1]), (ids[1], ids[0])):
+            r = rows[me]
+            gross[me] = r['gross']
+            here[me][other] = r['strokes'] or 0
+            gets[me][other] = totals.get(me, 0)
+        par.setdefault('par', c.get('par'))
+        par.setdefault('stroke_index', c.get('stroke_index'))
+
+        # Only the nine in play, then the overall. A settled front nine
+        # leaves the tray at the turn — it is on the board and in the money.
+        want = ('back' if back else 'front', 'overall')
+        chips = []
+        for line in c['lines']:
+            if line['key'] not in want:
+                continue
+            for chip in line['chips']:
+                name, text = chip.get('name') or '', chip['text']
+                value = text[len(name):].strip() if text.startswith(name) \
+                    else text
+                lead = chip.get('leader')
+                chips.append({
+                    'label'    : name,
+                    'value'    : value,
+                    'state'    : chip['state'],
+                    'leader_id': ids[lead - 1] if lead in (1, 2) else None,
+                    'manual'   : bool(chip.get('manual')),
+                })
+        w = c.get('winner')
+        live = float(next((e['amount'] for e in c['money']
+                           if e['side'] == 1), 0.0))
+        net[ids[0]] += live
+        net[ids[1]] -= live
+        nxt = order[pos + 1] if pos + 1 < len(order) else None
+        matches.append({
+            'game_type' : child.game_type,
+            'player_ids': ids,
+            'names'     : [first[ids[0]], first[ids[1]]],
+            'nets'      : [c['sides'][0]['best'], c['sides'][1]['best']],
+            'winner_id' : (ids[0] if w == 'team1' else
+                           ids[1] if w == 'team2' else None),
+            'halved'    : w == 'halved',
+            'chips'     : chips,
+            # The engine's answer to whether a press may be called; the
+            # tray only draws the button on a hole that is fully in.
+            'press_start': nxt if (c.get('can_press') and c['hole_complete']
+                                   and nxt is not None) else None,
+            'live'      : live,
+        })
+
+    players = []
+    for i, pid in enumerate(seat):
+        m = members[pid]
+        if pairwise:
+            pills = [{'text': f'{n} v {first[o]}', 'vs_id': o}
+                     for o, n in gets[pid].items() if n]
+            if not pills:
+                pills = [{'text': 'plays off scratch', 'vs_id': None}]
+            dots = [o for o in seat if o != pid
+                    for _ in range(here[pid].get(o, 0))]
+            vs = [first[o] for o in seat
+                  if o != pid and here[pid].get(o, 0)]
+            stroke_text = ('stroke v ' + ', '.join(vs)) if vs else 'no strokes'
+        else:
+            # Net and gross give a golfer ONE allowance, the same in both
+            # his matches, so there is one pill and one set of dots.
+            n = max(gets[pid].values() or [0])
+            k = max(here[pid].values() or [0])
+            pills = [{'text': f'gets {n}', 'vs_id': None}] if n else []
+            dots = [None] * k
+            stroke_text = ('no strokes' if not k else
+                           f'{k} stroke' + ('' if k == 1 else 's'))
+        players.append({
+            'player_id'      : pid,
+            'seat'           : i,
+            'name'           : m.player.name,
+            'first'          : first[pid],
+            'short'          : m.player.short_name,
+            'course_handicap': m.course_handicap,
+            'gross'          : gross[pid],
+            'pills'          : pills,
+            'dots'           : dots,
+            'strokes'        : max(here[pid].values() or [0]),
+            'stroke_text'    : stroke_text,
+        })
+
+    scored = sum(1 for p in players if p['gross'] is not None)
+    complete = scored == 3
+    round_over = complete and pos == len(order) - 1
+    stake = float(foursome.round.bet_unit or 0)
+
+    money = []
+    if stake:
+        money = sorted(
+            ({'player_id': pid, 'name': members[pid].player.name,
+              'amount': round(net[pid], 2)} for pid in seat),
+            key=lambda e: -e['amount'])
+    pays = []
+    if round_over and stake:
+        for mt in matches:
+            a, b = mt['names']
+            if abs(mt['live']) < 0.005:
+                pays.append(f'{a} and {b} are square')
+            elif mt['live'] > 0:
+                pays.append(f'{b} pays {a} {_money(mt["live"])}')
+            else:
+                pays.append(f'{a} pays {b} {_money(mt["live"])}')
+    for mt in matches:
+        del mt['live']
+
+    return {
+        'hole'         : hole,
+        'par'          : par.get('par'),
+        'stroke_index' : par.get('stroke_index'),
+        'thru'         : pos + 1,
+        'title'        : 'Triple Nassau',
+        'stake'        : stake,
+        'press_stake'  : float(cards[0][1].get('press_stake') or 0),
+        'players'      : players,
+        'matches'      : matches,
+        'scored'       : scored,
+        'hole_complete': complete,
+        'money'        : money,
+        'pays'         : pays,
+        'round_over'   : round_over,
+        'next_hole'    : order[pos + 1] if pos + 1 < len(order) else None,
+    }

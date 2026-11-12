@@ -1,0 +1,207 @@
+{
+ "hole": 14,
+ "par": 5,
+ "stroke_index": 4,
+ "thru": 14,
+ "title": "Triple Nassau",
+ "stake": 10.0,
+ "press_stake": 5.0,
+ "players": [
+  {
+   "player_id": 4,
+   "seat": 0,
+   "name": "Paul Lipkin",
+   "first": "Paul",
+   "short": "PL",
+   "course_handicap": 4,
+   "gross": 5,
+   "pills": [
+    {
+     "text": "plays off scratch",
+     "vs_id": null
+    }
+   ],
+   "dots": [],
+   "strokes": 0,
+   "stroke_text": "no strokes"
+  },
+  {
+   "player_id": 5,
+   "seat": 1,
+   "name": "Dave Gabe",
+   "first": "Dave",
+   "short": "DG",
+   "course_handicap": 9,
+   "gross": 5,
+   "pills": [
+    {
+     "text": "5 v Paul",
+     "vs_id": 4
+    }
+   ],
+   "dots": [
+    4
+   ],
+   "strokes": 1,
+   "stroke_text": "stroke v Paul"
+  },
+  {
+   "player_id": 6,
+   "seat": 2,
+   "name": "Sam White",
+   "first": "Sam",
+   "short": "SW",
+   "course_handicap": 14,
+   "gross": 5,
+   "pills": [
+    {
+     "text": "10 v Paul",
+     "vs_id": 4
+    },
+    {
+     "text": "5 v Dave",
+     "vs_id": 5
+    }
+   ],
+   "dots": [
+    4,
+    5
+   ],
+   "strokes": 1,
+   "stroke_text": "stroke v Paul, Dave"
+  }
+ ],
+ "matches": [
+  {
+   "game_type": "triple_1",
+   "player_ids": [
+    4,
+    5
+   ],
+   "names": [
+    "Paul",
+    "Dave"
+   ],
+   "nets": [
+    5,
+    4
+   ],
+   "winner_id": 5,
+   "halved": false,
+   "chips": [
+    {
+     "label": "Back",
+     "value": "2 UP",
+     "state": "live",
+     "leader_id": 5,
+     "manual": false
+    },
+    {
+     "label": "P1",
+     "value": "starts 15",
+     "state": "pending",
+     "leader_id": null,
+     "manual": false
+    },
+    {
+     "label": "Overall",
+     "value": "AS",
+     "state": "live",
+     "leader_id": null,
+     "manual": false
+    }
+   ],
+   "press_start": null
+  },
+  {
+   "game_type": "triple_2",
+   "player_ids": [
+    4,
+    6
+   ],
+   "names": [
+    "Paul",
+    "Sam"
+   ],
+   "nets": [
+    5,
+    4
+   ],
+   "winner_id": 6,
+   "halved": false,
+   "chips": [
+    {
+     "label": "Back",
+     "value": "1 UP",
+     "state": "live",
+     "leader_id": 6,
+     "manual": false
+    },
+    {
+     "label": "Overall",
+     "value": "2 UP",
+     "state": "live",
+     "leader_id": 4,
+     "manual": false
+    }
+   ],
+   "press_start": 15
+  },
+  {
+   "game_type": "triple_3",
+   "player_ids": [
+    5,
+    6
+   ],
+   "names": [
+    "Dave",
+    "Sam"
+   ],
+   "nets": [
+    5,
+    4
+   ],
+   "winner_id": 6,
+   "halved": false,
+   "chips": [
+    {
+     "label": "Back",
+     "value": "1 UP",
+     "state": "live",
+     "leader_id": 6,
+     "manual": false
+    },
+    {
+     "label": "Overall",
+     "value": "1 UP",
+     "state": "live",
+     "leader_id": 6,
+     "manual": false
+    }
+   ],
+   "press_start": 15
+  }
+ ],
+ "scored": 3,
+ "hole_complete": true,
+ "money": [
+  {
+   "player_id": 4,
+   "name": "Paul Lipkin",
+   "amount": 15.0
+  },
+  {
+   "player_id": 6,
+   "name": "Sam White",
+   "amount": 5.0
+  },
+  {
+   "player_id": 5,
+   "name": "Dave Gabe",
+   "amount": -20.0
+  }
+ ],
+ "pays": [],
+ "round_over": false,
+ "next_hole": 15
+}

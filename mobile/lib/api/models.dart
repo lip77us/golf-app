@@ -13119,3 +13119,200 @@ class MiniSinglesHoleCard {
     );
   }
 }
+
+// ── Triple Nassau score-entry card ──────────────────────────────────────────
+// `services.triple_nassau.triple_nassau_hole_card`. Three Nassau matches on
+// one hole; every figure and sentence is the server's.
+
+class TripleNassauPill {
+  final String text;
+  /// The opponent these strokes are against, or null for a pill that names
+  /// nobody (`plays off scratch`, `gets 14`).
+  final int? vsId;
+  const TripleNassauPill({required this.text, this.vsId});
+  factory TripleNassauPill.fromJson(Map<String, dynamic> j) =>
+      TripleNassauPill(
+          text: j['text'] as String? ?? '', vsId: j['vs_id'] as int?);
+}
+
+class TripleNassauCardPlayer {
+  final int playerId;
+  final int seat;
+  final String name;
+  final String first;
+  final String short;
+  final int? courseHandicap;
+  final int? gross;
+  final List<TripleNassauPill> pills;
+  /// One entry per stroke on THIS hole: the opponent it is against, or null
+  /// where the game gives one allowance for both matches.
+  final List<int?> dots;
+  final int strokes;
+  final String strokeText;
+  const TripleNassauCardPlayer({
+    required this.playerId,
+    required this.seat,
+    required this.name,
+    required this.first,
+    required this.short,
+    this.courseHandicap,
+    this.gross,
+    this.pills = const [],
+    this.dots = const [],
+    this.strokes = 0,
+    this.strokeText = '',
+  });
+  factory TripleNassauCardPlayer.fromJson(Map<String, dynamic> j) =>
+      TripleNassauCardPlayer(
+        playerId: j['player_id'] as int? ?? 0,
+        seat: j['seat'] as int? ?? 0,
+        name: j['name'] as String? ?? '',
+        first: j['first'] as String? ?? '',
+        short: j['short'] as String? ?? '',
+        courseHandicap: j['course_handicap'] as int?,
+        gross: j['gross'] as int?,
+        pills: (j['pills'] as List? ?? const [])
+            .map((e) => TripleNassauPill.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        dots: (j['dots'] as List? ?? const []).map((e) => e as int?).toList(),
+        strokes: j['strokes'] as int? ?? 0,
+        strokeText: j['stroke_text'] as String? ?? '',
+      );
+}
+
+class TripleNassauChip {
+  final String label;
+  final String value;
+  /// `live`, `pending` (a press that starts on a later hole) or `final`.
+  final String state;
+  final int? leaderId;
+  final bool manual;
+  const TripleNassauChip({
+    required this.label,
+    required this.value,
+    required this.state,
+    this.leaderId,
+    this.manual = false,
+  });
+  factory TripleNassauChip.fromJson(Map<String, dynamic> j) =>
+      TripleNassauChip(
+        label: j['label'] as String? ?? '',
+        value: j['value'] as String? ?? '',
+        state: j['state'] as String? ?? 'live',
+        leaderId: j['leader_id'] as int?,
+        manual: j['manual'] as bool? ?? false,
+      );
+}
+
+class TripleNassauCardMatch {
+  final String gameType;
+  final List<int> playerIds;
+  final List<String> names;
+  final List<int?> nets;
+  final int? winnerId;
+  final bool halved;
+  final List<TripleNassauChip> chips;
+  /// The hole a manual press would start on, or null when none is on offer.
+  final int? pressStart;
+  const TripleNassauCardMatch({
+    required this.gameType,
+    required this.playerIds,
+    required this.names,
+    required this.nets,
+    this.winnerId,
+    this.halved = false,
+    this.chips = const [],
+    this.pressStart,
+  });
+  bool get decided => winnerId != null || halved;
+  factory TripleNassauCardMatch.fromJson(Map<String, dynamic> j) =>
+      TripleNassauCardMatch(
+        gameType: j['game_type'] as String? ?? '',
+        playerIds:
+            (j['player_ids'] as List? ?? const []).map((e) => e as int).toList(),
+        names:
+            (j['names'] as List? ?? const []).map((e) => '$e').toList(),
+        nets: (j['nets'] as List? ?? const []).map((e) => e as int?).toList(),
+        winnerId: j['winner_id'] as int?,
+        halved: j['halved'] as bool? ?? false,
+        chips: (j['chips'] as List? ?? const [])
+            .map((e) => TripleNassauChip.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        pressStart: j['press_start'] as int?,
+      );
+}
+
+class TripleNassauMoney {
+  final int playerId;
+  final String name;
+  final double amount;
+  const TripleNassauMoney(
+      {required this.playerId, required this.name, required this.amount});
+  factory TripleNassauMoney.fromJson(Map<String, dynamic> j) =>
+      TripleNassauMoney(
+        playerId: j['player_id'] as int? ?? 0,
+        name: j['name'] as String? ?? '',
+        amount: (j['amount'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+class TripleNassauHoleCard {
+  final int hole;
+  final int? par;
+  final int? strokeIndex;
+  final int thru;
+  final String title;
+  final double stake;
+  final double pressStake;
+  final List<TripleNassauCardPlayer> players;
+  final List<TripleNassauCardMatch> matches;
+  final int scored;
+  final bool holeComplete;
+  final List<TripleNassauMoney> money;
+  final List<String> pays;
+  final bool roundOver;
+  final int? nextHole;
+  const TripleNassauHoleCard({
+    required this.hole,
+    this.par,
+    this.strokeIndex,
+    this.thru = 0,
+    this.title = 'Triple Nassau',
+    this.stake = 0,
+    this.pressStake = 0,
+    this.players = const [],
+    this.matches = const [],
+    this.scored = 0,
+    this.holeComplete = false,
+    this.money = const [],
+    this.pays = const [],
+    this.roundOver = false,
+    this.nextHole,
+  });
+  factory TripleNassauHoleCard.fromJson(Map<String, dynamic> j) =>
+      TripleNassauHoleCard(
+        hole: j['hole'] as int? ?? 0,
+        par: j['par'] as int?,
+        strokeIndex: j['stroke_index'] as int?,
+        thru: j['thru'] as int? ?? 0,
+        title: j['title'] as String? ?? 'Triple Nassau',
+        stake: (j['stake'] as num?)?.toDouble() ?? 0,
+        pressStake: (j['press_stake'] as num?)?.toDouble() ?? 0,
+        players: (j['players'] as List? ?? const [])
+            .map((e) =>
+                TripleNassauCardPlayer.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        matches: (j['matches'] as List? ?? const [])
+            .map((e) =>
+                TripleNassauCardMatch.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        scored: j['scored'] as int? ?? 0,
+        holeComplete: j['hole_complete'] as bool? ?? false,
+        money: (j['money'] as List? ?? const [])
+            .map((e) => TripleNassauMoney.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        pays: (j['pays'] as List? ?? const []).map((e) => '$e').toList(),
+        roundOver: j['round_over'] as bool? ?? false,
+        nextHole: j['next_hole'] as int?,
+      );
+}

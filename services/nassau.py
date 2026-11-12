@@ -2139,19 +2139,21 @@ def _bet_chip(bet, label, *, points=False, stake=None):
         leader = 1 if (bet.get('decided_margin') or margin) > 0 else (
             2 if (bet.get('decided_margin') or margin) < 0 else None)
         return {'text': text, 'state': 'final', 'leader': leader,
-                'manual': False}
+                'manual': False, 'name': label}
     if played == 0:
         return None            # not started — the caller says when it does
     if margin == 0:
         return {'text': f'{label} E' if points else f'{label} AS',
-                'state': 'live', 'leader': None, 'manual': False}
+                'state': 'live', 'leader': None, 'manual': False,
+                'name': label}
     sign = '+' if margin > 0 else '−'
     body = (f'{sign}{abs(margin)}' if points else f'{abs(margin)} UP')
     return {'text': f'{label} {body}', 'state': 'live',
-            'leader': 1 if margin > 0 else 2, 'manual': False}
+            'leader': 1 if margin > 0 else 2, 'manual': False,
+            'name': label}
 
 
-def nassau_hole_card(foursome, hole: int) -> dict:
+def nassau_hole_card(foursome, hole: int, game_type: str = None) -> dict:
     """Everything the Nassau score-entry screen draws for ONE hole.
 
     **Every bet, press and figure is the engine's.** The press rules are the
@@ -2161,12 +2163,16 @@ def nassau_hole_card(foursome, hole: int) -> dict:
     `calculate_nassau` has all of that and `nassau_summary` reports it, so
     this composes CHIPS out of those numbers and derives no rule of its own.
 
+    `game_type` picks one of several Nassaus on the foursome — a Triple
+    Nassau's three matches are three of these cards
+    (`services.triple_nassau.triple_nassau_hole_card`).
+
     Returns `{}` when no Nassau is set up for this foursome.
     """
     from services.hole_plan import play_order
     from services.player_labels import first_names
 
-    summary = nassau_summary(foursome)
+    summary = nassau_summary(foursome, game_type)
     if not summary:
         return {}
     teams = summary.get('teams') or {}
@@ -2322,6 +2328,7 @@ def nassau_hole_card(foursome, hole: int) -> dict:
                                           last_played)):
                 out.append({'text': f'{name} starts {start}',
                             'state': 'pending', 'leader': None,
+                            'name': name,
                             'manual': p.get('press_type') == 'manual'})
                 continue
             m = p.get('margin') or 0
@@ -2336,7 +2343,7 @@ def nassau_hole_card(foursome, hole: int) -> dict:
                     text = f'{name} {"+" if m > 0 else "−"}{abs(m)}'
                 else:
                     text = f'{abs(m)} UP'
-                out.append({'text': text, 'state': 'final',
+                out.append({'text': text, 'state': 'final', 'name': name,
                             'leader': 1 if m > 0 else (2 if m < 0 else None),
                             'manual': p.get('press_type') == 'manual'})
                 continue
@@ -2346,6 +2353,7 @@ def nassau_hole_card(foursome, hole: int) -> dict:
                 body = (f'{"+" if m > 0 else "−"}{abs(m)}' if points
                         else f'{abs(m)} UP')
             out.append({'text': f'{name} {body}', 'state': 'live',
+                        'name': name,
                         'leader': 1 if m > 0 else (2 if m < 0 else None),
                         'manual': p.get('press_type') == 'manual'})
         return out
@@ -2378,7 +2386,8 @@ def nassau_hole_card(foursome, hole: int) -> dict:
                 chips.append({
                     'text': f'{name} starts {start}' if start
                             else f'{name} not started',
-                    'state': 'pending', 'leader': None, 'manual': False})
+                    'state': 'pending', 'leader': None, 'manual': False,
+                    'name': name})
             else:
                 chips.append(chip)
             if nine:

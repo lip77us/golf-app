@@ -233,6 +233,11 @@ class FortyBallsKeypad extends StatefulWidget {
   /// destructive-ish controls at different widths.
   final VoidCallback? onNoScore;
 
+  /// Replaces `1 stroke` / `no stroke` in the header. Triple Nassau's
+  /// strokes are by MATCH, so the honest line names the opponents
+  /// (`stroke v Paul, Dave`) rather than a count.
+  final String? strokeNote;
+
   const FortyBallsKeypad({
     super.key,
     required this.playerName,
@@ -245,6 +250,7 @@ class FortyBallsKeypad extends StatefulWidget {
     this.capMax,
     this.floorText,
     this.onNoScore,
+    this.strokeNote,
   });
 
   @override
@@ -300,7 +306,9 @@ class _FortyBallsKeypadState extends State<FortyBallsKeypad> {
             _typing
                 ? 'Type a score of 10 or more'
                 : [
-                    _strokeWord(widget.strokes),
+                    (widget.strokeNote ?? '').isNotEmpty
+                        ? widget.strokeNote!
+                        : _strokeWord(widget.strokes),
                     'par ${widget.par}',
                     if (widget.capMax != null) 'max ${widget.capMax}',
                     if ((widget.floorText ?? '').isNotEmpty) widget.floorText!,

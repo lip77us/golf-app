@@ -1984,6 +1984,36 @@ class ApiClient {
     return TripleNassauSummary.fromJson(data as Map<String, dynamic>);
   }
 
+  /// A manual press in one match, returning the summary AND the hole card
+  /// the press was called from — the dashed chip and the button going away
+  /// are the same frame.
+  Future<(TripleNassauSummary, TripleNassauHoleCard?)> pressTripleNassau(
+    int foursomeId, {
+    required String gameType,
+    required int    startHole,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/triple-nassau/press/', {
+      'game_type' : gameType,
+      'start_hole': startHole,
+    }) as Map<String, dynamic>;
+    final card = data['triple_nassau_hole'];
+    return (
+      TripleNassauSummary.fromJson(data),
+      card is Map<String, dynamic> ? TripleNassauHoleCard.fromJson(card) : null,
+    );
+  }
+
+  /// GET /api/foursomes/{id}/triple-nassau/hole/{hole}/ — for a hole opened
+  /// without posting; a save returns the same shape under
+  /// `triple_nassau_hole`.
+  Future<TripleNassauHoleCard?> getTripleNassauHoleCard(
+      int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/triple-nassau/hole/$hole/');
+    final map = (data as Map).cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    return TripleNassauHoleCard.fromJson(map);
+  }
+
   // ---- Annandale Friday (a group of 5 or 6, three better-ball Nassaus) ----
 
   Future<AnnandaleFridaySummary> getAnnandaleFridaySummary(int foursomeId) async {

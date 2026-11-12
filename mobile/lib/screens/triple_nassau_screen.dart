@@ -35,6 +35,8 @@ import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
 import '../widgets/combo_tee_chip.dart';
 import '../widgets/stroke_dots.dart';
+import '../widgets/forty_balls_keypad.dart';
+import '../widgets/triple_nassau_entry.dart';
 
 const List<Color> _kNc = [Color(0xFF1976D2), Color(0xFFEF6C00), Color(0xFF7B3FA0)];
 const Color _muted = Color(0xFF5C6B62);
@@ -59,6 +61,19 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
   bool _initialJumpDone = false;
   int? _editingPlayerId;
 
+  /// `Edit scores` has been pressed: the keypad stays on whoever is chosen
+  /// until `Done`. Only a tray's `onEdit` turns it on — a tap on a row is a
+  /// one-shot.
+  bool _trayEditing = false;
+
+  /// Stored in [_pending] for a CLEARED score: dropped from the effective
+  /// scores and sent as a null gross so the server deletes the row.
+  static const int _kCleared = -1;
+
+  /// The hole we have asked the server for a card for, so a missing one is
+  /// fetched once rather than every frame.
+  int? _cardAsked;
+
   @override
   void initState() {
     super.initState();
@@ -70,7 +85,42 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
         rp.refreshPendingOverlay();
       }
       rp.loadTripleNassau(widget.foursomeId);
+      _loadCard();
     });
+  }
+
+  TripleNassauHoleCard? _card(RoundProvider rp) =>
+      rp.tripleNassauHole(_selectedHole);
+
+  void _loadCard() {
+    context.read<RoundProvider>()
+        .loadTripleNassauHole(widget.foursomeId, _selectedHole);
+  }
+
+  /// A save drops every other hole's card, which races the fetch the forward
+  /// button started — so whenever the hole on screen has none, ask for one.
+  void _ensureCard(RoundProvider rp) {
+    if (rp.tripleNassauHole(_selectedHole) != null) {
+      _cardAsked = null;
+      return;
+    }
+    if (_cardAsked == _selectedHole) return;
+    _cardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadCard();
+    });
+  }
+
+  /// Who the keypad points at: the one a scorer tapped, else the first
+  /// golfer without a score, in seat order.
+  Membership? _keypadMember(List<Membership> players, Map<int, int> scores) {
+    if (_editingPlayerId != null) {
+      for (final m in players) {
+        if (m.player.id == _editingPlayerId) return m;
+      }
+    }
+    final i = _hotSpotIdx(players, scores);
+    return (i >= 0 && i < players.length) ? players[i] : null;
   }
 
   Future<void> _refresh() async {
@@ -110,6 +160,7 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
         hole,
         queued: context.read<RoundProvider>().localPendingByHole,
         pending: _pending,
+        clearedSentinel: _kCleared,
       );
 
   int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
@@ -149,12 +200,7 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
 
   void _selectScore(Membership player, int score, int hole) {
     setState(() {
-      if (score == -1) {
-        _pending[hole]?.remove(player.player.id);
-        if (_pending[hole]?.isEmpty ?? false) _pending.remove(hole);
-      } else {
-        _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] = score;
-      }
+      _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] = score;
     });
   }
 
@@ -165,12 +211,17 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
     final hole = _selectedHole;
     final wasAll = sc != null && _allScored(players, _effectiveScores(sc, hole));
     _selectScore(m, score, hole);
-    if (sc == null || score <= 0) return;
+    if (sc == null || score == 0) return;
+    if (score < 0 && !wasAll) return;
     if (wasAll) {
-      setState(() => _editingPlayerId = null);
+      // A session keeps its cursor; only a one-shot ends on the score.
+      if (!_trayEditing) setState(() => _editingPlayerId = null);
       _saveHole(ctx, hole, players);
       return;
     }
+    // **A tray game saves and STAYS** — the tray is the end of the hole and
+    // its forward button is the advance.
+    if (_card(context.read<RoundProvider>()) != null) return;
     if (!context.read<SettingsProvider>().autoAdvanceHole) return;
     if (!_allScored(players, _effectiveScores(sc, hole))) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -203,19 +254,33 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
 
   void _advance() {
     final n = nextInOrder(_playOrder(context.read<RoundProvider>()), _selectedHole);
-    if (n != null) setState(() { _selectedHole = n; _editingPlayerId = null; });
+    if (n != null) {
+      setState(() {
+        _selectedHole = n; _editingPlayerId = null; _trayEditing = false;
+      });
+      _loadCard();
+    }
   }
 
   void _retreat() {
     final p = prevInOrder(_playOrder(context.read<RoundProvider>()), _selectedHole);
-    if (p != null) setState(() { _selectedHole = p; _editingPlayerId = null; });
+    if (p != null) {
+      setState(() {
+        _selectedHole = p; _editingPlayerId = null; _trayEditing = false;
+      });
+      _loadCard();
+    }
   }
 
   Future<void> _saveHole(BuildContext ctx, int hole, List<Membership> players) async {
     final edits = _pending[hole];
     if (edits == null || edits.isEmpty) return;
     final scores = edits.entries
-        .map((e) => {'player_id': e.key, 'gross_score': e.value}).toList();
+        .map((e) => {
+              'player_id': e.key,
+              'gross_score': e.value == _kCleared ? null : e.value,
+            })
+        .toList();
     final rp = context.read<RoundProvider>();
     final ok = await rp.submitHole(
         foursomeId: widget.foursomeId, holeNumber: hole, scores: scores);
@@ -251,7 +316,11 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
     final pend = _pending[_selectedHole];
     if (pend != null && pend.isNotEmpty) {
       final scores = pend.entries
-          .map((e) => {'player_id': e.key, 'gross_score': e.value}).toList();
+          .map((e) => {
+                'player_id': e.key,
+                'gross_score': e.value == _kCleared ? null : e.value,
+              })
+          .toList();
       final ok = await rp.submitHole(
           foursomeId: widget.foursomeId, holeNumber: _selectedHole, scores: scores);
       if (!mounted) return;
@@ -306,9 +375,10 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
           final rp = context.read<RoundProvider>();
           final client = context.read<AuthProvider>().client;
           try {
-            final updated = await client.postTripleNassauPress(
+            final (updated, card) = await client.pressTripleNassau(
                 widget.foursomeId, gameType: gameType, startHole: startHole);
             rp.setTripleNassauSummary(updated);
+            if (card != null) rp.setTripleNassauHole(card);
             if (mounted) Navigator.of(ctx).pop();
           } catch (e) {
             if (mounted) {
@@ -471,6 +541,8 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
     final holeData = sc.holeData(_selectedHole);
     final scores   = _effectiveScores(sc, _selectedHole);
     final hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
+    _ensureCard(rp);
+    final card = _card(rp);
 
     // Lowest-index player = the group "best player"; the LEFT match is always
     // against them (so the left dot column is consistent for everyone).
@@ -485,9 +557,17 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _rosterBanner(rp, players),
-          if (s != null) _pressesStrip(rp, s, players),
-          const SizedBox(height: 10),
+          // **With the hole's card, the screen is the hole, the golfers and
+          // the tray** (`handoff-triple-nassau-score-entry`). The roster
+          // banner, the presses strip, Call Press, the 3×3 matrix and the
+          // net position are the tray's now — or the leaderboard's. The old
+          // layout stays only for the moment before a card arrives, so a
+          // group is never looking at nothing.
+          if (card == null) ...[
+            _rosterBanner(rp, players),
+            if (s != null) _pressesStrip(rp, s, players),
+            const SizedBox(height: 10),
+          ],
           HoleHeader(
             holeData:    holeData,
             holeNumber:  _selectedHole,
@@ -496,8 +576,29 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
             standalone:  true,
           ),
           const SizedBox(height: 10),
-          _scoreCard(ctx, rp, s, players, low, holeData, scores, hotSpot),
-          if (s != null) ...[
+          if (card != null)
+            TripleNassauPlayersCard(
+              card: card,
+              scores: scores,
+              activePlayerId: isComplete
+                  ? null
+                  : _keypadMember(players, scores)?.player.id,
+              // A tap is a one-shot and must not start an edit session.
+              onTapPlayer: (pid) => setState(() => _editingPlayerId = pid),
+              rowExtras: (p) {
+                final m = players
+                    .where((x) => x.player.id == p.playerId).firstOrNull;
+                final combo = m?.comboTeeOnHole(_selectedHole);
+                return combo == null
+                    ? null
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: ComboTeeChip(tee: combo));
+              },
+            )
+          else
+            _scoreCard(ctx, rp, s, players, low, holeData, scores, hotSpot),
+          if (s != null && card == null) ...[
             const SizedBox(height: 12),
             if (_pressableMatches(s).isNotEmpty && !isComplete) ...[
               SizedBox(
@@ -962,8 +1063,111 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
     final order = _playOrder(rp);
     final prev = prevInOrder(order, _selectedHole);
     final next = nextInOrder(order, _selectedHole);
+    final card = _card(rp);
+    if (card != null && !isComplete) {
+      final scores = _effectiveScores(sc, _selectedHole);
+      // The cursor decides; `_trayEditing` is not consulted, so the two
+      // states cover everything — a golfer is being edited, or the hole is
+      // reported.
+      if (allDone && _editingPlayerId == null) {
+        return SafeArea(
+          child: TripleNassauHoleTray(
+            card: card,
+            gettingResult: _pending[_selectedHole]?.isNotEmpty ?? false,
+            picking: _trayEditing,
+            onEdit: () => setState(() {
+              _trayEditing = !_trayEditing;
+              _editingPlayerId = null;
+            }),
+            onPrev: prev == null ? null : _retreat,
+            onNext: rp.submitting
+                ? null
+                : (next == null
+                    ? () => _finishRound(ctx, players)
+                    : _advance),
+            onPress: _pressOffered(rp)
+                ? (m) => _callPress(ctx, rp, m)
+                : null,
+          ),
+        );
+      }
+      final m = _keypadMember(players, scores);
+      if (m != null) {
+        final cp = card.players
+            .where((p) => p.playerId == m.player.id).firstOrNull;
+        return SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            FortyBallsKeypad(
+              playerName: m.player.name,
+              par: sc.holeData(_selectedHole)
+                      ?.scoreFor(m.player.id)?.par ?? (card.par ?? 4),
+              // The header line names the opponents the strokes are against
+              // (`stroke v Paul, Dave`); the keypad codes against the most
+              // strokes he gets on the hole.
+              strokes: cp?.strokes ?? 0,
+              strokeNote: cp?.strokeText,
+              netStyle: ctx.watch<SettingsProvider>().netStyleEntry,
+              onDone: _trayEditing
+                  ? () => setState(() {
+                        _trayEditing = false;
+                        _editingPlayerId = null;
+                      })
+                  : null,
+              onScore: (n) {
+                _handleScore(ctx, m, n, players);
+                if (!_trayEditing && _editingPlayerId != null) {
+                  setState(() => _editingPlayerId = null);
+                }
+                // The hole is POSTED on its last score: the tray reports the
+                // server's result.
+                final now = _effectiveScores(sc, _selectedHole);
+                if (n > 0 && _allScored(players, now)) {
+                  final hole = _selectedHole;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted || _selectedHole != hole) return;
+                    if (context.read<RoundProvider>().submitting) return;
+                    _saveHole(ctx, hole, players);
+                  });
+                }
+              },
+              // −1 is the clear, not 0.
+              onClear: () => _handleScore(ctx, m, _kCleared, players),
+            ),
+            _pager(ctx, rp, players, allDone, isComplete, prev, next),
+          ]),
+        );
+      }
+    }
     return SafeArea(
-      child: Padding(
+        child: _pager(ctx, rp, players, allDone, isComplete, prev, next));
+  }
+
+  /// Presses are a setup option, and the SERVER says per match whether one is
+  /// on offer (`press_start`); this only says whether the game allows any.
+  bool _pressOffered(RoundProvider rp) {
+    final m = rp.tripleNassauSummary?.pressMode;
+    return m == 'manual' || m == 'both';
+  }
+
+  Future<void> _callPress(BuildContext ctx, RoundProvider rp,
+      TripleNassauCardMatch m) async {
+    final start = m.pressStart;
+    if (start == null) return;
+    try {
+      final (updated, card) = await context.read<AuthProvider>().client
+          .pressTripleNassau(widget.foursomeId,
+              gameType: m.gameType, startHole: start);
+      if (!mounted) return;
+      rp.setTripleNassauSummary(updated);
+      if (card != null) rp.setTripleNassauHole(card);
+    } catch (e) {
+      if (mounted) _snack(ctx, e.toString(), () => _callPress(ctx, rp, m));
+    }
+  }
+
+  Widget _pager(BuildContext ctx, RoundProvider rp, List<Membership> players,
+      bool allDone, bool isComplete, int? prev, int? next) {
+    return Padding(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
         child: Row(children: [
           Expanded(child: OutlinedButton.icon(
@@ -990,7 +1194,6 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
                     iconAlignment: IconAlignment.end),
           ),
         ]),
-      ),
     );
   }
 }

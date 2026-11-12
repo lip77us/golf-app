@@ -4366,6 +4366,9 @@ class _SurvivorGroupCardState extends State<_SurvivorGroupCard> {
                   ? 'green = won it · red = knocked out · plum = Zombie back in'
                   : 'green = won the hole · red = knocked out',
               holesInPlay:  scHolesInPlay,
+              // The dots are on the cells and `gets N` is beside each
+              // name, so the table under it restated the card.
+              showStrokes:  false,
             ),
           ],
 
@@ -7994,7 +7997,28 @@ class _TripleNassauGroupCardState extends State<_TripleNassauGroupCard> {
         side2: MatchPanelSide(
             nameOf[s.matches[picked].player2Id] ?? '—',
             colourOf[s.matches[picked].player2Id] ?? Halved.muted),
-        child: NassauBoard(data: boards[picked]),
+        // **The scorecard is behind the tab** (Paul, 11 Nov 2026): the picked
+        // match's two-golfer card — what each shot and the strokes THAT
+        // match gives — sits with its board, inside the same box, so
+        // switching the match switches both.
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          NassauBoard(data: boards[picked]),
+          if (_cardOf(raw, picked) case final card?) ...[
+            const SizedBox(height: 10),
+            NassauProgressCard(
+              nassau: s.matches[picked].match,
+              holes: card.holes,
+              players: card.players,
+              holesInPlay: card.holesInPlay,
+              title: '${nameOf[s.matches[picked].player1Id] ?? ''} v '
+                  '${nameOf[s.matches[picked].player2Id] ?? ''}',
+              side0Colour:
+                  colourOf[s.matches[picked].player1Id] ?? Halved.muted,
+              side1Colour:
+                  colourOf[s.matches[picked].player2Id] ?? Halved.muted,
+            ),
+          ],
+        ]),
       ),
       const SizedBox(height: 10),
       _TripleNetPosition(
@@ -8005,6 +8029,27 @@ class _TripleNassauGroupCardState extends State<_TripleNassauGroupCard> {
         done: boards.every((b) => b.allDone),
       ),
     ]);
+  }
+
+  /// Match [i]'s own scorecard block, or null before it has one.
+  static ({List<Map<String, dynamic>> holes, List<Map<String, dynamic>> players,
+      List<int> holesInPlay})? _cardOf(Map<String, dynamic> raw, int i) {
+    final ms = raw['matches'] as List?;
+    if (ms == null || i >= ms.length) return null;
+    final m = (ms[i] as Map?)?['match'] as Map?;
+    final sc = m?['scorecard'] as Map?;
+    if (sc == null) return null;
+    final holes =
+        (sc['holes'] as List? ?? const []).cast<Map<String, dynamic>>();
+    final players =
+        (sc['players'] as List? ?? const []).cast<Map<String, dynamic>>();
+    if (holes.isEmpty || players.isEmpty) return null;
+    return (
+      holes: holes,
+      players: players,
+      holesInPlay:
+          (sc['holes_in_play'] as List? ?? const []).cast<int>().toList(),
+    );
   }
 
   /// The reader's first match, else the first — *"default is the reader's

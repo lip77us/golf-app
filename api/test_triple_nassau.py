@@ -120,3 +120,65 @@ class TripleNassauEndpointTests(TestCase):
     def test_result_404_when_not_configured(self):
         r = self.client.get(reverse('api-triple-nassau-result', args=[self.fs.id]))
         assert r.status_code == 404
+
+
+class TripleNassauHoleCardEndpointTests(TripleNassauEndpointTests):
+    """The score-entry card: by GET, with the save, and with a press."""
+
+    def _post(self, hole, scores):
+        return self.client.post(
+            reverse('api-score-submit', args=[self.fs.id]),
+            {'hole_number': hole,
+             'scores': [{'player_id': p, 'gross_score': g}
+                        for p, g in zip(self.ids, scores)]},
+            format='json')
+
+    def _card(self, hole):
+        return self.client.get(
+            reverse('api-triple-nassau-hole', args=[self.fs.id, hole]))
+
+    def test_the_get_returns_the_card(self):
+        self._setup(handicap_mode='strokes_off')
+        r = self._card(1)
+        assert r.status_code == 200
+        c = r.json()
+        assert c['hole'] == 1 and len(c['matches']) == 3
+        assert [p['player_id'] for p in c['players']] == self.ids
+
+    def test_no_game_is_an_empty_card(self):
+        assert self._card(1).json() == {}
+
+    def test_the_save_carries_the_card(self):
+        self._setup()
+        r = self._post(1, [3, 4, 5])
+        assert r.status_code in (200, 201), r.content
+        c = r.json()['triple_nassau_hole']
+        assert c['hole'] == 1 and c['hole_complete']
+        assert c == self._card(1).json()
+
+    def test_the_press_carries_the_card(self):
+        self._setup(press_mode='manual', press_unit='5')
+        self._post(1, [3, 4, 5])
+        c = self._card(1).json()
+        m = next(x for x in c['matches'] if x['press_start'] is not None)
+        r = self.client.post(
+            reverse('api-triple-nassau-press', args=[self.fs.id]),
+            {'game_type': m['game_type'], 'start_hole': m['press_start']},
+            format='json')
+        assert r.status_code == 200, r.content
+        after = r.json()['triple_nassau_hole']
+        assert after['hole'] == 1
+        mm = next(x for x in after['matches']
+                  if x['game_type'] == m['game_type'])
+        assert mm['press_start'] is None
+        assert any(ch['state'] == 'pending' and ch['manual']
+                   for ch in mm['chips'])
+
+    def test_a_stranger_gets_a_404(self):
+        self._setup()
+        other = Account.objects.create(name='Other')
+        u = User.objects.create_user(username='x', account=other)
+        cl = APIClient()
+        cl.force_authenticate(u)
+        r = cl.get(reverse('api-triple-nassau-hole', args=[self.fs.id, 1]))
+        assert r.status_code == 404

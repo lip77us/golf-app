@@ -6262,7 +6262,7 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
              'low_net_round', 'points_531', 'wolf', 'vegas',
              'fourball', 'match_18', 'nassau', 'nassau_nine', 'skins',
              'sequoya_threes', 'triple_cup', 'match_play',
-             'stableford'} & active
+             'stableford', 'triple_nassau'} & active
     # **The skins POOL, only where it owns the entry screen.** A pool rides
     # as a side game on a sixty-player tournament, where its card would be a
     # pool summary computed on every posted score for a tray nobody draws
@@ -6398,6 +6398,13 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
                 card = sequoya_hole_card(foursome, hole_number)
                 if card:
                     out['sequoya_hole'] = card
+            # …and Triple Nassau's: three Nassau cards and the money across
+            # each golfer's two matches.
+            if 'triple_nassau' in wants and hole_number:
+                from services.triple_nassau import triple_nassau_hole_card
+                card = triple_nassau_hole_card(foursome, hole_number)
+                if card:
+                    out['triple_nassau_hole'] = card
             if 'skins' in active:
                 out['skins'] = skins_summary(foursome)
     except Exception:
@@ -8309,7 +8316,25 @@ class TripleNassauPressView(APIView):
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         calculate_triple_nassau(foursome)
-        return Response(triple_nassau_summary(foursome))
+        payload = triple_nassau_summary(foursome)
+        # The card comes back with the press, as it does with a save: the
+        # dashed `P1 manual starts 8` chip and the button going away are the
+        # same frame. The hole it was called from is the one before its
+        # start in the group's play order.
+        try:
+            from services.triple_nassau import triple_nassau_hole_card
+            from services.hole_plan import play_order
+            start = ser.validated_data['start_hole']
+            order = play_order(foursome.round, foursome) or []
+            at = order.index(start) if start in order else 0
+            card = triple_nassau_hole_card(
+                foursome, order[at - 1] if at > 0 else max(1, start - 1))
+            if card:
+                payload = {**payload, 'triple_nassau_hole': card}
+        except Exception:    # pragma: no cover - a read-out must not fail
+            logger.exception(  # a press that was saved
+                'triple nassau hole card failed for foursome %s', foursome.id)
+        return Response(payload)
 
 
 class TripleNassauResultView(APIView):
@@ -8631,6 +8656,18 @@ class RabbitHoleCardView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.rabbit import rabbit_hole_card
         return Response(rabbit_hole_card(foursome, int(hole)))
+
+
+class TripleNassauHoleCardView(APIView):
+    """GET /api/foursomes/{id}/triple-nassau/hole/{hole}/
+
+    One hole's score-entry card. The POST that saves a score returns the
+    same shape under `triple_nassau_hole`.
+    """
+    def get(self, request, pk, hole):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.triple_nassau import triple_nassau_hole_card
+        return Response(triple_nassau_hole_card(foursome, int(hole)))
 
 
 class NassauHoleCardView(APIView):
