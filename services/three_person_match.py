@@ -14,14 +14,13 @@ Tiebreak rules (applied when positions are tied after hole 9)
   • Clear 1st + clear 2nd → normal Phase 2 (no tiebreak needed).
   • 2-way tie for 1st + clear 3rd → the two tied players go directly to
     Phase 2 as leader/runner_up (no SD needed).
-  • Clear 1st + 2-way tie for 2nd → sudden-death head-to-head between
-    the two tied players on holes 10+.  First to uniquely win a hole
-    (lower net score) becomes runner_up.  Phase 2 then calculates
-    retroactively from hole 10.
-  • 3-way tie → sudden death until one player uniquely wins a hole
-    (lowest net vs both others) → that player becomes phase1_leader.
-    The remaining two then play SD head-to-head until one wins a hole
-    → runner_up.  Phase 2 calculates retroactively from hole 10.
+  • Level for 2nd (clear 1st + a 2-way tie for 2nd, or a 3-way tie) →
+    **points play on**: 5-3-1 keeps scoring all three men from hole 10
+    until 2nd is clear (`_second_is_clear`).  Nobody waits — the finals is
+    scored from the 10th against whoever ends up in it, so the match is
+    read back the moment 2nd is settled.  (This replaced a sudden-death
+    card-off, Paul, 11 Nov 2026: `handoff-mini-singles-three-score-entry`,
+    "the same rule as a halved semi".)
 
 Public API
 ~~~~~~~~~~
@@ -178,6 +177,49 @@ def setup_three_person_match(
 # Phase 2 / tiebreak helpers
 # ---------------------------------------------------------------------------
 
+def _second_is_clear(cum_pts: dict) -> bool:
+    """2nd place is settled: the second-most points are strictly more than
+    the third man's.  A tie for **1st** needs nothing — both are in the
+    finals."""
+    pts = sorted((float(v) for v in cum_pts.values()), reverse=True)
+    return len(pts) == 3 and pts[1] > pts[2]
+
+
+def _finals_index(game: ThreePersonMatch, foursome: Foursome,
+                  a_id: int, b_id: int) -> dict:
+    """The score index the FINALS is played on.
+
+    Strokes-off in the finals are off the lower of the **two** finalists,
+    not the lowest of the three: when the man who is out was the low man the
+    two numbers differ, and a golfer would be given strokes against somebody
+    who is not in the match.  Net and gross are per-player and need no
+    adjustment.
+    """
+    if game.handicap_mode != HandicapMode.STROKES_OFF:
+        return _get_score_index(game, foursome)
+    index = build_score_index(foursome, handicap_mode=HandicapMode.GROSS)
+    ms = list(foursome.memberships.select_related('tee')
+              .filter(player_id__in=[a_id, b_id]))
+    phcps = [m.playing_handicap for m in ms if m.playing_handicap is not None]
+    if not phcps:
+        return index
+    low = min(phcps)
+    for m in ms:
+        if m.tee_id is None:
+            continue
+        so = round_half_up(max(0, (m.playing_handicap or 0) - low)
+                           * game.net_percent / 100)
+        per = index.get(m.player_id)
+        if so <= 0 or not per:
+            continue
+        for hole_num, score in list(per.items()):
+            si = m.tee.hole(hole_num).get('stroke_index', 18)
+            n = so // 18 + (1 if si <= so % 18 else 0)
+            if n:
+                per[hole_num] = score - n
+    return index
+
+
 def _do_phase2(game: ThreePersonMatch, score_index: dict) -> None:
     """
     Run Phase 2 match play (holes 10-18) for leader vs runner_up.
@@ -242,246 +284,6 @@ def _do_phase2(game: ThreePersonMatch, score_index: dict) -> None:
         game.status = 'phase2'
 
 
-def _write_tiebreak_rows(game: ThreePersonMatch,
-                          leader_id: int,
-                          tb_holes: list) -> None:
-    """
-    Persist TIEBREAK phase rows for an in-progress SD.
-
-    tb_holes: list of (hole_num, leader_net, a_net, b_net)
-      where a_net / b_net are the two SD contestants' scores and
-      leader_net is the phase1_leader's score (or a placeholder during
-      the 3-way finding-leader phase).
-
-    main_opp_net is set to min(a_net, b_net) — the best of the two
-    contestants — so the leader's running Phase 2 margin can be estimated
-    live before runner_up is confirmed.
-    """
-    db_rows:     list = []
-    main_margin: int  = 0
-    tb_margin:   int  = 0
-
-    for hole_num, leader_net, a_net, b_net in tb_holes:
-        opp_net = min(a_net, b_net)
-
-        if leader_net < opp_net:
-            mlw = True;  main_margin += 1
-        elif leader_net > opp_net:
-            mlw = False; main_margin -= 1
-        else:
-            mlw = None
-
-        if a_net < b_net:
-            taw = True;  tb_margin += 1
-        elif b_net < a_net:
-            taw = False; tb_margin -= 1
-        else:
-            taw = None
-
-        db_rows.append(ThreePersonMatchP2HoleResult(
-            game              = game,
-            hole_number       = hole_num,
-            phase             = ThreePersonMatchP2HoleResult.PHASE_TIEBREAK,
-            main_leader_net   = leader_net,
-            main_opp_net      = opp_net,
-            main_leader_wins  = mlw,
-            main_margin_after = main_margin,
-            tb_a_net          = a_net,
-            tb_b_net          = b_net,
-            tb_a_wins         = taw,
-            tb_margin_after   = tb_margin,
-        ))
-
-    if db_rows:
-        ThreePersonMatchP2HoleResult.objects.bulk_create(db_rows)
-
-
-def _do_tiebreak_23(game: ThreePersonMatch,
-                     score_index: dict,
-                     leader_id: int,
-                     tb_a_id: int,
-                     tb_b_id: int) -> None:
-    """
-    Tiebreak: clear 1st place, 2-way tie for 2nd/3rd.
-
-    Runs sudden-death head-to-head between tb_a and tb_b starting at
-    hole 10.  The first player to win a hole (lower net score) becomes
-    runner_up.  Phase 2 is then calculated retroactively from hole 10.
-
-    If the SD has not yet resolved (scores missing or all holes tied),
-    PHASE_TIEBREAK rows are written for display.
-
-    Assumes game.phase1_leader, game.phase1_tied_a, game.phase1_tied_b
-    are already set on game.  Mutates game.status and game.phase1_runner_up;
-    does NOT call game.save().
-    """
-    game.status = 'tiebreak'
-
-    runner_up_id: int | None = None
-    tb_holes: list            = []  # (hole_num, leader_net, a_net, b_net)
-
-    for hole_num in range(10, 19):
-        leader_net = score_index.get(leader_id, {}).get(hole_num)
-        a_net      = score_index.get(tb_a_id,   {}).get(hole_num)
-        b_net      = score_index.get(tb_b_id,   {}).get(hole_num)
-
-        if any(x is None for x in [leader_net, a_net, b_net]):
-            break
-
-        tb_holes.append((hole_num, leader_net, a_net, b_net))
-
-        if a_net < b_net:
-            runner_up_id = tb_a_id
-            break
-        elif b_net < a_net:
-            runner_up_id = tb_b_id
-            break
-        # else: halved hole — SD continues
-
-    if runner_up_id is not None:
-        # SD resolved — Phase 2 calculates retroactively from hole 10.
-        game.phase1_runner_up = Player.objects.get(pk=runner_up_id)
-        _do_phase2(game, score_index)
-    else:
-        # SD still in progress — persist TIEBREAK rows for live display.
-        _write_tiebreak_rows(game, leader_id, tb_holes)
-
-
-def _do_tiebreak_3way(game: ThreePersonMatch,
-                       score_index: dict,
-                       standings: list) -> None:
-    """
-    Tiebreak: 3-way tie after Phase 1.
-
-    Step 1 — Find phase1_leader: walk holes 10-18 until one player
-    uniquely wins a hole (lowest net vs both others).
-    Step 2 — Find runner_up: run SD head-to-head between the remaining
-    two players on the following holes.
-    Step 3 — Phase 2: once both leader and runner_up are known, calculate
-    match play retroactively from hole 10.
-
-    If leader or runner_up are not yet resolved (missing scores), writes
-    PHASE_TIEBREAK rows for whatever has been played.
-
-    Mutates game fields; does NOT call game.save().
-    """
-    game.status = 'tiebreak'
-
-    # ── Step 1: find phase1_leader ───────────────────────────────────────────
-    phase1_leader_id:  int | None = None
-    tb_a_id:           int | None = None
-    tb_b_id:           int | None = None
-    leader_found_hole: int | None = None
-
-    # (hole_num, {pid: score}) for 3-way SD holes before leader emerges
-    pre_leader_data: list = []
-
-    for hole_num in range(10, 19):
-        scores = {pid: score_index.get(pid, {}).get(hole_num) for pid in standings}
-        if any(v is None for v in scores.values()):
-            break
-
-        min_score      = min(scores.values())
-        unique_winners = [pid for pid, s in scores.items() if s == min_score]
-
-        if len(unique_winners) == 1:
-            # One player uniquely beat both others → phase1_leader found.
-            phase1_leader_id  = unique_winners[0]
-            others            = [pid for pid in standings if pid != phase1_leader_id]
-            tb_a_id, tb_b_id  = others[0], others[1]
-            leader_found_hole = hole_num
-            break
-
-        elif len(unique_winners) == 2:
-            # Two players tied for best, both beating the third.
-            # The SD is over — those two go directly to Phase 2.
-            # Assign leader/runner_up in a deterministic order (lower pid first).
-            w0, w1 = sorted(unique_winners)
-            game.phase1_leader    = Player.objects.get(pk=w0)
-            game.phase1_runner_up = Player.objects.get(pk=w1)
-            _do_phase2(game, score_index)
-            return
-
-        else:
-            # All three tied on this hole — SD continues.
-            pre_leader_data.append((hole_num, dict(scores)))
-
-    if phase1_leader_id is None:
-        # Still in 3-way SD with no unique winner found yet.
-        # Write display rows using a fixed ordering (standings[0] as stand-in
-        # leader; [1]/[2] as tb_a/b — purely for UI display, recalculated
-        # on every score submission once leader is determined).
-        p0, p1, p2 = standings[0], standings[1], standings[2]
-        _write_tiebreak_rows(
-            game, p0,
-            [(hn, scores[p0], scores[p1], scores[p2])
-             for hn, scores in pre_leader_data]
-        )
-        return
-
-    # ── Step 2: leader found — set model fields ──────────────────────────────
-    game.phase1_leader = Player.objects.get(pk=phase1_leader_id)
-    game.phase1_tied_a = Player.objects.get(pk=tb_a_id)
-    game.phase1_tied_b = Player.objects.get(pk=tb_b_id)
-
-    # ── Step 3: 2-way SD between tb_a and tb_b (holes after leader_found) ───
-    runner_up_id:      int | None = None
-    post_leader_holes: list       = []  # (hole_num, leader_net, a_net, b_net)
-
-    for hole_num in range(leader_found_hole + 1, 19):
-        leader_net = score_index.get(phase1_leader_id, {}).get(hole_num)
-        a_net      = score_index.get(tb_a_id,          {}).get(hole_num)
-        b_net      = score_index.get(tb_b_id,          {}).get(hole_num)
-
-        if any(x is None for x in [leader_net, a_net, b_net]):
-            break
-
-        post_leader_holes.append((hole_num, leader_net, a_net, b_net))
-
-        if a_net < b_net:
-            runner_up_id = tb_a_id
-            break
-        elif b_net < a_net:
-            runner_up_id = tb_b_id
-            break
-        # else: halved — SD continues
-
-    if runner_up_id is not None:
-        # Both leader and runner_up known — Phase 2 from hole 10.
-        game.phase1_runner_up = Player.objects.get(pk=runner_up_id)
-        _do_phase2(game, score_index)
-        return
-
-    # ── Runner-up SD still in progress — write all tiebreak rows ────────────
-    # Now that we know leader/tb_a/tb_b, re-map the pre-leader 3-way holes
-    # and combine with the post-leader 2-way holes.
-    all_tb_holes: list = []
-
-    for hole_num, score_map in pre_leader_data:
-        all_tb_holes.append((
-            hole_num,
-            score_map[phase1_leader_id],
-            score_map[tb_a_id],
-            score_map[tb_b_id],
-        ))
-
-    # The hole where leader was found (include it; tb_a_wins=None since it's
-    # the leader-resolution hole, not a head-to-head SD result).
-    lf_scores = {pid: score_index.get(pid, {}).get(leader_found_hole)
-                 for pid in standings}
-    all_tb_holes.append((
-        leader_found_hole,
-        lf_scores[phase1_leader_id],
-        lf_scores[tb_a_id],
-        lf_scores[tb_b_id],
-    ))
-
-    # Post-leader 2-way SD holes (SD not yet broken).
-    all_tb_holes.extend(post_leader_holes)
-
-    _write_tiebreak_rows(game, phase1_leader_id, all_tb_holes)
-
-
 # ---------------------------------------------------------------------------
 # Calculator
 # ---------------------------------------------------------------------------
@@ -538,35 +340,36 @@ def calculate_three_person_match(foursome: Foursome) -> ThreePersonMatch | None:
 
     score_index = _get_score_index(game, foursome)
 
-    # ── Score holes 1–9 with 5-3-1 ──────────────────────────────────────────
+    # ── Score holes 1–9 with 5-3-1, then PLAY ON while 2nd is level ─────────
     p1_rows:      list = []
     cum_pts:      dict = {pid: Decimal('0') for pid in real_ids}
     holes_scored: int  = 0
 
-    for hole_num in range(1, 10):  # Only holes 1–9
+    def _score_points_hole(hole_num: int) -> bool:
         scores: dict = {}
         for pid in real_ids:
-            s = score_index.get(pid, {}).get(hole_num)
-            if s is None:
-                break
-            scores[pid] = s
-
-        if len(scores) < len(real_ids):
-            # Missing at least one score; stop here.
-            break
-
-        pts_map = _allocate_hole_points(real_ids, scores)
-        for pid, pts in pts_map.items():
+            sc = score_index.get(pid, {}).get(hole_num)
+            if sc is None:
+                return False
+            scores[pid] = sc
+        for pid, pts in _allocate_hole_points(real_ids, scores).items():
             p1_rows.append(ThreePersonMatchP1HoleResult(
-                game           = game,
-                player_id      = pid,
-                hole_number    = hole_num,
-                net_score      = scores[pid],
-                points_awarded = pts,
-            ))
+                game=game, player_id=pid, hole_number=hole_num,
+                net_score=scores[pid], points_awarded=pts))
             cum_pts[pid] += pts
+        return True
 
+    for hole_num in range(1, 10):
+        if not _score_points_hole(hole_num):
+            break
         holes_scored = hole_num
+
+    # Points play on from the 10th, all three, until 2nd is clear.
+    if holes_scored == 9:
+        while not _second_is_clear(cum_pts) and holes_scored < 18:
+            if not _score_points_hole(holes_scored + 1):
+                break
+            holes_scored += 1
 
     if p1_rows:
         ThreePersonMatchP1HoleResult.objects.bulk_create(p1_rows)
@@ -582,41 +385,110 @@ def calculate_three_person_match(foursome: Foursome) -> ThreePersonMatch | None:
         game.save()
         return game
 
-    # ── All 9 holes scored — determine Phase 1 scenario ──────────────────────
     standings = sorted(real_ids, key=lambda pid: (-float(cum_pts[pid]), pid))
-    p1_pts = float(cum_pts[standings[0]])
-    p2_pts = float(cum_pts[standings[1]])
-    p3_pts = float(cum_pts[standings[2]])
 
-    tie_12 = (p1_pts == p2_pts)   # tie between places 1 and 2
-    tie_23 = (p2_pts == p3_pts)   # tie between places 2 and 3
-
-    if not tie_12 and not tie_23:
-        # ── Scenario A: clear 1st and 2nd → normal Phase 2 ──────────────────
+    if _second_is_clear(cum_pts):
+        # The top two play the finals, scored from the 10th — read back over
+        # whatever points holes were played on while 2nd was level.
         game.phase1_leader    = Player.objects.get(pk=standings[0])
         game.phase1_runner_up = Player.objects.get(pk=standings[1])
-        _do_phase2(game, score_index)
-
-    elif tie_12 and not tie_23:
-        # ── Scenario C: 2-way tie for 1st, clear 3rd ────────────────────────
-        game.phase1_leader    = Player.objects.get(pk=standings[0])
-        game.phase1_runner_up = Player.objects.get(pk=standings[1])
-        _do_phase2(game, score_index)
-
-    elif not tie_12 and tie_23:
-        # ── Scenario B: clear 1st, 2-way tie for 2nd ────────────────────────
-        game.phase1_leader = Player.objects.get(pk=standings[0])
-        game.phase1_tied_a = Player.objects.get(pk=standings[1])
-        game.phase1_tied_b = Player.objects.get(pk=standings[2])
-        _do_tiebreak_23(game, score_index,
-                         standings[0], standings[1], standings[2])
-
+        _do_phase2(game, _finals_index(
+            game, foursome, standings[0], standings[1]))
     else:
-        # ── Scenario D: 3-way tie ────────────────────────────────────────────
-        _do_tiebreak_3way(game, score_index, standings)
+        # Still level for 2nd and the next points hole is not in yet. A clear
+        # 1st is named so the board can show the finals against either.
+        game.status = 'tiebreak'
+        if float(cum_pts[standings[0]]) > float(cum_pts[standings[1]]):
+            game.phase1_leader = Player.objects.get(pk=standings[0])
+            game.phase1_tied_a = Player.objects.get(pk=standings[1])
+            game.phase1_tied_b = Player.objects.get(pk=standings[2])
 
     game.save()
     return game
+
+
+# ---------------------------------------------------------------------------
+# Scorecard block — gross, points and where the strokes fall
+# ---------------------------------------------------------------------------
+
+def _stroke_on_hole(tee, hole: int, so: int) -> int:
+    if so <= 0 or tee is None:
+        return 0
+    si = tee.hole(hole).get('stroke_index', 18)
+    return so // 18 + (1 if si <= so % 18 else 0)
+
+
+def _scorecard_block(foursome, game, members, p1_by_hole, standings) -> dict:
+    """The leaderboard card's scorecard, shaped for `HoleGridScorecard`
+    (`showPoints`): every hole in play with par, stroke index, each golfer's
+    gross, the points he took and the strokes that hole gives him.
+
+    **Strokes are PROSPECTIVE and phase-aware**, the way Stableford's are:
+    the dots are on holes nobody has played, so the plan is visible up front.
+    Strokes-off is off the low man of the three in the points, and off the
+    lower of the two finalists in the finals (nothing for the man who is
+    out); net is each golfer's own allowance throughout.
+    """
+    from scoring.models import HoleScore
+    from services.hole_plan import play_order
+
+    order = play_order(foursome.round, foursome) or list(range(1, 19))
+    gross = {(s.player_id, s.hole_number): s.gross_score
+             for s in HoleScore.objects.filter(foursome=foursome)
+             if s.gross_score is not None}
+    by_pid = {m.player_id: m for m in members}
+    through = max(p1_by_hole, default=0)
+    p1_by_hole = {h: {r.player_id: r for r in rows}
+                  for h, rows in p1_by_hole.items()}
+    fa, fb = game.phase1_leader_id, game.phase1_runner_up_id
+    finals_known = game.status in ('phase2', 'complete') and fa and fb
+
+    pct = game.net_percent or 100
+    mode = game.handicap_mode
+
+    def allowance(pid, low):
+        ph = by_pid[pid].playing_handicap or 0
+        if mode == HandicapMode.GROSS:
+            return 0
+        if mode == HandicapMode.STROKES_OFF:
+            return round_half_up(max(0, ph - low) * pct / 100)
+        return round_half_up(ph * pct / 100)
+
+    low_three = min((m.playing_handicap or 0) for m in members)
+    low_two = min((by_pid[p].playing_handicap or 0) for p in (fa, fb)) \
+        if finals_known else None
+    so_points = {pid: allowance(pid, low_three) for pid in by_pid}
+    so_finals = ({pid: allowance(pid, low_two) for pid in (fa, fb)}
+                 if finals_known else {})
+
+    holes = []
+    for hn in order:
+        in_finals = bool(finals_known) and hn > max(through, 9)
+        tee = next((m.tee for m in members if m.tee_id), None)
+        hd = tee.hole(hn) if tee else {}
+        scores = []
+        for pid, m in by_pid.items():
+            if in_finals:
+                n = _stroke_on_hole(m.tee, hn, so_finals.get(pid, 0))
+            else:
+                n = _stroke_on_hole(m.tee, hn, so_points[pid])
+            e = p1_by_hole.get(hn, {}).get(pid)
+            scores.append({
+                'player_id': pid,
+                'gross'    : gross.get((pid, hn)),
+                'strokes'  : n,
+                'points'   : float(e.points_awarded) if e is not None else None,
+            })
+        holes.append({'hole': hn, 'par': hd.get('par'),
+                      'stroke_index': hd.get('stroke_index'),
+                      'scores': scores})
+    return {
+        'players': [{'player_id': pid, 'name': m.player.name,
+                     'short_name': m.player.short_name}
+                    for pid, m in by_pid.items()],
+        'holes': holes,
+        'holes_in_play': order,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -754,10 +626,34 @@ def three_person_match_summary(foursome: Foursome) -> dict | None:
         '3rd': float(payout_cfg.get('3rd', 0.0)),
     }
 
+    # **1st and 2nd come from the FINALS, 3rd from the points** once the match
+    # is over (`handoff-mini-singles-three-score-entry`). A halved finals
+    # leaves both finalists on 1st, so they split 1st and 2nd between them.
+    # Until then the places are the points standings, with 1st and 2nd merged.
+    #
+    # **Before the finals, 1st and 2nd on points split the money** (Paul,
+    # 11 Nov 2026): finishing first on points is no edge — both men play the
+    # finals either way — so the two places are one and the pot for them is
+    # shared. A man still in contention for 2nd is in that share until 2nd is
+    # clear; the third man keeps 3rd.
+    money_place = {pid: (1 if pl <= 2 else pl) for pid, pl in place_map.items()}
+    if game.status == 'complete' and game.phase1_leader_id \
+            and game.phase1_runner_up_id:
+        fin = {game.phase1_leader_id, game.phase1_runner_up_id}
+        for pid in real_ids:
+            if pid not in fin:
+                money_place[pid] = 3
+        if game.match_winner_id:
+            for pid in fin:
+                money_place[pid] = 1 if pid == game.match_winner_id else 2
+        else:
+            for pid in fin:
+                money_place[pid] = 1
+
     # Group players by place, then split the combined payouts evenly.
     players_at_place: dict = {}
     for pid in real_ids:
-        p = place_map[pid]
+        p = money_place[pid]
         players_at_place.setdefault(p, []).append(pid)
 
     payout_per_player: dict = {}
@@ -806,8 +702,10 @@ def three_person_match_summary(foursome: Foursome) -> dict | None:
     # Otherwise: use phase1_place (points standings).
     final_place_map: dict = dict(place_map)  # start from phase1 standings
     if game.status == 'complete' and game.match_winner_id:
+        fin = {game.phase1_leader_id, game.phase1_runner_up_id}
         for pid in standings:
-            final_place_map[pid] = 1 if pid == game.match_winner_id else 2
+            final_place_map[pid] = (1 if pid == game.match_winner_id
+                                    else 2 if pid in fin else 3)
     elif game.status == 'phase2':
         leader_pid    = game.phase1_leader_id
         runner_up_pid = game.phase1_runner_up_id
@@ -835,33 +733,17 @@ def three_person_match_summary(foursome: Foursome) -> dict | None:
             'money'        : payout_per_player.get(pid, 0.0),
         })
 
-    # ── Tiebreak block ────────────────────────────────────────────────────────
+    # ── Play-on block ─────────────────────────────────────────────────────────
+    # **No sudden death any more.** While 2nd is level the points hole keeps
+    # being played by all three, so the old `tiebreak` shape is kept only so
+    # an installed client reads a sensible object (`holes` empty, the leader
+    # named once 1st is clear) — what is happening is `play_on`.
     tiebreak_block = None
+    play_on_block = None
     if game.status == 'tiebreak':
-        tb_results = list(
-            game.phase2_results
-            .filter(phase=ThreePersonMatchP2HoleResult.PHASE_TIEBREAK)
-            .order_by('hole_number')
-        )
-
         leader_player = pid_to_player.get(game.phase1_leader.pk) if game.phase1_leader else None
         tied_a_player = pid_to_player.get(game.phase1_tied_a.pk) if game.phase1_tied_a else None
         tied_b_player = pid_to_player.get(game.phase1_tied_b.pk) if game.phase1_tied_b else None
-
-        tb_holes_out = []
-        for r in tb_results:
-            tb_holes_out.append({
-                'hole'        : r.hole_number,
-                'leader_net'  : r.main_leader_net,
-                'opp_net'     : r.main_opp_net,
-                'leader_wins' : r.main_leader_wins,
-                'margin'      : r.main_margin_after,
-                'tb_a_net'    : r.tb_a_net,
-                'tb_b_net'    : r.tb_b_net,
-                'tb_a_wins'   : r.tb_a_wins,
-                'tb_margin'   : r.tb_margin_after,
-            })
-
         tiebreak_block = {
             'leader_found': game.phase1_leader is not None,
             'leader_id'   : game.phase1_leader.pk if game.phase1_leader else None,
@@ -870,7 +752,13 @@ def three_person_match_summary(foursome: Foursome) -> dict | None:
             'tied_a_name' : tied_a_player.short_name if tied_a_player else None,
             'tied_b_id'   : game.phase1_tied_b.pk if game.phase1_tied_b else None,
             'tied_b_name' : tied_b_player.short_name if tied_b_player else None,
-            'holes'       : tb_holes_out,
+            'holes'       : [],
+        }
+        play_on_block = {
+            'through'  : max(p1_by_hole) if p1_by_hole else 0,
+            'leader_id': game.phase1_leader.pk if game.phase1_leader else None,
+            'level_ids': [p.pk for p in (game.phase1_tied_a, game.phase1_tied_b)
+                          if p is not None],
         }
 
     # ── Phase 2 block ─────────────────────────────────────────────────────────
@@ -936,7 +824,11 @@ def three_person_match_summary(foursome: Foursome) -> dict | None:
             'holes'         : p2_holes_out,
         }
 
+    scorecard_block = _scorecard_block(
+        foursome, game, real_members, p1_by_hole, standings)
+
     return {
+        'scorecard'   : scorecard_block,
         'status'      : game.status,
         'handicap'    : {
             'mode'       : game.handicap_mode,
@@ -946,6 +838,326 @@ def three_person_match_summary(foursome: Foursome) -> dict | None:
         'players'     : players_out,
         'holes'       : holes_out,
         'tiebreak'    : tiebreak_block,
+        'play_on'     : play_on_block,
         'phase2'      : phase2_block,
         'money'       : money_block,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Score-entry card — `~/Downloads/handoff-mini-singles-three-score-entry`
+# ---------------------------------------------------------------------------
+
+def _pts_txt(v) -> str:
+    v = float(v)
+    return f'{v:g}'
+
+
+def _place_texts(totals: dict) -> dict:
+    """`1`, `T2`… by points, ties sharing a place."""
+    order = sorted(totals, key=lambda pid: (-totals[pid], pid))
+    place, out = 0, {}
+    for i, pid in enumerate(order):
+        if i == 0 or totals[pid] != totals[order[i - 1]]:
+            place = i + 1
+        out[pid] = place
+    tied = {p for p in out.values() if list(out.values()).count(p) > 1}
+    return {pid: (f'T{pl}' if pl in tied else str(pl))
+            for pid, pl in out.items()}
+
+
+def three_person_hole_card(foursome, hole: int) -> dict:
+    """Everything the three-man Mini Singles score-entry screen draws for ONE
+    hole (`handoff-mini-singles-three-score-entry`, 11 Nov 2026).
+
+    **It renders `three_person_match_summary` and decides no golf.** The
+    points, the play-on, the finalists, the finals margins and the money are
+    the engine's; what this adds is the cut — the round AS OF this hole, so a
+    tray reopened on the 4th does not report the 16th — and the sentences,
+    each of which is a rule.
+
+    Three phases of a hole: `points` (holes 1–9, and any hole points play on
+    for), and `finals` (the two leaders, match play, scored from the 10th).
+    Returns `{}` when there is no three-man match, so a caller can test the
+    key.
+    """
+    from scoring.models import HoleScore as _HS
+    from services.hole_plan import play_order
+    from services.player_labels import first_names
+
+    summary = three_person_match_summary(foursome)
+    if not summary:
+        return {}
+    game = foursome.three_person_match
+    members = [m for m in foursome.memberships.select_related('player', 'tee')
+               if not m.player.is_phantom]
+    if len(members) != 3 or not 1 <= hole <= 18:
+        return {}
+    order = play_order(foursome.round, foursome) or list(range(1, 19))
+    if hole not in order:
+        return {}
+    pos = order.index(hole)
+    ids = [m.player_id for m in members]
+    mem = {m.player_id: m for m in members}
+    first = first_names({pid: mem[pid].player for pid in ids})
+    status = summary['status']
+
+    # ── what the points round had done by this hole ────────────────────────
+    by_hole = {h['hole']: {e['player_id']: e for e in h['entries']}
+               for h in summary['holes']}
+    through = max(by_hole, default=0)               # last points hole played
+    total = {pid: 0.0 for pid in ids}
+    for h in sorted(by_hole):
+        if h <= hole:
+            for pid, e in by_hole[h].items():
+                total[pid] += e['points']
+
+    # ── which phase is THIS hole ───────────────────────────────────────────
+    finals_known = status in ('phase2', 'complete')
+    if hole <= 9 or hole <= through:
+        phase = 'points'
+    elif status == 'tiebreak' and hole == through + 1:
+        phase = 'points'
+    elif finals_known:
+        phase = 'finals'
+    else:
+        phase = 'points'
+    play_on = phase == 'points' and hole > 9
+
+    gross = {s.player_id: s.gross_score for s in _HS.objects.filter(
+        foursome=foursome, hole_number=hole, player_id__in=ids)
+        if s.gross_score is not None}
+    base = _get_score_index(game, foursome)
+    sc_hole = next((x for x in [mem[ids[0]].tee.hole(hole)]), {}) \
+        if mem[ids[0]].tee_id else {}
+
+    fa = fb = None
+    if finals_known:
+        fa, fb = game.phase1_leader_id, game.phase1_runner_up_id
+    fin_idx = _finals_index(game, foursome, fa, fb) if fa and fb else None
+
+    def strokes_in(index, pid):
+        g, n = gross.get(pid), index.get(pid, {}).get(hole)
+        return (g - n) if g is not None and n is not None else 0
+
+    hole_pts = by_hole.get(hole, {})
+
+    # ── players ────────────────────────────────────────────────────────────
+    players = []
+    for i, pid in enumerate(ids):
+        m = mem[pid]
+        row = {
+            'player_id': pid, 'seat': i, 'name': m.player.name,
+            'first': first[pid], 'short': m.player.short_name,
+            'course_handicap': m.course_handicap,
+            'gross': gross.get(pid), 'role': 'points',
+            'pts': (_pts_txt(hole_pts[pid]['points'])
+                    if pid in hole_pts else None),
+            'net': None, 'strokes': 0,
+        }
+        if phase == 'finals':
+            if pid in (fa, fb):
+                row['role'] = 'finalist'
+                idx = fin_idx
+            else:
+                row['role'] = 'third'
+                idx = None
+            if idx is not None:
+                row['strokes'] = strokes_in(idx, pid)
+                row['net'] = idx.get(pid, {}).get(hole) \
+                    if pid in gross else None
+        else:
+            row['strokes'] = strokes_in(base, pid)
+            row['net'] = base.get(pid, {}).get(hole) if pid in gross else None
+        players.append(row)
+
+    scored = sum(1 for p in players if p['gross'] is not None)
+    complete = scored == 3
+
+    # ── the points table, and what it says ─────────────────────────────────
+    places = _place_texts(total)
+    leader_pts = max(total.values())
+    pts_sorted = sorted(ids, key=lambda p: (-total[p], p))
+    clear_now = _second_is_clear({p: Decimal(str(v)) for p, v in total.items()})
+    holes_in = len([h for h in by_hole if h <= hole])
+    top_two = set(pts_sorted[:2])
+    mint = (top_two if (holes_in >= 9 and clear_now)
+            else ({pts_sorted[0]} if total[pts_sorted[0]] > total[pts_sorted[1]]
+                  else set()))
+    table = [{
+        'player_id': pid, 'place': places[pid], 'name': mem[pid].player.name,
+        'first': first[pid],
+        'net': (base.get(pid, {}).get(hole) if pid in gross else None),
+        'pts': (_pts_txt(hole_pts[pid]['points']) if pid in hole_pts else None),
+        'total': _pts_txt(total[pid]),
+        'mint': pid in mint,
+    } for pid in pts_sorted]
+
+    line = ''
+    level_ids: list = []
+    if phase == 'points':
+        if holes_in < 9:
+            line = (f'Thru {holes_in} of 9. The top two after nine play the '
+                    'finals over the back nine.')
+        elif clear_now:
+            fin = [first[p] for p in pts_sorted[:2]]
+            line = (f'{fin[0]} and {fin[1]} play the finals, scored from the '
+                    f'10th. {first[pts_sorted[2]]} takes 3rd on points.')
+        else:
+            if total[pts_sorted[0]] > total[pts_sorted[1]]:
+                level_ids = pts_sorted[1:]
+                a, b = (first[p] for p in level_ids)
+                line = (f'{a} and {b} are level for 2nd. Points play on until '
+                        'one of them is clear. Nobody waits: the finals is '
+                        'scored from the 10th against both.')
+            else:
+                line = ('All three are level. Points play on until 2nd is '
+                        'clear. Nobody waits: the finals is scored from the '
+                        '10th against whoever gets there.')
+
+    # ── the finals, scored from the 10th ───────────────────────────────────
+    def margin_of(a_id, b_id, index, upto):
+        t = played = 0
+        for h in range(10, min(upto, 18) + 1):
+            x, y = index.get(a_id, {}).get(h), index.get(b_id, {}).get(h)
+            if x is None or y is None:
+                break
+            played += 1
+            t += (x < y) - (x > y)
+        return t, played
+
+    def up_text(t, a_name, b_name):
+        return 'All square' if t == 0 else (
+            f'{a_name} {abs(t)} UP' if t > 0 else f'{b_name} {abs(t)} UP')
+
+    finals_cards = []
+    if play_on and level_ids and game.phase1_leader_id is not None:
+        lead = game.phase1_leader_id
+        for x in level_ids:
+            t, _ = margin_of(lead, x, _finals_index(game, foursome, lead, x),
+                             hole)
+            finals_cards.append({
+                'names': f'{first[lead]} v {first[x]}',
+                'text': up_text(t, first[lead], first[x])})
+
+    finals = None
+    p2 = summary.get('phase2') or {}
+    if phase == 'finals' and fa and fb:
+        rows = [h for h in (p2.get('holes') or []) if h['hole'] <= hole]
+        margin = rows[-1]['margin'] if rows else 0
+        played = len(rows)
+        remaining = 9 - played
+        closed = bool(rows) and abs(margin) > remaining and remaining >= 0 \
+            and played < 9
+        this = next((h for h in rows if h['hole'] == hole), None)
+        winner = None
+        if this is not None and this['leader_wins'] is not None:
+            winner = fa if this['leader_wins'] else fb
+        tiles = []
+        by_h = {h['hole']: h for h in (p2.get('holes') or [])}
+        for h in range(10, 19):
+            r = by_h.get(h)
+            if h > hole or r is None:
+                tiles.append({'hole': h, 'state': 'x'})
+            elif r['leader_wins'] is None:
+                tiles.append({'hole': h, 'state': 'h'})
+            else:
+                tiles.append({'hole': h, 'state': 'a' if r['leader_wins'] else 'b'})
+        lead_id = fa if margin >= 0 else fb
+        if margin == 0:
+            std = 'All square'
+        elif closed:
+            std = f'{abs(margin)}&{remaining}'
+        else:
+            std = f'{abs(margin)} UP'
+        finals = {
+            'a_id': fa, 'b_id': fb,
+            'names': [first[fa], first[fb]],
+            'nets': [fin_idx.get(fa, {}).get(hole) if fa in gross else None,
+                     fin_idx.get(fb, {}).get(hole) if fb in gross else None],
+            'winner_id': winner,
+            'halved': this is not None and this['leader_wins'] is None,
+            'leader_id': lead_id if margin else None,
+            'leader': first[lead_id] if margin else '',
+            'standing': std,
+            'thru': played, 'to_play': remaining,
+            'closed': closed,
+            'tiles': tiles,
+            'over_line': (f'Finals · {first[lead_id]} won {std} · hole '
+                          f'{[t["hole"] for t in tiles if t["state"] == "x"][0]}'
+                          ' is stroke play only') if closed and any(
+                              t['state'] == 'x' for t in tiles) else '',
+        }
+
+    # ── the header pill ────────────────────────────────────────────────────
+    if phase == 'finals' and finals:
+        pill = {'text': ('Finals · ' + (f"{finals['leader']} {finals['standing']}"
+                                        if finals['leader'] else 'All square')),
+                'sub': f"{finals['to_play']} to play",
+                'leader_id': finals['leader_id']}
+    elif play_on:
+        pill = {'text': 'Points play on',
+                'sub': (', '.join(first[p] for p in level_ids)
+                        + ' level for 2nd') if level_ids else 'All level',
+                'leader_id': None}
+    else:
+        lead_p = pts_sorted[0]
+        pill = {'text': (f'Points · {first[lead_p]} {_pts_txt(total[lead_p])}'
+                         if total[lead_p] > total[pts_sorted[1]] or holes_in
+                         else 'Points'),
+                'sub': f'thru {min(holes_in, 9)} of 9', 'leader_id': None}
+
+    # ── what comes after hole 9 ────────────────────────────────────────────
+    nxt = None
+    if hole == 9 and complete:
+        if clear_now:
+            nxt = {'title': f'Finals {first[pts_sorted[0]]} v {first[pts_sorted[1]]}',
+                   'line': line}
+        else:
+            nxt = {'title': 'Points play on from 10', 'line': line}
+
+    # ── money, on the last hole ────────────────────────────────────────────
+    entry = float(game.entry_fee or 0)
+    pot = entry * 3
+    last = pos == len(order) - 1
+    round_over = complete and last
+    result = None
+    winner_card = None
+    if round_over and status == 'complete':
+        places = {p['player_id']: p for p in summary['players']}
+        ordered = sorted(summary['players'], key=lambda p: (
+            p['final_place'], -p['phase1_points']))
+        rows = []
+        for p in ordered:
+            fp = p['final_place']
+            rows.append({'player_id': p['player_id'], 'name': p['name'],
+                         'place': {1: '1st', 2: '2nd', 3: '3rd'}.get(fp, '3rd'),
+                         'net': round(p['money'] - entry, 2) if pot else None})
+        result = {'rows': rows, 'pot': pot, 'entry': entry,
+                  'note': ''}
+        if p2.get('winner_name'):
+            w = next(p for p in summary['players']
+                     if p['short_name'] == p2['winner_name'])
+            winner_card = {
+                'player_id': w['player_id'], 'name': w['name'],
+                'text': (f"{first[w['player_id']]} wins the finals "
+                         f"{finals['standing'] if finals else ''} and goes "
+                         "through to the champions’ foursome on day 2.")
+                        if finals else '',
+            }
+
+    return {
+        'hole': hole, 'par': sc_hole.get('par'),
+        'stroke_index': sc_hole.get('stroke_index'),
+        'phase': phase, 'play_on': play_on, 'thru': pos + 1,
+        'title': 'Mini Singles', 'pot': pot, 'entry': entry,
+        'players': players, 'scored': scored, 'hole_complete': complete,
+        'pill': pill,
+        'totals': [{'player_id': p, 'first': first[p],
+                    'total': _pts_txt(total[p])} for p in ids],
+        'table': table, 'line': line,
+        'finals_cards': finals_cards, 'finals': finals, 'next': nxt,
+        'winner': winner_card, 'result': result,
+        'round_over': round_over,
+        'next_hole': order[pos + 1] if pos + 1 < len(order) else None,
     }

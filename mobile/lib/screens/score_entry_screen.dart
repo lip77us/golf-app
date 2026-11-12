@@ -45,6 +45,7 @@ import '../utils/banker_strokes.dart';
 import '../widgets/banker_entry.dart';
 import '../widgets/banker_entry_strip.dart';
 import '../widgets/mini_singles_entry.dart';
+import '../widgets/mini_singles_three_entry.dart';
 import '../widgets/triple_cup_entry.dart';
 import '../widgets/triple_cup_pairings.dart';
 import '../widgets/standing_ribbon.dart';
@@ -214,6 +215,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final ms = _miniSinglesCard(rp);
     if (ms != null) {
       final s = ms.strokesFor(m.player.id);
+      if (s != null) return s;
+    }
+
+    // **Mini Singles, a group of three: the strokes of the phase being
+    // played** — off the low man of the three in the points, off the lower
+    // of the two finalists in the finals, and none for the man who is out.
+    final m3 = _threeCard(rp);
+    if (m3 != null) {
+      final s = m3.strokesFor(m.player.id);
       if (s != null) return s;
     }
 
@@ -1659,7 +1669,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         // the same keypad and tray over a round cut in thirds.
         primary == GameIds.tripleCup ||
         // The Mini Singles bracket, per `handoff-mini-singles-score-entry`.
-        _miniSinglesRound(rp);
+        _miniSinglesRound(rp) ||
+        // …and its group of three, per
+        // `handoff-mini-singles-three-score-entry`.
+        _threeRound(rp);
   }
 
   /// **This group is playing a Mini Singles bracket on this screen** — a
@@ -1689,6 +1702,52 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final primary = resolvePrimary(rp.round?.primaryGame, games);
     return primary == null || !owners.contains(primary);
   }
+
+  /// **A group of THREE playing Match Play** — points over the front (and
+  /// while 2nd is level), then the finals. Same slug as the four-man
+  /// bracket, a different game, so the golfer count is what tells them
+  /// apart; and the same tray-owner exclusions apply.
+  bool _threeRound(RoundProvider rp) {
+    final games = _activeGames(rp.round);
+    if (!games.contains(GameIds.matchPlay) &&
+        !games.contains('three_person_match')) {
+      return false;
+    }
+    final fs = rp.round?.foursomes
+        .where((f) => f.id == widget.foursomeId)
+        .firstOrNull;
+    if (fs == null || fs.realPlayers.length != 3) return false;
+    const owners = {
+      GameIds.sixes, GameIds.vegas, GameIds.nassau, GameIds.nassauNine,
+      GameIds.skins, GameIds.multiSkins, GameIds.banker, GameIds.tripleCup,
+      GameIds.points531, GameIds.wolf, GameIds.rabbit, GameIds.survivor,
+    };
+    final primary = resolvePrimary(rp.round?.primaryGame, games);
+    return primary == null || !owners.contains(primary);
+  }
+
+  int? _threeCardAsked;
+
+  /// Make sure the hole on screen has a three-man card (see
+  /// `_ensureMiniSinglesCard`: a save drops every other hole's, because a
+  /// posted hole can move the finalists).
+  void _ensureThreeCard(RoundProvider rp) {
+    if (!_threeRound(rp)) return;
+    if (rp.miniSinglesThreeHole(_selectedHole) != null) {
+      _threeCardAsked = null;
+      return;
+    }
+    if (_threeCardAsked == _selectedHole) return;
+    _threeCardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<RoundProvider>()
+          .loadMiniSinglesThreeHole(widget.foursomeId, _selectedHole);
+    });
+  }
+
+  MiniSinglesThreeCard? _threeCard(RoundProvider rp) =>
+      _threeRound(rp) ? rp.miniSinglesThreeHole(_selectedHole) : null;
 
   /// The hole we have asked the server for; see `_ensureFourballCard`.
   int? _miniSinglesCardAsked;
@@ -1725,6 +1784,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       _fourballCard(rp) != null ||
       _tripleCupCard(rp) != null ||
       _miniSinglesCard(rp) != null ||
+      _threeCard(rp) != null ||
       _singlesCard(rp) != null ||
       _nassauCard(rp) != null ||
       _skinsCard(rp) != null ||
@@ -1811,7 +1871,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// strokes, the auto-post) therefore serves both without a second branch.
   StrokePlayHoleCard? _strokePlayCard(RoundProvider rp) {
     if (_stablefordPrimary(rp)) {
-      if (_miniSinglesRound(rp)) return null;
+      if (_miniSinglesRound(rp) || _threeRound(rp)) return null;
       return rp.stablefordHole(_selectedHole);
     }
     final games = _activeGames(rp.round);
@@ -1820,7 +1880,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     }
     // A group playing a Mini Singles bracket gets THAT tray: two cannot
     // both rise, and the place in the field is still on the leaderboard.
-    if (_miniSinglesRound(rp)) return null;
+    if (_miniSinglesRound(rp) || _threeRound(rp)) return null;
     return rp.strokePlayHole(_selectedHole);
   }
 
@@ -3840,6 +3900,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final msTray =
         msCard != null && fbActive && allDone && _editHotPid == null;
 
+    // **Mini Singles, a group of three.** Points, then the finals.
+    _ensureThreeCard(rp);
+    final m3Card = _threeCard(rp);
+    final m3Tray =
+        m3Card != null && fbActive && allDone && _editHotPid == null;
+
     // **Banker.** The tray rises on a RESOLVED hole rather than on four
     // scores: three of the four numbers mean nothing until the banker's is
     // among them, which is the strip's own long-standing rule.
@@ -3949,6 +4015,28 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               // While this tray is up it IS the bottom bar — the pager below
               // is hidden, so these are the only arrows on screen, and on
               // the last hole the forward button is Complete Round.
+              onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
+              onNext: rp.submitting
+                  ? null
+                  : (_nextHoleInOrder(rp) == null
+                      ? () => _completeRound(ctx, players, par)
+                      : _advance),
+              gettingResult: rp.trayResultPending(_selectedHole) ||
+                  _hasRealPending(_selectedHole),
+              notSynced: rp.trayHoleUnsynced(_selectedHole),
+              // Picks nobody — see the Sixes tray above.
+              picking: _trayEditing,
+              onEdit: () => setState(() {
+                _trayEditing = !_trayEditing;
+                _editHotPid = null;
+              }),
+            )
+          else if (m3Tray)
+            MiniSinglesThreeTray(
+              card: m3Card,
+              // While this tray is up it IS the bottom bar — the pager below
+              // is hidden, so these are the only arrows on screen, and on
+              // the last hole the forward button finishes the round.
               onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
               onNext: rp.submitting
                   ? null
@@ -4261,7 +4349,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // has the tray overlaying this row, so this is the half that goes
           // (Paul, 30 Oct 2026).
           if (!sixTray && !spTray && !vgTray && !fourTray && !nasTray
-              && !skTray && !bkTray && !tcTray && !msTray)
+              && !skTray && !bkTray && !tcTray && !msTray && !m3Tray)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Column(children: [
@@ -4629,6 +4717,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 // on the same round — it is one of the tray owners.
                 aboveRows: _miniSinglesCard(rp) != null
                     ? MiniSinglesMatches(card: _miniSinglesCard(rp)!)
+                    : _threeCard(rp) != null
+                    ? MiniSinglesThreeHeader(card: _threeCard(rp)!)
                     : (_bankerRound(rp) &&
                         rp.bankerSummary?.current?.hole == _selectedHole)
                     ? BankerBetsCard(
@@ -4893,9 +4983,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 matchPlayData:           ((games.contains('match_play') ||
                         games.contains('singles_nassau') ||
                         games.contains('singles_18')) &&
-                        !_miniSinglesRound(rp))
+                        !_miniSinglesRound(rp) && !_threeRound(rp))
                     ? rp.matchPlayData : null,
-                threePersonMatchSummary: games.contains('three_person_match') ? rp.threePersonMatchSummary   : null,
+                threePersonMatchSummary: games.contains('three_person_match')
+                        && !_threeRound(rp)
+                    ? rp.threePersonMatchSummary : null,
                 foursomeId:              widget.foursomeId,
                 roundId:                 rp.round?.id,
                 players:                 players,
@@ -4908,7 +5000,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 loadingPoints531:        rp.loadingPoints531,
                 loadingVegas:            rp.loadingVegas,
                 loadingMatchPlay:        rp.loadingMatchPlay &&
-                                         !_miniSinglesRound(rp),
+                                         !_miniSinglesRound(rp) &&
+                                         !_threeRound(rp),
                 loadingThreePersonMatch: rp.loadingThreePersonMatch,
                 onTapHole:               _selectHole,
                 irBallsConfig:           games.contains('irish_rumble')
@@ -8668,9 +8761,10 @@ class _ThreePersonMatchStatusCard extends StatelessWidget {
           final leaderName = tb['leader_name'] as String? ?? 'Player';
           final aName = tb['tied_a_name'] as String? ?? '?';
           final bName = tb['tied_b_name'] as String? ?? '?';
-          return '$leaderName leads — $aName vs $bName SD';
+          return '$leaderName leads — $aName and $bName level for 2nd, '
+              'points play on';
         }
-        return 'Sudden death — all tied';
+        return 'All level — points play on';
       case 'phase2':
         return 'Back 9 — match play';
       case 'complete':

@@ -171,6 +171,25 @@ class HoleGridScorecard extends StatefulWidget {
 }
 
 class _HoleGridScorecardState extends State<HoleGridScorecard> {
+
+
+  /// **The card already shows where the strokes fall.** A stroke planned on
+  /// a hole nobody has scored draws as a dot on that cell, so the whole
+  /// plan is on the grid up front and the table beneath it only says it a
+  /// second time (Paul, 11 Nov 2026). The table stays for a card that
+  /// carries dots on PLAYED holes alone — there it is the only place the
+  /// holes still to come are legible.
+  bool get _hasFutureDots {
+    for (final h in widget.holes) {
+      for (final sc in (h['scores'] as List? ?? const [])) {
+        final m = sc as Map;
+        if (m['gross'] == null && ((m['strokes'] as num?)?.toInt() ?? 0) > 0) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
   // Wide enough for `Larry gets 10` on one line — a five-letter short
   // name and a two-digit allowance — where 78 was sized for the name
   // alone and ellipsised the figure it had just been given.
@@ -826,7 +845,7 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
             ),
           ]);
         }),
-        if (widget.showStrokes) ...[
+        if (widget.showStrokes && !_hasFutureDots) ...[
           const SizedBox(height: 10),
           StrokesTable(
             holes: widget.holes,

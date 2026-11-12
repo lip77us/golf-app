@@ -1,0 +1,125 @@
+{
+ "hole": 10,
+ "par": 4,
+ "stroke_index": 12,
+ "phase": "points",
+ "play_on": true,
+ "thru": 10,
+ "title": "Mini Singles",
+ "pot": 30.0,
+ "entry": 10.0,
+ "players": [
+  {
+   "player_id": 10,
+   "seat": 0,
+   "name": "Paul Lipkin",
+   "first": "Paul",
+   "short": "PL",
+   "course_handicap": 8,
+   "gross": 4,
+   "role": "points",
+   "pts": "5",
+   "net": 4,
+   "strokes": 0
+  },
+  {
+   "player_id": 11,
+   "seat": 1,
+   "name": "Dave Moran",
+   "first": "Dave",
+   "short": "DM",
+   "course_handicap": 11,
+   "gross": 5,
+   "role": "points",
+   "pts": "2",
+   "net": 5,
+   "strokes": 0
+  },
+  {
+   "player_id": 12,
+   "seat": 2,
+   "name": "Sam Reid",
+   "first": "Sam",
+   "short": "SR",
+   "course_handicap": 14,
+   "gross": 5,
+   "role": "points",
+   "pts": "2",
+   "net": 5,
+   "strokes": 0
+  }
+ ],
+ "scored": 3,
+ "hole_complete": true,
+ "pill": {
+  "text": "Points play on",
+  "sub": "Dave, Sam level for 2nd",
+  "leader_id": null
+ },
+ "totals": [
+  {
+   "player_id": 10,
+   "first": "Paul",
+   "total": "38"
+  },
+  {
+   "player_id": 11,
+   "first": "Dave",
+   "total": "26"
+  },
+  {
+   "player_id": 12,
+   "first": "Sam",
+   "total": "26"
+  }
+ ],
+ "table": [
+  {
+   "player_id": 10,
+   "place": "1",
+   "name": "Paul Lipkin",
+   "first": "Paul",
+   "net": 4,
+   "pts": "5",
+   "total": "38",
+   "mint": true
+  },
+  {
+   "player_id": 11,
+   "place": "T2",
+   "name": "Dave Moran",
+   "first": "Dave",
+   "net": 5,
+   "pts": "2",
+   "total": "26",
+   "mint": false
+  },
+  {
+   "player_id": 12,
+   "place": "T2",
+   "name": "Sam Reid",
+   "first": "Sam",
+   "net": 5,
+   "pts": "2",
+   "total": "26",
+   "mint": false
+  }
+ ],
+ "line": "Dave and Sam are level for 2nd. Points play on until one of them is clear. Nobody waits: the finals is scored from the 10th against both.",
+ "finals_cards": [
+  {
+   "names": "Paul v Dave",
+   "text": "Paul 1 UP"
+  },
+  {
+   "names": "Paul v Sam",
+   "text": "Paul 1 UP"
+  }
+ ],
+ "finals": null,
+ "next": null,
+ "winner": null,
+ "result": null,
+ "round_over": false,
+ "next_hole": 11
+}

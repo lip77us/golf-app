@@ -1,0 +1,119 @@
+{
+ "hole": 9,
+ "par": 5,
+ "stroke_index": 15,
+ "phase": "points",
+ "play_on": false,
+ "thru": 9,
+ "title": "Mini Singles",
+ "pot": 30.0,
+ "entry": 10.0,
+ "players": [
+  {
+   "player_id": 7,
+   "seat": 0,
+   "name": "Paul Lipkin",
+   "first": "Paul",
+   "short": "PL",
+   "course_handicap": 8,
+   "gross": 6,
+   "role": "points",
+   "pts": "2",
+   "net": 6,
+   "strokes": 0
+  },
+  {
+   "player_id": 8,
+   "seat": 1,
+   "name": "Dave Moran",
+   "first": "Dave",
+   "short": "DM",
+   "course_handicap": 11,
+   "gross": 6,
+   "role": "points",
+   "pts": "2",
+   "net": 6,
+   "strokes": 0
+  },
+  {
+   "player_id": 9,
+   "seat": 2,
+   "name": "Sam Reid",
+   "first": "Sam",
+   "short": "SR",
+   "course_handicap": 14,
+   "gross": 5,
+   "role": "points",
+   "pts": "5",
+   "net": 5,
+   "strokes": 0
+  }
+ ],
+ "scored": 3,
+ "hole_complete": true,
+ "pill": {
+  "text": "Points \u00b7 Paul 33",
+  "sub": "thru 9 of 9",
+  "leader_id": null
+ },
+ "totals": [
+  {
+   "player_id": 7,
+   "first": "Paul",
+   "total": "33"
+  },
+  {
+   "player_id": 8,
+   "first": "Dave",
+   "total": "24"
+  },
+  {
+   "player_id": 9,
+   "first": "Sam",
+   "total": "24"
+  }
+ ],
+ "table": [
+  {
+   "player_id": 7,
+   "place": "1",
+   "name": "Paul Lipkin",
+   "first": "Paul",
+   "net": 6,
+   "pts": "2",
+   "total": "33",
+   "mint": true
+  },
+  {
+   "player_id": 8,
+   "place": "T2",
+   "name": "Dave Moran",
+   "first": "Dave",
+   "net": 6,
+   "pts": "2",
+   "total": "24",
+   "mint": false
+  },
+  {
+   "player_id": 9,
+   "place": "T2",
+   "name": "Sam Reid",
+   "first": "Sam",
+   "net": 5,
+   "pts": "5",
+   "total": "24",
+   "mint": false
+  }
+ ],
+ "line": "Dave and Sam are level for 2nd. Points play on until one of them is clear. Nobody waits: the finals is scored from the 10th against both.",
+ "finals_cards": [],
+ "finals": null,
+ "next": {
+  "title": "Points play on from 10",
+  "line": "Dave and Sam are level for 2nd. Points play on until one of them is clear. Nobody waits: the finals is scored from the 10th against both."
+ },
+ "winner": null,
+ "result": null,
+ "round_over": false,
+ "next_hole": 10
+}

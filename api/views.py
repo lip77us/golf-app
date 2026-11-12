@@ -1073,7 +1073,9 @@ def _build_leaderboard(round_obj: Round) -> dict:
     if tpm_qs.exists():
         from services.three_person_match import three_person_match_summary
         games['three_person_match'] = {
-            'label'   : 'Three-Person Match',
+            # The same game the setup and the score screen call Mini Singles.
+            'label'   : ('Mini Singles' if 'match_play' in active_games
+                         else 'Three-Person Match'),
             'by_group': [
                 {
                     'foursome_id' : tpm.foursome_id,
@@ -1393,6 +1395,14 @@ def _leaderboard_active_games(round_obj, games_dict: dict) -> list:
             continue
         if key not in active:
             active.append(key)
+    # **A group of three plays the Mini Singles as a three-man match, and its
+    # board is the `three_person_match` block.** The round still lists
+    # `match_play`, which for the bracket is the four-man board — with no
+    # four-man group in the round it has no block, and the tab read "not set
+    # up yet" beside a perfectly good one (Paul, 11 Nov 2026).
+    if ('match_play' in active and 'match_play' not in games_dict
+            and 'three_person_match' in games_dict):
+        active.remove('match_play')
     return active
 
 
@@ -6262,7 +6272,13 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
              'low_net_round', 'points_531', 'wolf', 'vegas',
              'fourball', 'match_18', 'nassau', 'nassau_nine', 'skins',
              'sequoya_threes', 'triple_cup', 'match_play',
-             'stableford', 'triple_nassau'} & active
+             'stableford', 'triple_nassau',
+             'three_person_match'} & active
+    # A three-golfer Match Play group plays the three-man Mini Singles, and
+    # `match_play` is what the round lists — the group's own game is only
+    # stamped `three_person_match` on a tournament round.
+    if 'match_play' in active:
+        wants = wants | {'three_person_match'}
     # **The skins POOL, only where it owns the entry screen.** A pool rides
     # as a side game on a sixty-player tournament, where its card would be a
     # pool summary computed on every posted score for a tray nobody draws
@@ -6398,6 +6414,13 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
                 card = sequoya_hole_card(foursome, hole_number)
                 if card:
                     out['sequoya_hole'] = card
+            # …and the three-man Mini Singles': points, the play-on, the
+            # finals and the money, AS OF the hole.
+            if 'three_person_match' in wants and hole_number:
+                from services.three_person_match import three_person_hole_card
+                card = three_person_hole_card(foursome, hole_number)
+                if card:
+                    out['three_person_hole'] = card
             # …and Triple Nassau's: three Nassau cards and the money across
             # each golfer's two matches.
             if 'triple_nassau' in wants and hole_number:
@@ -8656,6 +8679,18 @@ class RabbitHoleCardView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.rabbit import rabbit_hole_card
         return Response(rabbit_hole_card(foursome, int(hole)))
+
+
+class ThreePersonHoleCardView(APIView):
+    """GET /api/foursomes/{id}/three-person-match/hole/{hole}/
+
+    One hole's score-entry card for the three-man Mini Singles. The POST that
+    saves a score returns the same shape under `three_person_hole`.
+    """
+    def get(self, request, pk, hole):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.three_person_match import three_person_hole_card
+        return Response(three_person_hole_card(foursome, int(hole)))
 
 
 class TripleNassauHoleCardView(APIView):

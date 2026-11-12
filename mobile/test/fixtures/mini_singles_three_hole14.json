@@ -1,0 +1,174 @@
+{
+ "hole": 14,
+ "par": 5,
+ "stroke_index": 4,
+ "phase": "finals",
+ "play_on": false,
+ "thru": 14,
+ "title": "Mini Singles",
+ "pot": 30.0,
+ "entry": 10.0,
+ "players": [
+  {
+   "player_id": 4,
+   "seat": 0,
+   "name": "Paul Lipkin",
+   "first": "Paul",
+   "short": "PL",
+   "course_handicap": 8,
+   "gross": 5,
+   "role": "finalist",
+   "pts": null,
+   "net": 5,
+   "strokes": 0
+  },
+  {
+   "player_id": 5,
+   "seat": 1,
+   "name": "Dave Moran",
+   "first": "Dave",
+   "short": "DM",
+   "course_handicap": 11,
+   "gross": 6,
+   "role": "third",
+   "pts": null,
+   "net": null,
+   "strokes": 0
+  },
+  {
+   "player_id": 6,
+   "seat": 2,
+   "name": "Sam Reid",
+   "first": "Sam",
+   "short": "SR",
+   "course_handicap": 14,
+   "gross": 6,
+   "role": "finalist",
+   "pts": null,
+   "net": 5,
+   "strokes": 1
+  }
+ ],
+ "scored": 3,
+ "hole_complete": true,
+ "pill": {
+  "text": "Finals \u00b7 Sam 1 UP",
+  "sub": "4 to play",
+  "leader_id": 6
+ },
+ "totals": [
+  {
+   "player_id": 4,
+   "first": "Paul",
+   "total": "42"
+  },
+  {
+   "player_id": 5,
+   "first": "Dave",
+   "total": "27"
+  },
+  {
+   "player_id": 6,
+   "first": "Sam",
+   "total": "30"
+  }
+ ],
+ "table": [
+  {
+   "player_id": 4,
+   "place": "1",
+   "name": "Paul Lipkin",
+   "first": "Paul",
+   "net": 5,
+   "pts": null,
+   "total": "42",
+   "mint": true
+  },
+  {
+   "player_id": 6,
+   "place": "2",
+   "name": "Sam Reid",
+   "first": "Sam",
+   "net": 5,
+   "pts": null,
+   "total": "30",
+   "mint": true
+  },
+  {
+   "player_id": 5,
+   "place": "3",
+   "name": "Dave Moran",
+   "first": "Dave",
+   "net": 6,
+   "pts": null,
+   "total": "27",
+   "mint": false
+  }
+ ],
+ "line": "",
+ "finals_cards": [],
+ "finals": {
+  "a_id": 4,
+  "b_id": 6,
+  "names": [
+   "Paul",
+   "Sam"
+  ],
+  "nets": [
+   5,
+   5
+  ],
+  "winner_id": null,
+  "halved": true,
+  "leader_id": 6,
+  "leader": "Sam",
+  "standing": "1 UP",
+  "thru": 5,
+  "to_play": 4,
+  "closed": false,
+  "tiles": [
+   {
+    "hole": 10,
+    "state": "a"
+   },
+   {
+    "hole": 11,
+    "state": "h"
+   },
+   {
+    "hole": 12,
+    "state": "b"
+   },
+   {
+    "hole": 13,
+    "state": "b"
+   },
+   {
+    "hole": 14,
+    "state": "h"
+   },
+   {
+    "hole": 15,
+    "state": "x"
+   },
+   {
+    "hole": 16,
+    "state": "x"
+   },
+   {
+    "hole": 17,
+    "state": "x"
+   },
+   {
+    "hole": 18,
+    "state": "x"
+   }
+  ],
+  "over_line": ""
+ },
+ "next": null,
+ "winner": null,
+ "result": null,
+ "round_over": false,
+ "next_hole": 15
+}

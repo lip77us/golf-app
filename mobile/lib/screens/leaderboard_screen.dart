@@ -4659,7 +4659,7 @@ class _ThreePersonMatchGroupCard extends StatelessWidget {
     switch (status) {
       case 'complete':    statusLabel = 'Final';       break;
       case 'in_progress': statusLabel = 'In progress'; break;
-      case 'tiebreak':    statusLabel = 'Tiebreak';    break;
+      case 'tiebreak':    statusLabel = 'Points play on'; break;
       case 'phase2':      statusLabel = 'Back 9';      break;
       default:            statusLabel = 'Pending';     break;
     }
@@ -4678,7 +4678,7 @@ class _ThreePersonMatchGroupCard extends StatelessWidget {
           Row(children: [
             Expanded(
               child: Text(
-                'Three-Person Match — ${_hcapLabel(hcap)}',
+                'Mini Singles — ${_hcapLabel(hcap)}',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
@@ -4774,18 +4774,46 @@ class _ThreePersonMatchGroupCard extends StatelessWidget {
             }(),
           ],
 
-          // Per-hole grid (reuses Points 5-3-1 grid — same hole entry shape)
-          if (holes.isNotEmpty) ...[
-            const Divider(height: 20),
-            _Points531HoleGrid(holes: holes, players: players),
-          ],
+          // **The scorecard, like Stableford's** (Paul, 11 Nov 2026): gross and
+          // the points it earned over ONE set of hole columns, with the
+          // stroke index row and the dots — including on the holes still to
+          // come. The old grid showed nets and points only, so a reader could
+          // not see the score behind a point or where the strokes fall.
+          ...() {
+            final sc = summary['scorecard'] as Map<String, dynamic>?;
+            final scHoles = ((sc?['holes'] as List?) ?? const [])
+                .cast<Map<String, dynamic>>();
+            final scPlayers = ((sc?['players'] as List?) ?? const [])
+                .cast<Map<String, dynamic>>();
+            if (scHoles.isEmpty || scPlayers.isEmpty) {
+              return <Widget>[
+                if (holes.isNotEmpty) ...[
+                  const Divider(height: 20),
+                  _Points531HoleGrid(holes: holes, players: players),
+                ],
+              ];
+            }
+            return <Widget>[
+              const Divider(height: 20),
+              HoleGridScorecard(
+                holes: scHoles,
+                participants: scPlayers,
+                holesInPlay: ((sc?['holes_in_play'] as List?) ?? const [])
+                    .map((e) => e as int)
+                    .toList(),
+                showPoints: true,
+                legend: null,
+                showStrokes: false,
+              ),
+            ];
+          }(),
 
           // ── Tiebreak section ─────────────────────────────────────────────
           if (status == 'tiebreak') ...[
             const Divider(height: 20),
-            _TpmTiebreakSection(
+            _TpmPlayOnSection(
                 tiebreak: summary['tiebreak'] as Map<String, dynamic>?,
-                players: players,
+                playOn: summary['play_on'] as Map<String, dynamic>?,
                 theme: theme),
           ],
 
@@ -4833,118 +4861,59 @@ class _ThreePersonMatchGroupCard extends StatelessWidget {
   }
 }
 
-/// Section widget showing the sudden-death tiebreak progress.
-class _TpmTiebreakSection extends StatelessWidget {
+/// Points are still being played because 2nd is level.
+///
+/// **No sudden death any more**: while 2nd is level the 5-3-1 hole keeps being
+/// played by all three, and the finals is scored from the 10th against
+/// whoever ends up in it. The per-hole grid above already carries the extra
+/// holes, so this only says what is happening and why.
+class _TpmPlayOnSection extends StatelessWidget {
   final Map<String, dynamic>? tiebreak;
-  final List                  players;
+  final Map<String, dynamic>? playOn;
   final ThemeData             theme;
-  const _TpmTiebreakSection({
+  const _TpmPlayOnSection({
     required this.tiebreak,
-    required this.players,
+    required this.playOn,
     required this.theme,
   });
 
   @override
   Widget build(BuildContext context) {
-    final tb = tiebreak ?? {};
+    final tb = tiebreak ?? const {};
     final leaderFound = tb['leader_found'] == true;
-    final leaderName  = tb['leader_name'] as String?;
-    final tiedAName   = tb['tied_a_name'] as String?;
-    final tiedBName   = tb['tied_b_name'] as String?;
-    final tbHoles     = (tb['holes'] as List? ?? []);
-
-    // Column headers: before leader found, use standings order from players.
-    final col0 = leaderFound ? (leaderName ?? '?')
-        : (players.isNotEmpty ? (players[0] as Map)['short_name']?.toString() ?? '?' : '?');
-    final col1 = leaderFound ? (tiedAName  ?? '?')
-        : (players.length > 1 ? (players[1] as Map)['short_name']?.toString() ?? '?' : '?');
-    final col2 = leaderFound ? (tiedBName  ?? '?')
-        : (players.length > 2 ? (players[2] as Map)['short_name']?.toString() ?? '?' : '?');
-
-    final muted = theme.textTheme.labelSmall
-        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
-    final bodySmall = theme.textTheme.bodySmall;
-
-    Widget scoreCell(int? score, int? minScore) {
-      final isWin = score != null && minScore != null && score == minScore;
-      return SizedBox(
-        width: 40,
-        child: Text(
-          score?.toString() ?? '—',
-          textAlign: TextAlign.center,
-          style: bodySmall?.copyWith(
-            fontWeight: isWin ? FontWeight.bold : FontWeight.normal,
-            color: isWin ? theme.colorScheme.primary : theme.colorScheme.onSurface,
-          ),
-        ),
-      );
-    }
-
+    final a = tb['tied_a_name'] as String?;
+    final b = tb['tied_b_name'] as String?;
+    final through = (playOn?['through'] as num?)?.toInt();
+    final sentence = leaderFound
+        ? '${a ?? "?"} and ${b ?? "?"} are level for 2nd. Points play on until '
+          'one of them is clear. Nobody waits: the finals is scored from the '
+          '10th against both.'
+        : 'All three are level. Points play on until 2nd is clear. Nobody '
+          'waits: the finals is scored from the 10th against whoever gets '
+          'there.';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Sudden Death',
+        Text('POINTS PLAY ON',
             style: theme.textTheme.labelSmall?.copyWith(
                 color: Colors.orange.shade800,
                 fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
-
-        // Describe the current SD state.
-        Text(
-          leaderFound
-              ? '${leaderName ?? "?"} leads — ${tiedAName ?? "?"} vs ${tiedBName ?? "?"} in SD for 2nd'
-              : '3-way SD — keep scoring hole by hole',
-          style: bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
-
-        if (tbHoles.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          // Header
-          Row(children: [
-            SizedBox(width: 48, child: Text('Hole', style: muted)),
-            SizedBox(width: 40, child: Text(col0, textAlign: TextAlign.center, style: muted)),
-            SizedBox(width: 40, child: Text(col1, textAlign: TextAlign.center, style: muted)),
-            SizedBox(width: 40, child: Text(col2, textAlign: TextAlign.center, style: muted)),
-          ]),
-          ...tbHoles.map((h) {
-            final row       = h as Map<String, dynamic>;
-            final holeNum   = (row['hole'] as num?)?.toInt() ?? 0;
-            final c0        = (row['leader_net'] as num?)?.toInt();
-            final c1        = (row['tb_a_net']   as num?)?.toInt();
-            final c2        = (row['tb_b_net']   as num?)?.toInt();
-            final allScores = [c0, c1, c2].whereType<int>();
-            final minScore  = allScores.isNotEmpty
-                ? allScores.reduce((a, b) => a < b ? a : b) : null;
-            final tieCount  = [c0, c1, c2].where((s) => s == minScore).length;
-            final suffix    = tieCount == 3 ? ' (all ↔)' : tieCount == 2 ? ' (tied)' : '';
-            return Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Row(children: [
-                SizedBox(
-                  width: 48,
-                  child: Text('H$holeNum$suffix',
-                      style: bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant)),
-                ),
-                scoreCell(c0, minScore),
-                scoreCell(c1, minScore),
-                scoreCell(c2, minScore),
-              ]),
-            );
-          }),
-        ] else ...[
-          const SizedBox(height: 4),
-          Text('Scoring continues from hole 10.',
-              style: bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontStyle: FontStyle.italic)),
-        ],
+        Text(sentence,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        if (through != null && through > 9)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text('Thru $through',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w600)),
+          ),
       ],
     );
   }
 }
 
-/// Section widget for the back-9 match play phase of Three-Person Match.
 class _TpmPhase2Section extends StatelessWidget {
   final Map<String, dynamic> phase2;
   final ThemeData            theme;

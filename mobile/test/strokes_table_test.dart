@@ -133,14 +133,35 @@ void main() {
   });
 
   group('every board gets one', () {
-    testWidgets('a scorecard draws it underneath, by default', (t) async {
+    Map<String, dynamic> played(int h, Map<int, int> strokes) {
+      final m = _hole(h, strokes);
+      for (final s in m['scores'] as List) {
+        (s as Map)['gross'] = 5;
+      }
+      return m;
+    }
+
+    testWidgets('a scorecard draws it underneath when only played holes '
+        'carry dots', (t) async {
       await _pump(t, HoleGridScorecard(
-        holes: [for (var h = 1; h <= 3; h++) _hole(h, {1: 0, 2: 1})],
+        holes: [for (var h = 1; h <= 3; h++) played(h, {1: 0, 2: 1})],
         participants: _people,
         holesInPlay: const [1, 2, 3],
       ));
       expect(find.byType(StrokesTable), findsOneWidget);
       expect(find.text('STROKES'), findsOneWidget);
+    });
+
+    testWidgets('…and draws none once the card shows the holes to come',
+        (t) async {
+      // Paul, 11 Nov 2026: the dots on unplayed holes already say where the
+      // strokes fall, so the table only says it twice.
+      await _pump(t, HoleGridScorecard(
+        holes: [for (var h = 1; h <= 3; h++) _hole(h, {1: 0, 2: 1})],
+        participants: _people,
+        holesInPlay: const [1, 2, 3],
+      ));
+      expect(find.byType(StrokesTable), findsNothing);
     });
 
     testWidgets('…and a gross round still draws none', (t) async {

@@ -1,0 +1,116 @@
+{
+ "hole": 3,
+ "par": 3,
+ "stroke_index": 13,
+ "phase": "points",
+ "play_on": false,
+ "thru": 3,
+ "title": "Mini Singles",
+ "pot": 30.0,
+ "entry": 10.0,
+ "players": [
+  {
+   "player_id": 13,
+   "seat": 0,
+   "name": "Paul Lipkin",
+   "first": "Paul",
+   "short": "PL",
+   "course_handicap": 8,
+   "gross": 3,
+   "role": "points",
+   "pts": null,
+   "net": 3,
+   "strokes": 0
+  },
+  {
+   "player_id": 14,
+   "seat": 1,
+   "name": "Dave Moran",
+   "first": "Dave",
+   "short": "DM",
+   "course_handicap": 11,
+   "gross": 5,
+   "role": "points",
+   "pts": null,
+   "net": 5,
+   "strokes": 0
+  },
+  {
+   "player_id": 15,
+   "seat": 2,
+   "name": "Sam Reid",
+   "first": "Sam",
+   "short": "SR",
+   "course_handicap": 14,
+   "gross": null,
+   "role": "points",
+   "pts": null,
+   "net": null,
+   "strokes": 0
+  }
+ ],
+ "scored": 2,
+ "hole_complete": false,
+ "pill": {
+  "text": "Points \u00b7 Paul 8",
+  "sub": "thru 2 of 9",
+  "leader_id": null
+ },
+ "totals": [
+  {
+   "player_id": 13,
+   "first": "Paul",
+   "total": "8"
+  },
+  {
+   "player_id": 14,
+   "first": "Dave",
+   "total": "8"
+  },
+  {
+   "player_id": 15,
+   "first": "Sam",
+   "total": "2"
+  }
+ ],
+ "table": [
+  {
+   "player_id": 13,
+   "place": "T1",
+   "name": "Paul Lipkin",
+   "first": "Paul",
+   "net": 3,
+   "pts": null,
+   "total": "8",
+   "mint": false
+  },
+  {
+   "player_id": 14,
+   "place": "T1",
+   "name": "Dave Moran",
+   "first": "Dave",
+   "net": 5,
+   "pts": null,
+   "total": "8",
+   "mint": false
+  },
+  {
+   "player_id": 15,
+   "place": "3",
+   "name": "Sam Reid",
+   "first": "Sam",
+   "net": null,
+   "pts": null,
+   "total": "2",
+   "mint": false
+  }
+ ],
+ "line": "Thru 2 of 9. The top two after nine play the finals over the back nine.",
+ "finals_cards": [],
+ "finals": null,
+ "next": null,
+ "winner": null,
+ "result": null,
+ "round_over": false,
+ "next_hole": 4
+}

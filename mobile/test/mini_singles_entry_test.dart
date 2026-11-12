@@ -296,7 +296,7 @@ void main() {
 
     test('and the Stroke Play tray stands down for it', () {
       expect(body('StrokePlayHoleCard? _strokePlayCard(RoundProvider rp)'),
-          contains('if (_miniSinglesRound(rp)) return null;'));
+          contains('if (_miniSinglesRound(rp) || _threeRound(rp)) return null;'));
     });
 
     test('its hole ends in a tray, so it posts itself and stays', () {
@@ -327,7 +327,7 @@ void main() {
     });
 
     test('the old bracket card leaves the screen for these groups', () {
-      expect(src, contains('!_miniSinglesRound(rp))\n'
+      expect(src, contains('!_miniSinglesRound(rp) && !_threeRound(rp))\n'
           '                    ? rp.matchPlayData : null,'));
     });
   });

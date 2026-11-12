@@ -13316,3 +13316,284 @@ class TripleNassauHoleCard {
         nextHole: j['next_hole'] as int?,
       );
 }
+
+// ── Mini Singles, group of three — score-entry card ─────────────────────────
+// `services.three_person_match.three_person_hole_card`. Points over the front
+// (and while 2nd is level), then the finals; every figure and sentence is the
+// server's.
+
+class M3Player {
+  final int playerId;
+  final int seat;
+  final String name;
+  final String first;
+  final String short;
+  final int? courseHandicap;
+  final int? gross;
+  /// `points`, `finalist` or `third`.
+  final String role;
+  final String? pts;
+  final int? net;
+  final int strokes;
+  const M3Player({
+    required this.playerId,
+    required this.seat,
+    required this.name,
+    required this.first,
+    required this.short,
+    this.courseHandicap,
+    this.gross,
+    this.role = 'points',
+    this.pts,
+    this.net,
+    this.strokes = 0,
+  });
+  factory M3Player.fromJson(Map<String, dynamic> j) => M3Player(
+        playerId: j['player_id'] as int? ?? 0,
+        seat: j['seat'] as int? ?? 0,
+        name: j['name'] as String? ?? '',
+        first: j['first'] as String? ?? '',
+        short: j['short'] as String? ?? '',
+        courseHandicap: j['course_handicap'] as int?,
+        gross: j['gross'] as int?,
+        role: j['role'] as String? ?? 'points',
+        pts: j['pts'] as String?,
+        net: j['net'] as int?,
+        strokes: j['strokes'] as int? ?? 0,
+      );
+}
+
+class M3TableRow {
+  final int playerId;
+  final String place;
+  final String name;
+  final String first;
+  final int? net;
+  final String? pts;
+  final String total;
+  final bool mint;
+  const M3TableRow({
+    required this.playerId,
+    required this.place,
+    required this.name,
+    required this.first,
+    this.net,
+    this.pts,
+    required this.total,
+    this.mint = false,
+  });
+  factory M3TableRow.fromJson(Map<String, dynamic> j) => M3TableRow(
+        playerId: j['player_id'] as int? ?? 0,
+        place: j['place'] as String? ?? '',
+        name: j['name'] as String? ?? '',
+        first: j['first'] as String? ?? '',
+        net: j['net'] as int?,
+        pts: j['pts'] as String?,
+        total: j['total'] as String? ?? '0',
+        mint: j['mint'] as bool? ?? false,
+      );
+}
+
+class M3Tile {
+  final int hole;
+  /// `a` (the leader won it), `b`, `h` (halved) or `x` (not played).
+  final String state;
+  const M3Tile({required this.hole, required this.state});
+  factory M3Tile.fromJson(Map<String, dynamic> j) => M3Tile(
+      hole: j['hole'] as int? ?? 0, state: j['state'] as String? ?? 'x');
+}
+
+class M3Finals {
+  final int aId;
+  final int bId;
+  final List<String> names;
+  final List<int?> nets;
+  final int? winnerId;
+  final bool halved;
+  final int? leaderId;
+  final String leader;
+  final String standing;
+  final int thru;
+  final int toPlay;
+  final bool closed;
+  final List<M3Tile> tiles;
+  final String overLine;
+  const M3Finals({
+    required this.aId,
+    required this.bId,
+    required this.names,
+    required this.nets,
+    this.winnerId,
+    this.halved = false,
+    this.leaderId,
+    this.leader = '',
+    this.standing = '',
+    this.thru = 0,
+    this.toPlay = 9,
+    this.closed = false,
+    this.tiles = const [],
+    this.overLine = '',
+  });
+  factory M3Finals.fromJson(Map<String, dynamic> j) => M3Finals(
+        aId: j['a_id'] as int? ?? 0,
+        bId: j['b_id'] as int? ?? 0,
+        names: (j['names'] as List? ?? const []).map((e) => '$e').toList(),
+        nets: (j['nets'] as List? ?? const []).map((e) => e as int?).toList(),
+        winnerId: j['winner_id'] as int?,
+        halved: j['halved'] as bool? ?? false,
+        leaderId: j['leader_id'] as int?,
+        leader: j['leader'] as String? ?? '',
+        standing: j['standing'] as String? ?? '',
+        thru: j['thru'] as int? ?? 0,
+        toPlay: j['to_play'] as int? ?? 9,
+        closed: j['closed'] as bool? ?? false,
+        tiles: (j['tiles'] as List? ?? const [])
+            .map((e) => M3Tile.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        overLine: j['over_line'] as String? ?? '',
+      );
+}
+
+class M3FinalsCard {
+  final String names;
+  final String text;
+  const M3FinalsCard({required this.names, required this.text});
+  factory M3FinalsCard.fromJson(Map<String, dynamic> j) => M3FinalsCard(
+      names: j['names'] as String? ?? '', text: j['text'] as String? ?? '');
+}
+
+class M3ResultRow {
+  final int playerId;
+  final String name;
+  final String place;
+  final double? net;
+  const M3ResultRow(
+      {required this.playerId,
+      required this.name,
+      required this.place,
+      this.net});
+  factory M3ResultRow.fromJson(Map<String, dynamic> j) => M3ResultRow(
+        playerId: j['player_id'] as int? ?? 0,
+        name: j['name'] as String? ?? '',
+        place: j['place'] as String? ?? '',
+        net: (j['net'] as num?)?.toDouble(),
+      );
+}
+
+class MiniSinglesThreeCard {
+  final int hole;
+  final int? par;
+  /// `points` or `finals`.
+  final String phase;
+  final bool playOn;
+  final int thru;
+  final double pot;
+  final double entry;
+  final List<M3Player> players;
+  final int scored;
+  final bool holeComplete;
+  final String pillText;
+  final String pillSub;
+  final int? pillLeaderId;
+  final List<MapEntry<String, String>> totals;
+  final List<M3TableRow> table;
+  final String line;
+  final List<M3FinalsCard> finalsCards;
+  final M3Finals? finals;
+  final String? nextTitle;
+  final String? nextLine;
+  final int? winnerId;
+  final String? winnerName;
+  final String? winnerText;
+  final List<M3ResultRow> result;
+  final bool hasResult;
+  final bool roundOver;
+  final int? nextHole;
+
+  const MiniSinglesThreeCard({
+    required this.hole,
+    this.par,
+    this.phase = 'points',
+    this.playOn = false,
+    this.thru = 0,
+    this.pot = 0,
+    this.entry = 0,
+    this.players = const [],
+    this.scored = 0,
+    this.holeComplete = false,
+    this.pillText = '',
+    this.pillSub = '',
+    this.pillLeaderId,
+    this.totals = const [],
+    this.table = const [],
+    this.line = '',
+    this.finalsCards = const [],
+    this.finals,
+    this.nextTitle,
+    this.nextLine,
+    this.winnerId,
+    this.winnerName,
+    this.winnerText,
+    this.result = const [],
+    this.hasResult = false,
+    this.roundOver = false,
+    this.nextHole,
+  });
+
+  bool get isFinals => phase == 'finals';
+
+  /// The strokes THIS golfer gets on this hole, in the phase being played.
+  int? strokesFor(int pid) {
+    for (final p in players) {
+      if (p.playerId == pid) return p.strokes;
+    }
+    return null;
+  }
+
+  factory MiniSinglesThreeCard.fromJson(Map<String, dynamic> j) {
+    final pill = (j['pill'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final winner = (j['winner'] as Map?)?.cast<String, dynamic>();
+    final result = (j['result'] as Map?)?.cast<String, dynamic>();
+    final next = (j['next'] as Map?)?.cast<String, dynamic>();
+    final finals = (j['finals'] as Map?)?.cast<String, dynamic>();
+    return MiniSinglesThreeCard(
+      hole: j['hole'] as int? ?? 0,
+      par: j['par'] as int?,
+      phase: j['phase'] as String? ?? 'points',
+      playOn: j['play_on'] as bool? ?? false,
+      thru: j['thru'] as int? ?? 0,
+      pot: (j['pot'] as num?)?.toDouble() ?? 0,
+      entry: (j['entry'] as num?)?.toDouble() ?? 0,
+      players: (j['players'] as List? ?? const [])
+          .map((e) => M3Player.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      scored: j['scored'] as int? ?? 0,
+      holeComplete: j['hole_complete'] as bool? ?? false,
+      pillText: pill['text'] as String? ?? '',
+      pillSub: pill['sub'] as String? ?? '',
+      pillLeaderId: pill['leader_id'] as int?,
+      totals: (j['totals'] as List? ?? const [])
+          .map((e) => MapEntry('${(e as Map)['first']}', '${e['total']}'))
+          .toList(),
+      table: (j['table'] as List? ?? const [])
+          .map((e) => M3TableRow.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      line: j['line'] as String? ?? '',
+      finalsCards: (j['finals_cards'] as List? ?? const [])
+          .map((e) => M3FinalsCard.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      finals: finals == null ? null : M3Finals.fromJson(finals),
+      nextTitle: next?['title'] as String?,
+      nextLine: next?['line'] as String?,
+      winnerId: winner?['player_id'] as int?,
+      winnerName: winner?['name'] as String?,
+      winnerText: winner?['text'] as String?,
+      result: (result?['rows'] as List? ?? const [])
+          .map((e) => M3ResultRow.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      hasResult: result != null,
+      roundOver: j['round_over'] as bool? ?? false,
+      nextHole: j['next_hole'] as int?,
+    );
+  }
+}
