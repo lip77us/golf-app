@@ -126,45 +126,6 @@ void _handicapOnTheLedger() {
 
 void main() {
   _handicapOnTheLedger();
-  testWidgets('the hole just played leads the board', (t) async {
-    await _pump(t, _summary(thru: 7));
-    expect(find.text('HOLE 7 · PAR 3'), findsOneWidget);
-    expect(find.text('Next: 8 · par 4'), findsOneWidget);
-    expect(find.text('11 holes left'), findsOneWidget);
-  });
-
-  testWidgets('the hole total is summed from the scores, not asserted',
-      (t) async {
-    await _pump(t, _summary(thru: 7));
-    // 5 + 3 + 1. Summing says it from the awards rather than from a sentence
-    // that would keep reading `9` if the prices ever changed.
-    expect(find.textContaining('The hole pays'), findsOneWidget);
-    expect(find.text('9'), findsWidgets);
-  });
-
-  testWidgets('a tied hole marks both golfers', (t) async {
-    await _pump(t, _summary(thru: 13, holes: [
-      {
-        'hole': 13,
-        'par': 4,
-        'entries': [
-          _entry(_sam, 'Sam', 4, 4),
-          _entry(_dave, 'Dave', 4, 4),
-          _entry(_paul, 'Paul', 5, 1),
-        ],
-      },
-    ]));
-    expect(find.text('tied'), findsNWidgets(2));
-  });
-
-  testWidgets('before the first tee it states the rule, not an empty hole',
-      (t) async {
-    await _pump(t, _summary(thru: 0));
-    expect(find.text('Not started'), findsOneWidget);
-    expect(find.textContaining('5 for low, 3 for second, 1 for third'),
-        findsOneWidget);
-  });
-
   testWidgets('the finish reports against target, not against par',
       (t) async {
     await _pump(t, _summary(
@@ -359,5 +320,37 @@ void main() {
     for (final gone in ['_hcapLabel', '_modeLabel', 'par is', 'Bet unit']) {
       expect(card.contains(gone), isFalse, reason: '$gone survives');
     }
+  });
+
+  group('the order of the board', () {
+    testWidgets('no last-hole card, whatever is scored', (t) async {
+      await _pump(t, _summary(thru: 7));
+      expect(find.text('HOLE 7 · PAR 3'), findsNothing);
+      expect(find.textContaining('The hole pays'), findsNothing);
+      expect(find.textContaining('holes left'), findsNothing);
+    });
+
+    testWidgets('the scorecard sits under the points and above the money',
+        (t) async {
+      await t.binding.setSurfaceSize(const Size(390, 2400));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: PointsBoard(
+              data: PointsBoardData.fromSummary(
+                  Points531Summary.fromJson(_summary(thru: 7))),
+              scorecard: const SizedBox(
+                  key: ValueKey('card'), height: 60, child: Text('CARD')),
+            ),
+          ),
+        ),
+      ));
+      final byHole = t.getTopLeft(find.text('POINTS BY HOLE')).dy;
+      final card = t.getTopLeft(find.text('CARD')).dy;
+      final ledger = t.getTopLeft(find.text('Each · now')).dy;
+      expect(byHole < card && card < ledger, isTrue,
+          reason: 'points $byHole, card $card, money $ledger');
+    });
   });
 }

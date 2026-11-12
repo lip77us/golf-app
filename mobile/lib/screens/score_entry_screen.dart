@@ -46,6 +46,7 @@ import '../widgets/banker_entry.dart';
 import '../widgets/banker_entry_strip.dart';
 import '../widgets/mini_singles_entry.dart';
 import '../widgets/mini_singles_three_entry.dart';
+import '../widgets/points_entry.dart';
 import '../widgets/triple_cup_entry.dart';
 import '../widgets/triple_cup_pairings.dart';
 import '../widgets/standing_ribbon.dart';
@@ -215,6 +216,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final ms = _miniSinglesCard(rp);
     if (ms != null) {
       final s = ms.strokesFor(m.player.id);
+      if (s != null) return s;
+    }
+
+    // **Points 5-3-1: the strokes POINTS issues, off the low man** — not the
+    // round's stored full-net allocation, which is a different number
+    // whenever the game is strokes-off.
+    final pts = _pointsCard(rp);
+    if (pts != null) {
+      final s = pts.playerById(m.player.id)?.strokes;
       if (s != null) return s;
     }
 
@@ -1672,7 +1682,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         _miniSinglesRound(rp) ||
         // …and its group of three, per
         // `handoff-mini-singles-three-score-entry`.
-        _threeRound(rp);
+        _threeRound(rp) ||
+        // Points 5-3-1, per `handoff-points-score-entry`.
+        _pointsRound(rp);
   }
 
   /// **This group is playing a Mini Singles bracket on this screen** — a
@@ -1725,6 +1737,44 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final primary = resolvePrimary(rp.round?.primaryGame, games);
     return primary == null || !owners.contains(primary);
   }
+
+  /// **Points 5-3-1 is the round's game** — three golfers, the keypad and the
+  /// dark tray. Points plays HERE: setup sends the group to `/score-entry`
+  /// and nothing pushes `/points-531`, so the tray built on that screen was
+  /// never seen (Paul, 11 Nov 2026: "my sim shows old entry style").
+  bool _pointsRound(RoundProvider rp) {
+    final games = _activeGames(rp.round);
+    if (!games.contains(GameIds.points531)) return false;
+    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.points531) {
+      return false;
+    }
+    final fs = rp.round?.foursomes
+        .where((f) => f.id == widget.foursomeId)
+        .firstOrNull;
+    return fs != null && fs.realPlayers.length == 3;
+  }
+
+  int? _pointsCardAsked;
+
+  /// Make sure the hole on screen has a Points card (a save drops every
+  /// other hole's — a posted hole moves the standing on all of them).
+  void _ensurePointsCard(RoundProvider rp) {
+    if (!_pointsRound(rp)) return;
+    if (rp.pointsHole(_selectedHole) != null) {
+      _pointsCardAsked = null;
+      return;
+    }
+    if (_pointsCardAsked == _selectedHole) return;
+    _pointsCardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<RoundProvider>()
+          .loadPointsHole(widget.foursomeId, _selectedHole);
+    });
+  }
+
+  PointsHoleCard? _pointsCard(RoundProvider rp) =>
+      _pointsRound(rp) ? rp.pointsHole(_selectedHole) : null;
 
   int? _threeCardAsked;
 
@@ -1785,6 +1835,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       _tripleCupCard(rp) != null ||
       _miniSinglesCard(rp) != null ||
       _threeCard(rp) != null ||
+      _pointsCard(rp) != null ||
       _singlesCard(rp) != null ||
       _nassauCard(rp) != null ||
       _skinsCard(rp) != null ||
@@ -3900,6 +3951,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final msTray =
         msCard != null && fbActive && allDone && _editHotPid == null;
 
+    // **Points 5-3-1.** Same tray, the nets turned into points and the
+    // standing against the target.
+    _ensurePointsCard(rp);
+    final ptsCard = _pointsCard(rp);
+    final ptsTray =
+        ptsCard != null && fbActive && allDone && _editHotPid == null;
+
     // **Mini Singles, a group of three.** Points, then the finals.
     _ensureThreeCard(rp);
     final m3Card = _threeCard(rp);
@@ -4021,6 +4079,34 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                   : (_nextHoleInOrder(rp) == null
                       ? () => _completeRound(ctx, players, par)
                       : _advance),
+              gettingResult: rp.trayResultPending(_selectedHole) ||
+                  _hasRealPending(_selectedHole),
+              notSynced: rp.trayHoleUnsynced(_selectedHole),
+              // Picks nobody — see the Sixes tray above.
+              picking: _trayEditing,
+              onEdit: () => setState(() {
+                _trayEditing = !_trayEditing;
+                _editHotPid = null;
+              }),
+            )
+          else if (ptsTray)
+            PointsHoleTray(
+              card: ptsCard,
+              // Each golfer's colour on the dark tray, by seat.
+              colours: {
+                for (var i = 0; i < players.length; i++)
+                  players[i].player.id: Halved.onDarkFor(i),
+              },
+              // While this tray is up it IS the bottom bar — the pager below
+              // is hidden, so these are the only arrows on screen, and on
+              // the last hole the forward button finishes the round.
+              onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
+              onNext: rp.submitting
+                  ? null
+                  : (_nextHoleInOrder(rp) == null
+                      ? () => _completeRound(ctx, players, par)
+                      : _advance),
+              nextHole: _nextHoleInOrder(rp),
               gettingResult: rp.trayResultPending(_selectedHole) ||
                   _hasRealPending(_selectedHole),
               notSynced: rp.trayHoleUnsynced(_selectedHole),
@@ -4349,7 +4435,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // has the tray overlaying this row, so this is the half that goes
           // (Paul, 30 Oct 2026).
           if (!sixTray && !spTray && !vgTray && !fourTray && !nasTray
-              && !skTray && !bkTray && !tcTray && !msTray && !m3Tray)
+              && !skTray && !bkTray && !tcTray && !msTray && !m3Tray && !ptsTray)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Column(children: [
@@ -7421,41 +7507,11 @@ class _GameStatusSection extends StatelessWidget {
         // the hole did.
 
 
-        // Points 5-3-1 summary grid
-        if (games.contains('points_531')) ...[
-          // **The app's standard scorecard, not this game's own grid.** The
-          // grid that was here stacked a score row and a points row per
-          // golfer, alternating down the card, which asked the reader to hold
-          // which of two adjacent numbers meant what — and the two do not
-          // compare: a gross is strokes and a points total is a share of nine
-          // per hole.
-          //
-          // `showPoints` draws them as two blocks instead, gross first and the
-          // awards beneath, sharing the hole columns and the scroll. So the
-          // points table needs no hole row and no par row of its own: the card
-          // above it already has them, with the same shading and the same
-          // Index row every other game shows.
-          if (points531Summary != null &&
-              points531Summary!.scorecardHoles.isNotEmpty)
-            HoleGridScorecard(
-              // A progress read-out under a keypad: a second table here would push
-              // the entry card off the screen. See `HoleGridScorecard.showStrokes`.
-              showStrokes: false,
-              holes:        points531Summary!.scorecardHoles,
-              participants: points531Summary!.scorecardPlayers,
-              showPoints:   true,
-              legend:       null,
-              holesInPlay:  points531Summary!.scorecardHolesInPlay,
-            )
-          else if (loadingPoints531)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          const SizedBox(height: 12),
-        ],
+        // **Points 5-3-1 draws no scorecard here — it is the leaderboard's**
+        // (Paul, 11 Nov 2026). It sat under the hole behind the keypad and
+        // the tray, and the board draws the same card — gross over the points
+        // it earned — right under the points, with the money last. The tray
+        // says what the hole did.
 
         // **Las Vegas draws nothing here — it is the leaderboard's.**
         //

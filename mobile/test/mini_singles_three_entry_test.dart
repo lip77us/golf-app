@@ -137,7 +137,7 @@ void main() {
     final src = File('lib/screens/score_entry_screen.dart').readAsStringSync();
 
     test('the keypad round and the tray gate include the three-man card', () {
-      expect(src, contains('_threeRound(rp);'));
+      expect(src, contains('_threeRound(rp) ||'));
       expect(src, contains('_threeCard(rp) != null ||'));
     });
 
@@ -185,6 +185,35 @@ void main() {
       expect(body, contains('HoleGridScorecard('));
       expect(body, contains('showPoints: true'));
       expect(body, contains('showStrokes: false'));
+    });
+  });
+
+  group('Points plays on the shared screen', () {
+    // **Points' tray was built on `points_531_screen`, which nothing opens**
+    // (setup and the hub send the group to `/score-entry`), so the sim kept
+    // showing the old inline picker (Paul, 11 Nov 2026). It lives here now.
+    final src = File('lib/screens/score_entry_screen.dart').readAsStringSync();
+
+    test('the keypad round, the tray gate and the pager include it', () {
+      expect(src, contains('_pointsRound(rp);'));
+      expect(src, contains('_pointsCard(rp) != null ||'));
+      expect(src, contains('&& !ptsTray)'));
+    });
+
+    test('the tray is PointsHoleTray, fed the screen\'s own card', () {
+      expect(src, contains('PointsHoleTray('));
+      expect(src, contains('rp.pointsHole(_selectedHole)'));
+    });
+
+    test('the keypad takes the strokes Points issues', () {
+      expect(src, contains('pts.playerById(m.player.id)?.strokes'));
+    });
+
+    test('only when Points is the round\'s game, with three golfers', () {
+      final at = src.indexOf('bool _pointsRound(');
+      final body = src.substring(at, src.indexOf('int? _pointsCardAsked', at));
+      expect(body, contains('!= GameIds.points531'));
+      expect(body, contains('realPlayers.length == 3'));
     });
   });
 }

@@ -3808,24 +3808,29 @@ class _Points531GroupCard extends StatelessWidget {
           child: Text('Group ${group['group_number']}',
               style: const TextStyle(fontWeight: FontWeight.bold)),
         ),
-      PointsBoard(data: PointsBoardData.fromSummary(s)),
-      // The standard card, under the board. The board's own grid is POINTS;
-      // this is what everybody actually shot, which is the other half a net
-      // or strokes-off golfer needs and the only place the stroke dots are.
-      if (s.scorecardHoles.isNotEmpty) ...[
-        const SizedBox(height: 10),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: HoleGridScorecard(
-              holes:        s.scorecardHoles,
-              participants: s.scorecardPlayers,
-              legend:       null,
-              holesInPlay:  s.scorecardHolesInPlay,
-            ),
-          ),
-        ),
-      ],
+      // **The standard card sits between the points and the money.** The
+      // board's own grid is POINTS; this is what everybody actually shot, the
+      // other half a net or strokes-off golfer needs and the place the stroke
+      // dots are. No strokes table under it: the dots say it (Paul, 11 Nov
+      // 2026).
+      PointsBoard(
+        data: PointsBoardData.fromSummary(s),
+        scorecard: s.scorecardHoles.isEmpty
+            ? null
+            : Card(
+                margin: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: HoleGridScorecard(
+                    holes:        s.scorecardHoles,
+                    participants: s.scorecardPlayers,
+                    legend:       null,
+                    holesInPlay:  s.scorecardHolesInPlay,
+                    showStrokes:  false,
+                  ),
+                ),
+              ),
+      ),
     ]);
   }
 }
