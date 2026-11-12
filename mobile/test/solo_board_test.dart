@@ -233,7 +233,7 @@ void main() {
             _hole(3, gross: 4, result: 'halved'),
             for (var n = 4; n <= 18; n++) _hole(n),
           ])));
-      expect(find.text('Won'), findsOneWidget);
+      expect(find.text('Hole won by'), findsOneWidget);
       // The golfer's own initial where he won, par's P where it did — and
       // this fixture's golfer is Paul, the collision the handoff draws, so
       // both chips read P and only the colours separate them. A halved hole
@@ -264,7 +264,7 @@ void main() {
           SoloScorecard(
               solo: _solo('stroke',
                   holes: [_hole(1, gross: 3, result: 'won')])));
-      expect(find.text('Won'), findsNothing);
+      expect(find.text('Hole won by'), findsNothing);
       expect(find.text('P'), findsNothing);
     });
 

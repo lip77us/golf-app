@@ -195,9 +195,9 @@ void main() {
     final src = File('lib/screens/score_entry_screen.dart').readAsStringSync();
 
     test('the keypad round, the tray gate and the pager include it', () {
-      expect(src, contains('_pointsRound(rp);'));
+      expect(src, contains('_pointsRound(rp) ||'));
       expect(src, contains('_pointsCard(rp) != null ||'));
-      expect(src, contains('&& !ptsTray)'));
+      expect(src, contains('&& !ptsTray'));
     });
 
     test('the tray is PointsHoleTray, fed the screen\'s own card', () {

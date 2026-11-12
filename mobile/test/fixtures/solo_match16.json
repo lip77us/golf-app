@@ -1,0 +1,129 @@
+{
+ "hole": 16,
+ "par": 3,
+ "stroke_index": 18,
+ "thru": 16,
+ "variant": "match",
+ "title": "Match Play",
+ "net_percent": 100,
+ "golfer": {
+  "player_id": 6,
+  "name": "Paul Lipkin",
+  "first": "Paul",
+  "course_handicap": 12,
+  "gross": 2,
+  "net": 2,
+  "strokes": 0,
+  "strokes_total": 12,
+  "si_range": "SI 1\u201312"
+ },
+ "hole_complete": true,
+ "round_over": false,
+ "next_hole": 17,
+ "result": "won",
+ "match": {
+  "up": 3,
+  "standing": "Paul wins 3&2",
+  "short": "3 UP",
+  "leader": 1,
+  "decided": "3&2",
+  "decided_on": 16,
+  "thru": 16,
+  "to_play": 2,
+  "tiles": [
+   {
+    "hole": 1,
+    "state": "h",
+    "dimmed": false
+   },
+   {
+    "hole": 2,
+    "state": "w",
+    "dimmed": false
+   },
+   {
+    "hole": 3,
+    "state": "l",
+    "dimmed": false
+   },
+   {
+    "hole": 4,
+    "state": "h",
+    "dimmed": false
+   },
+   {
+    "hole": 5,
+    "state": "w",
+    "dimmed": false
+   },
+   {
+    "hole": 6,
+    "state": "l",
+    "dimmed": false
+   },
+   {
+    "hole": 7,
+    "state": "h",
+    "dimmed": false
+   },
+   {
+    "hole": 8,
+    "state": "h",
+    "dimmed": false
+   },
+   {
+    "hole": 9,
+    "state": "l",
+    "dimmed": false
+   },
+   {
+    "hole": 10,
+    "state": "h",
+    "dimmed": false
+   },
+   {
+    "hole": 11,
+    "state": "h",
+    "dimmed": false
+   },
+   {
+    "hole": 12,
+    "state": "h",
+    "dimmed": false
+   },
+   {
+    "hole": 13,
+    "state": "w",
+    "dimmed": false
+   },
+   {
+    "hole": 14,
+    "state": "w",
+    "dimmed": false
+   },
+   {
+    "hole": 15,
+    "state": "w",
+    "dimmed": false
+   },
+   {
+    "hole": 16,
+    "state": "w",
+    "dimmed": false
+   },
+   {
+    "hole": 17,
+    "state": "x",
+    "dimmed": true
+   },
+   {
+    "hole": 18,
+    "state": "x",
+    "dimmed": true
+   }
+  ],
+  "over_line": "Decided on 16 \u00b7 holes 17\u201318 played out for the card",
+  "after_close": false,
+  "after_line": ""
+ }
+}

@@ -249,7 +249,7 @@ void main() {
       final src =
           File('lib/screens/score_entry_screen.dart').readAsStringSync();
       expect(
-          RegExp(r'aboveRows: _miniSinglesCard\(rp\) != null\s*'
+          RegExp(r'_miniSinglesCard\(rp\) != null\s*'
                   r'\? MiniSinglesMatches\(card: _miniSinglesCard\(rp\)!\)')
               .hasMatch(src),
           isTrue);

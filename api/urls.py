@@ -136,6 +136,7 @@ urlpatterns = [
     path('foursomes/<int:pk>/triple-nassau/',       views.TripleNassauResultView.as_view(), name='api-triple-nassau-result'),
     path('foursomes/<int:pk>/triple-nassau/setup/', views.TripleNassauSetupView.as_view(),  name='api-triple-nassau-setup'),
     path('foursomes/<int:pk>/triple-nassau/press/', views.TripleNassauPressView.as_view(),  name='api-triple-nassau-press'),
+    path('foursomes/<int:pk>/solo/hole/<int:hole>/', views.SoloHoleCardView.as_view(), name='api-solo-hole'),
     path('foursomes/<int:pk>/three-person-match/hole/<int:hole>/', views.ThreePersonHoleCardView.as_view(), name='api-three-person-hole'),
     path('foursomes/<int:pk>/triple-nassau/hole/<int:hole>/', views.TripleNassauHoleCardView.as_view(), name='api-triple-nassau-hole'),
     path('foursomes/<int:pk>/annandale-friday/',       views.AnnandaleFridayResultView.as_view(), name='api-annandale-friday-result'),

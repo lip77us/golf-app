@@ -1,77 +1,158 @@
-// Solo is reachable, and the three solo games appear ONLY there.
-//
-// `handoff-solo-games`: Who's playing? becomes Solo · 2 · 3 · 4 · Across
-// groups, with Solo first; the chips become Stroke Play, Nassau and Match
-// Play; side games are hidden; and the note reads "Solo games are played
-// against par."
-//
-// The sharp edge is the NAMES. The solo games are called Stroke Play, Nassau
-// and Match Play — the same as three multi-player games — because a golfer on
-// his own is still playing Stroke Play. What keeps them apart is `sizes: {1}`,
-// matched by no other filter, so this is what stops a duplicate chip showing
-// up in a foursome's picker.
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:golf_mobile/game_catalog.dart';
+import 'package:golf_mobile/api/models.dart';
+import 'package:golf_mobile/widgets/solo_entry.dart';
+
+/// Solo games' score entry — `~/Downloads/handoff-solo-score-entry`
+/// (11 Nov 2026). The engine is covered in
+/// `scoring/tests/test_solo_hole_card.py`, which also WRITES the fixtures
+/// these draw (`REGEN_SOLO_FIXTURES=1`).
+
+SoloHoleCard _card(String name) => SoloHoleCard.fromJson(jsonDecode(
+        File('test/fixtures/solo_$name.json').readAsStringSync())
+    as Map<String, dynamic>);
+
+Future<void> _tray(WidgetTester t, SoloHoleCard card,
+    {Size size = const Size(390, 1500), VoidCallback? onNext,
+    bool gettingResult = false}) async {
+  await t.binding.setSurfaceSize(size);
+  addTearDown(() => t.binding.setSurfaceSize(null));
+  await t.pumpWidget(MaterialApp(
+    home: Scaffold(
+      body: Align(
+        alignment: Alignment.bottomCenter,
+        child: MediaQuery(
+          data: MediaQueryData(size: Size(size.width, size.height + 400)),
+          child: SoloHoleTray(
+            card: card,
+            onEdit: () {},
+            onPrev: () {},
+            onNext: onNext ?? () {},
+            gettingResult: gettingResult,
+          ),
+        ),
+      ),
+    ),
+  ));
+}
 
 void main() {
-  GameMeta meta(String id) => gameMeta(id)!;
-  const soloIds = [GameIds.soloStroke, GameIds.soloNassau, GameIds.soloMatch];
+  group('the header', () {
+    testWidgets('names the strokes and the index range', (t) async {
+      await t.pumpWidget(MaterialApp(
+          home: Scaffold(body: SoloHeader(card: _card('stroke12')))));
+      expect(find.text('SOLO'), findsOneWidget);
+      expect(find.text('12 STROKES · SI 1–12'), findsOneWidget);
+    });
+  });
 
-  group('the three solo games', () {
-    test('are one golfer and one golfer only', () {
-      for (final id in soloIds) {
-        final m = meta(id);
-        expect(m.minPlayers, 1, reason: '$id');
-        expect(m.maxPlayers, 1, reason: '$id');
-        expect(m.supportsSize(1), isTrue, reason: '$id');
+  group('stroke play', () {
+    testWidgets('the hole, the bubble and net to par', (t) async {
+      await _tray(t, _card('stroke12'));
+      expect(find.text('HOLE 12 · STROKE PLAY'), findsOneWidget);
+      expect(find.text('VS PAR'), findsOneWidget);
+      expect(find.text('gross 3 · net 3'), findsOneWidget);
+      expect(find.text('Net par'), findsOneWidget);
+      expect(find.text('Net to par'), findsOneWidget);
+      expect(find.text('+1'), findsOneWidget);
+      expect(find.text('gross 56 · net 48 · thru 12'), findsOneWidget);
+    });
+
+    testWidgets('round over: net total, the final card and the note',
+        (t) async {
+      await _tray(t, _card('stroke18'));
+      expect(find.text('ROUND OVER'), findsOneWidget);
+      expect(find.text('Net total'), findsOneWidget);
+      expect(find.text('−2'), findsOneWidget);
+      expect(find.text('Net 70 · −2'), findsOneWidget);
+      expect(find.textContaining('nothing to settle'), findsOneWidget);
+      expect(find.text('Finish round ›'), findsOneWidget);
+    });
+  });
+
+  group('nassau', () {
+    testWidgets('the hole line and the three bets', (t) async {
+      await _tray(t, _card('nassau12'));
+      expect(find.text('HOLE 12 · NASSAU'), findsOneWidget);
+      expect(find.text('Halved'), findsOneWidget);
+      for (final s in ['Front Par 1 UP', 'Back AS', 'Overall Par 1 UP']) {
+        expect(
+            find.byWidgetPredicate(
+                (w) => w is RichText && w.text.toPlainText() == s),
+            findsOneWidget,
+            reason: s);
       }
     });
 
-    test('match NO other group size', () {
-      // The whole mechanism: a foursome's picker filters on supportsSize(4)
-      // and must never offer these.
-      for (final id in soloIds) {
-        for (final n in [2, 3, 4]) {
-          expect(meta(id).supportsSize(n), isFalse,
-              reason: '$id offered itself to a group of $n');
-        }
+    testWidgets('round over: the count and what each bet did', (t) async {
+      await _tray(t, _card('nassau18'));
+      expect(find.text('2 won · 1 lost'), findsOneWidget);
+      expect(find.textContaining('front lost, back won, overall won'),
+          findsOneWidget);
+    });
+  });
+
+  group('match play', () {
+    testWidgets('decided early: the closing score and the tiles', (t) async {
+      await _tray(t, _card('match16'));
+      expect(find.text('Paul wins 3&2'), findsOneWidget);
+      expect(find.textContaining('holes 17–18 played out for the card'),
+          findsOneWidget);
+      expect(find.text('Won'), findsOneWidget);
+      for (var h = 1; h <= 18; h++) {
+        expect(find.text('$h'), findsOneWidget, reason: 'hole $h');
       }
     });
 
-    test('carry the names a golfer already knows', () {
-      expect(meta(GameIds.soloStroke).displayName, 'Stroke Play');
-      expect(meta(GameIds.soloNassau).displayName, 'Nassau');
-      expect(meta(GameIds.soloMatch).displayName, 'Match Play');
+    testWidgets('the holes after a close-out say so in one line', (t) async {
+      await _tray(t, _card('match18'));
+      expect(find.text('MATCH Paul won 3&2 · hole 18 is played out'),
+          findsOneWidget);
+    });
+  });
+
+  group('the tray', () {
+    testWidgets('the forward button is the next hole', (t) async {
+      var n = 0;
+      await _tray(t, _card('stroke12'), onNext: () => n++);
+      await t.tap(find.text('Hole 13 ›'));
+      expect(n, 1);
     });
 
-    test('the shared names cannot collide in one picker', () {
-      // Stroke Play and Nassau exist twice in the catalog on purpose. No size
-      // filter may match both, or a picker shows the same word twice.
-      for (final id in soloIds) {
-        final name = meta(id).displayName;
-        final twins = kGameCatalog.where(
-            (m) => m.displayName == name && m.id != id);
-        for (final twin in twins) {
-          expect(twin.supportsSize(1), isFalse,
-              reason: '${twin.id} shares the name "$name" and also fits a '
-                  'solo round — they would both show');
-        }
-      }
+    testWidgets('a hole waiting for its result draws no blocks', (t) async {
+      await _tray(t, _card('nassau12'), gettingResult: true);
+      expect(find.text('Getting result…'), findsOneWidget);
+      expect(find.text('HOLE 12 · NASSAU'), findsNothing);
     });
 
-    test('every one can explain itself', () {
-      for (final id in soloIds) {
-        expect(meta(id).blurb, isNotNull, reason: '$id has no blurb');
-        expect(meta(id).blurb, contains('par'),
-            reason: '$id never mentions the opponent');
+    testWidgets('fits a 320pt phone', (t) async {
+      for (final n in ['stroke18', 'nassau18', 'match16']) {
+        await _tray(t, _card(n), size: const Size(320, 1500));
+        expect(t.takeException(), isNull, reason: n);
       }
     });
+  });
 
-    test('none of them carries a money line', () {
-      // Always for fun. A money note would be the first thing to argue with.
-      for (final id in soloIds) {
-        expect(meta(id).moneyNote, isNull, reason: '$id has a money note');
-      }
+  group('the screen', () {
+    final src = File('lib/screens/score_entry_screen.dart').readAsStringSync();
+
+    test('solo is on the keypad, the tray gate and the pager', () {
+      expect(src, contains('_soloRound(rp);'));
+      expect(src, contains('_soloCard(rp) != null ||'));
+      expect(src, contains('&& !soloTray)'));
+    });
+
+    test('the keypad takes the strokes from the card', () {
+      expect(src, contains('if (solo != null) return solo.strokes;'));
+    });
+
+    test('the scorecard leaves score entry once the card is there', () {
+      final at = src.indexOf('SoloHoleLine(');
+      final before = src.substring(at - 400, at);
+      expect(before, contains('rp.soloHoleCard(_selectedHole) == null'));
     });
   });
 }

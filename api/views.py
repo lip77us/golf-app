@@ -6274,6 +6274,8 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
              'sequoya_threes', 'triple_cup', 'match_play',
              'stableford', 'triple_nassau',
              'three_person_match'} & active
+    if {'solo_stroke', 'solo_nassau', 'solo_match'} & active:
+        wants = wants | {'solo'}
     # A three-golfer Match Play group plays the three-man Mini Singles, and
     # `match_play` is what the round lists — the group's own game is only
     # stamped `three_person_match` on a tournament round.
@@ -6414,6 +6416,12 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
                 card = sequoya_hole_card(foursome, hole_number)
                 if card:
                     out['sequoya_hole'] = card
+            # …and the solo games': one golfer against par, as of the hole.
+            if 'solo' in wants and hole_number:
+                from services.solo import solo_hole_card
+                card = solo_hole_card(foursome, hole_number)
+                if card:
+                    out['solo_hole'] = card
             # …and the three-man Mini Singles': points, the play-on, the
             # finals and the money, AS OF the hole.
             if 'three_person_match' in wants and hole_number:
@@ -8679,6 +8687,18 @@ class RabbitHoleCardView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.rabbit import rabbit_hole_card
         return Response(rabbit_hole_card(foursome, int(hole)))
+
+
+class SoloHoleCardView(APIView):
+    """GET /api/foursomes/{id}/solo/hole/{hole}/
+
+    One hole's score-entry card for a solo round. The POST that saves a
+    score returns the same shape under `solo_hole`.
+    """
+    def get(self, request, pk, hole):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.solo import solo_hole_card
+        return Response(solo_hole_card(foursome, int(hole)))
 
 
 class ThreePersonHoleCardView(APIView):

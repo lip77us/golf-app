@@ -13597,3 +13597,186 @@ class MiniSinglesThreeCard {
     );
   }
 }
+
+// ── Solo games — score-entry card ───────────────────────────────────────────
+// `services.solo.solo_hole_card`: one golfer against par, as of the hole.
+// Every figure and sentence is the server's.
+
+class SoloChip {
+  final String label;
+  final String text;
+  /// `live`, `pending` or `final`.
+  final String state;
+  /// 1 = the golfer, 2 = par, null = level.
+  final int? leader;
+  const SoloChip(
+      {required this.label,
+      required this.text,
+      required this.state,
+      this.leader});
+  factory SoloChip.fromJson(Map<String, dynamic> j) => SoloChip(
+        label: j['label'] as String? ?? '',
+        text: j['text'] as String? ?? '',
+        state: j['state'] as String? ?? 'live',
+        leader: j['leader'] as int?,
+      );
+}
+
+class SoloTile {
+  final int hole;
+  /// `w` (the golfer won it), `l`, `h` or `x` (not played).
+  final String state;
+  final bool dimmed;
+  const SoloTile({required this.hole, required this.state, this.dimmed = false});
+  factory SoloTile.fromJson(Map<String, dynamic> j) => SoloTile(
+        hole: j['hole'] as int? ?? 0,
+        state: j['state'] as String? ?? 'x',
+        dimmed: j['dimmed'] as bool? ?? false,
+      );
+}
+
+class SoloHoleCard {
+  final int hole;
+  final int? par;
+  final int? strokeIndex;
+  final int thru;
+  /// `stroke`, `nassau` or `match`.
+  final String variant;
+  final String title;
+  final int netPercent;
+  final int playerId;
+  final String name;
+  final String first;
+  final int? courseHandicap;
+  final int? gross;
+  final int? net;
+  final int strokes;
+  final int strokesTotal;
+  final String siRange;
+  final bool holeComplete;
+  final bool roundOver;
+  final int? nextHole;
+  /// `won`, `halved`, `lost`, or null before the hole is played.
+  final String? result;
+
+  // stroke play
+  final String strokeWord;
+  final String toParText;
+  final int toPar;
+  final int grossTotal;
+  final int netTotal;
+  final int strokeThru;
+  // nassau
+  final List<SoloChip> chips;
+  // match
+  final String matchStanding;
+  final String matchShort;
+  final int? matchLeader;
+  final int matchThru;
+  final int matchToPlay;
+  final List<SoloTile> tiles;
+  final String overLine;
+  final String afterLine;
+  // the final card, on the last hole
+  final String finalLine;
+  final String finalSub;
+  final String finalCard;
+  final String finalNote;
+
+  const SoloHoleCard({
+    required this.hole,
+    this.par,
+    this.strokeIndex,
+    this.thru = 0,
+    this.variant = 'stroke',
+    this.title = 'Solo',
+    this.netPercent = 100,
+    this.playerId = 0,
+    this.name = '',
+    this.first = '',
+    this.courseHandicap,
+    this.gross,
+    this.net,
+    this.strokes = 0,
+    this.strokesTotal = 0,
+    this.siRange = '',
+    this.holeComplete = false,
+    this.roundOver = false,
+    this.nextHole,
+    this.result,
+    this.strokeWord = '',
+    this.toParText = '',
+    this.toPar = 0,
+    this.grossTotal = 0,
+    this.netTotal = 0,
+    this.strokeThru = 0,
+    this.chips = const [],
+    this.matchStanding = '',
+    this.matchShort = '',
+    this.matchLeader,
+    this.matchThru = 0,
+    this.matchToPlay = 0,
+    this.tiles = const [],
+    this.overLine = '',
+    this.afterLine = '',
+    this.finalLine = '',
+    this.finalSub = '',
+    this.finalCard = '',
+    this.finalNote = '',
+  });
+
+  bool get hasFinal => finalLine.isNotEmpty;
+
+  factory SoloHoleCard.fromJson(Map<String, dynamic> j) {
+    final g = (j['golfer'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final st = (j['stroke'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final nas = (j['nassau'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final mt = (j['match'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final fin = (j['final'] as Map?)?.cast<String, dynamic>() ?? const {};
+    return SoloHoleCard(
+      hole: j['hole'] as int? ?? 0,
+      par: j['par'] as int?,
+      strokeIndex: j['stroke_index'] as int?,
+      thru: j['thru'] as int? ?? 0,
+      variant: j['variant'] as String? ?? 'stroke',
+      title: j['title'] as String? ?? 'Solo',
+      netPercent: j['net_percent'] as int? ?? 100,
+      playerId: g['player_id'] as int? ?? 0,
+      name: g['name'] as String? ?? '',
+      first: g['first'] as String? ?? '',
+      courseHandicap: g['course_handicap'] as int?,
+      gross: g['gross'] as int?,
+      net: g['net'] as int?,
+      strokes: g['strokes'] as int? ?? 0,
+      strokesTotal: g['strokes_total'] as int? ?? 0,
+      siRange: g['si_range'] as String? ?? '',
+      holeComplete: j['hole_complete'] as bool? ?? false,
+      roundOver: j['round_over'] as bool? ?? false,
+      nextHole: j['next_hole'] as int?,
+      result: j['result'] as String?,
+      strokeWord: st['word'] as String? ?? '',
+      toParText: st['to_par_text'] as String? ?? '',
+      toPar: st['to_par'] as int? ?? 0,
+      grossTotal: st['gross_total'] as int? ?? 0,
+      netTotal: st['net_total'] as int? ?? 0,
+      strokeThru: st['thru'] as int? ?? 0,
+      chips: (nas['chips'] as List? ?? const [])
+          .map((e) => SoloChip.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      matchStanding: mt['standing'] as String? ?? '',
+      matchShort: mt['short'] as String? ?? '',
+      matchLeader: mt['leader'] as int?,
+      matchThru: mt['thru'] as int? ?? 0,
+      matchToPlay: mt['to_play'] as int? ?? 0,
+      tiles: (mt['tiles'] as List? ?? const [])
+          .map((e) => SoloTile.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      overLine: mt['over_line'] as String? ?? '',
+      afterLine: mt['after_line'] as String? ?? '',
+      finalLine: fin['line'] as String? ?? '',
+      finalSub: fin['sub'] as String? ?? '',
+      finalCard: fin['card'] as String? ?? '',
+      finalNote: fin['note'] as String? ?? '',
+    );
+  }
+}

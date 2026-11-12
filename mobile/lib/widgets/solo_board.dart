@@ -304,7 +304,7 @@ class SoloScorecard extends StatelessWidget {
           ? const []
           : [
               HoleGridFooterRow(
-                label: 'Won',
+                label: 'Hole won by',
                 text: (h) => switch (resultOf[h]) {
                   'won' => mark,
                   'lost' => 'P',          // Par, which really is a P

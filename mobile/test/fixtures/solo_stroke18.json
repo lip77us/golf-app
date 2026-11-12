@@ -1,0 +1,39 @@
+{
+ "hole": 18,
+ "par": 5,
+ "stroke_index": 14,
+ "thru": 18,
+ "variant": "stroke",
+ "title": "Stroke Play",
+ "net_percent": 100,
+ "golfer": {
+  "player_id": 5,
+  "name": "Paul Lipkin",
+  "first": "Paul",
+  "course_handicap": 12,
+  "gross": 6,
+  "net": 6,
+  "strokes": 0,
+  "strokes_total": 12,
+  "si_range": "SI 1\u201312"
+ },
+ "hole_complete": true,
+ "round_over": true,
+ "next_hole": null,
+ "result": "lost",
+ "stroke": {
+  "word": "Net bogey",
+  "to_par": -2,
+  "to_par_text": "\u22122",
+  "gross_total": 82,
+  "net_total": 70,
+  "thru": 18,
+  "par_total": 72
+ },
+ "final": {
+  "line": "Net total \u22122",
+  "sub": "gross 82 \u00b7 net 70 \u00b7 par 72",
+  "card": "Net 70 \u00b7 \u22122",
+  "note": "For fun: nothing to settle. The card goes to the round history."
+ }
+}

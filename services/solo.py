@@ -284,3 +284,204 @@ def setup_solo(round_obj, *, variant: str, net_percent: int = 100,
     # just replaced.
     round_obj._state.fields_cache.pop('solo_game', None)
     return cfg
+
+
+# ── score-entry card — `~/Downloads/handoff-solo-score-entry` ───────────────
+
+_NET_WORD = {-3: 'Net albatross', -2: 'Net eagle', -1: 'Net birdie',
+             0: 'Net par', 1: 'Net bogey', 2: 'Net double'}
+
+
+def _asof(rows, pos):
+    """The golfer's holes with everything after position `pos` unplayed —
+    which is what a tray reopened on the 4th must report."""
+    return [h if i <= pos else {**h, 'gross': None, 'net': None,
+                                'to_par': None, 'result': None}
+            for i, h in enumerate(rows)]
+
+
+def _signed(v: int) -> str:
+    return 'E' if v == 0 else (f'+{v}' if v > 0 else f'−{abs(v)}')
+
+
+def _bet_chip(label, up, decided, thru, holes, golfer):
+    """One bet against par: live, or final once it is decided or played out.
+    `leader` is 1 (the golfer), 2 (par) or None."""
+    final = decided is not None or thru == holes
+    if thru == 0 and not final:
+        return None
+    leader = 1 if up > 0 else (2 if up < 0 else None)
+    who = golfer if up > 0 else 'Par'
+    if final:
+        if up == 0:
+            text = 'Push'
+        elif decided and '&' in decided:
+            text = f'{who} {decided}'
+        else:
+            text = f'{who} {abs(up)} UP'
+        return {'label': label, 'text': text, 'state': 'final',
+                'leader': leader}
+    text = 'AS' if up == 0 else f'{who} {abs(up)} UP'
+    return {'label': label, 'text': text, 'state': 'live', 'leader': leader}
+
+
+def solo_hole_card(foursome, hole: int) -> dict:
+    """Everything the solo score-entry screen draws for ONE hole.
+
+    **It renders `solo_summary`'s walk and decides no golf**: a hole against
+    par is net under = won, net par = halved, net over = lost, and the
+    matches, closing scores and auto presses are `_match_over` / `_presses`.
+    What this adds is the cut (the round AS OF this hole) and the sentences.
+    Returns `{}` when the round is not a configured solo round.
+    """
+    rnd = foursome.round
+    cfg = _config(rnd)
+    m = _solo_membership(foursome)
+    if cfg is None or m is None:
+        return {}
+    rows = _holes(rnd, foursome, cfg)
+    order = [r['hole'] for r in rows]
+    if hole not in order:
+        return {}
+    pos = order.index(hole)
+    row = rows[pos]
+    cur = _asof(rows, pos)
+    first = (m.player.name or '').split(' ')[0] or 'You'
+    variant = cfg.variant
+    strokes_total = sum(r['strokes'] for r in rows)
+    complete = row['gross'] is not None
+    last = pos == len(rows) - 1
+    round_over = complete and last
+
+    card = {
+        'hole': hole, 'par': row['par'], 'stroke_index': row['stroke_index'],
+        'thru': pos + 1, 'variant': variant,
+        'title': {'stroke': 'Stroke Play', 'nassau': 'Nassau',
+                  'match': 'Match Play'}.get(variant, 'Solo'),
+        'net_percent': cfg.net_percent,
+        'golfer': {
+            'player_id': m.player_id, 'name': m.player.name, 'first': first,
+            'course_handicap': m.course_handicap, 'gross': row['gross'],
+            'net': row['net'], 'strokes': row['strokes'],
+            'strokes_total': strokes_total,
+            'si_range': (f'SI 1–{strokes_total}'
+                         if 0 < strokes_total <= 18 else ''),
+        },
+        'hole_complete': complete, 'round_over': round_over,
+        'next_hole': order[pos + 1] if pos + 1 < len(order) else None,
+        'result': row['result'],
+    }
+
+    if variant == 'stroke':
+        s = _stroke(cur)
+        par_total = sum(r['par'] or 0 for r in rows)
+        gross_total = sum(r['gross'] for r in cur if r['gross'] is not None)
+        card['stroke'] = {
+            'word': (_NET_WORD.get(row['to_par'], 'Net ' + _signed(
+                row['to_par'])) if row['to_par'] is not None else ''),
+            'to_par': s['to_par'], 'to_par_text': _signed(s['to_par']),
+            'gross_total': gross_total, 'net_total': s['net_total'],
+            'thru': s['thru'], 'par_total': par_total,
+        }
+        if round_over:
+            card['final'] = {
+                'line': f"Net total {_signed(s['to_par'])}",
+                'sub': (f"gross {gross_total} · net {s['net_total']}"
+                        f" · par {par_total}"),
+                'card': f"Net {s['net_total']} · {_signed(s['to_par'])}",
+                'note': ('For fun: nothing to settle. The card goes to the '
+                         'round history.'),
+            }
+    elif variant == 'nassau':
+        nas = _nassau(cur, auto_press=cfg.auto_press)
+        chips = []
+        for key, label in (('front', 'Front'), ('back', 'Back'),
+                           ('overall', 'Overall')):
+            b = nas[key]
+            chip = _bet_chip(label, b['up'], b['decided'], b['thru'],
+                             b['holes'], first)
+            if chip is None:
+                start = order[9] if key == 'back' and len(order) > 9 else None
+                chip = {'label': label,
+                        'text': (f'{label} starts {start}' if start
+                                 else f'{label} not started'),
+                        'state': 'pending', 'leader': None}
+            else:
+                chip['text'] = f"{label} {chip['text']}"
+            chips.append(chip)
+            for p in b['presses']:
+                started = hole >= p['start']
+                chips.append({
+                    'label': f"P{p['index']}",
+                    'text': (f"P{p['index']} " + (
+                        ('Push' if p['up'] == 0 else
+                         f"{first if p['up'] > 0 else 'Par'} {abs(p['up'])} UP")
+                        if started else f"starts {p['start']}")),
+                    'state': ('pending' if not started else
+                              'final' if p['decided'] or p['thru'] == p['holes']
+                              else 'live'),
+                    'leader': (1 if p['up'] > 0 else 2 if p['up'] < 0
+                               else None) if started else None,
+                })
+        card['nassau'] = {'chips': chips}
+        if round_over:
+            res = []
+            for key in ('front', 'back', 'overall'):
+                u = nas[key]['up']
+                res.append('won' if u > 0 else 'lost' if u < 0 else 'halved')
+            won, lost = res.count('won'), res.count('lost')
+            card['final'] = {
+                'line': f'{won} won · {lost} lost',
+                'sub': (f'Against par: front {res[0]}, back {res[1]}, '
+                        f'overall {res[2]}.'),
+                'note': 'For fun: nothing to settle.',
+            }
+    elif variant == 'match':
+        up, decided, thru = _match_over(cur)
+        decided_at = None
+        if decided:
+            # The hole the match was decided on: the first hole where the
+            # margin outran what was left.
+            u = 0
+            for i, r in enumerate(cur):
+                if r['result'] is None:
+                    continue
+                u += 1 if r['result'] == 'won' else (
+                    -1 if r['result'] == 'lost' else 0)
+                if abs(u) > len(cur) - (i + 1):
+                    decided_at = r['hole']
+                    break
+        tiles = []
+        for i, r in enumerate(rows):
+            if r['hole'] > hole and i > pos:
+                st = 'x'
+            else:
+                st = {'won': 'w', 'lost': 'l', 'halved': 'h'}.get(
+                    cur[i]['result'], 'x')
+            after = decided_at is not None and order.index(
+                r['hole']) > order.index(decided_at)
+            tiles.append({'hole': r['hole'], 'state': st,
+                          'dimmed': bool(after)})
+        who = first if up > 0 else 'Par'
+        std = ('All square' if up == 0 else
+               f'{who} wins {decided}' if decided else
+               f'{who} {abs(up)} UP')
+        card['match'] = {
+            'up': up, 'standing': std,
+            'short': 'AS' if up == 0 else f'{abs(up)} UP',
+            'leader': 1 if up > 0 else (2 if up < 0 else None),
+            'decided': decided, 'decided_on': decided_at,
+            'thru': thru, 'to_play': len(rows) - thru,
+            'tiles': tiles,
+            'over_line': (f'Decided on {decided_at} · holes '
+                          f"{order[order.index(decided_at) + 1]}–"
+                          f'{order[-1]} played out for the card')
+                         if decided and decided_at != order[-1] else '',
+            'after_close': bool(decided_at is not None and pos
+                                > order.index(decided_at)),
+            'after_line': (f'MATCH {first if up > 0 else "Par"} won '
+                           f'{decided} · hole {hole} is played out')
+                          if decided and decided_at is not None
+                          and pos > order.index(decided_at) else '',
+        }
+    return card

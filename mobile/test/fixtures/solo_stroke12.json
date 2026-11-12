@@ -1,0 +1,33 @@
+{
+ "hole": 12,
+ "par": 3,
+ "stroke_index": 16,
+ "thru": 12,
+ "variant": "stroke",
+ "title": "Stroke Play",
+ "net_percent": 100,
+ "golfer": {
+  "player_id": 5,
+  "name": "Paul Lipkin",
+  "first": "Paul",
+  "course_handicap": 12,
+  "gross": 3,
+  "net": 3,
+  "strokes": 0,
+  "strokes_total": 12,
+  "si_range": "SI 1\u201312"
+ },
+ "hole_complete": true,
+ "round_over": false,
+ "next_hole": 13,
+ "result": "halved",
+ "stroke": {
+  "word": "Net par",
+  "to_par": 1,
+  "to_par_text": "+1",
+  "gross_total": 56,
+  "net_total": 48,
+  "thru": 12,
+  "par_total": 72
+ }
+}

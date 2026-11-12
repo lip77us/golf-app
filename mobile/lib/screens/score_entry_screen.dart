@@ -47,6 +47,7 @@ import '../widgets/banker_entry_strip.dart';
 import '../widgets/mini_singles_entry.dart';
 import '../widgets/mini_singles_three_entry.dart';
 import '../widgets/points_entry.dart';
+import '../widgets/solo_entry.dart';
 import '../widgets/triple_cup_entry.dart';
 import '../widgets/triple_cup_pairings.dart';
 import '../widgets/standing_ribbon.dart';
@@ -218,6 +219,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       final s = ms.strokesFor(m.player.id);
       if (s != null) return s;
     }
+
+    // **Solo: the strokes of the hole against par**, at the golfer's own
+    // allowance (50–130%), which is not the round's stored full-net number.
+    final solo = _soloCard(rp);
+    if (solo != null) return solo.strokes;
 
     // **Points 5-3-1: the strokes POINTS issues, off the low man** — not the
     // round's stored full-net allocation, which is a different number
@@ -1684,7 +1690,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         // `handoff-mini-singles-three-score-entry`.
         _threeRound(rp) ||
         // Points 5-3-1, per `handoff-points-score-entry`.
-        _pointsRound(rp);
+        _pointsRound(rp) ||
+        // …and the solo games, per `handoff-solo-score-entry`.
+        _soloRound(rp);
   }
 
   /// **This group is playing a Mini Singles bracket on this screen** — a
@@ -1753,6 +1761,33 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         .firstOrNull;
     return fs != null && fs.realPlayers.length == 3;
   }
+
+  /// **A solo round** — one golfer against par, and the card is the
+  /// server's. `soloSummary` says it is configured; until then the screen
+  /// keeps its old layout so a golfer is never looking at nothing.
+  bool _soloRound(RoundProvider rp) =>
+      soloVariantOf(_activeGames(rp.round)) != null &&
+      rp.soloSummary?['configured'] == true;
+
+  int? _soloCardAsked;
+
+  void _ensureSoloCard(RoundProvider rp) {
+    if (!_soloRound(rp)) return;
+    if (rp.soloHoleCard(_selectedHole) != null) {
+      _soloCardAsked = null;
+      return;
+    }
+    if (_soloCardAsked == _selectedHole) return;
+    _soloCardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<RoundProvider>()
+          .loadSoloHole(widget.foursomeId, _selectedHole);
+    });
+  }
+
+  SoloHoleCard? _soloCard(RoundProvider rp) =>
+      _soloRound(rp) ? rp.soloHoleCard(_selectedHole) : null;
 
   int? _pointsCardAsked;
 
@@ -1836,6 +1871,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       _miniSinglesCard(rp) != null ||
       _threeCard(rp) != null ||
       _pointsCard(rp) != null ||
+      _soloCard(rp) != null ||
       _singlesCard(rp) != null ||
       _nassauCard(rp) != null ||
       _skinsCard(rp) != null ||
@@ -3951,6 +3987,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final msTray =
         msCard != null && fbActive && allDone && _editHotPid == null;
 
+    // **Solo.** One golfer against par; the tray rises after his one score.
+    _ensureSoloCard(rp);
+    final soloCard = _soloCard(rp);
+    final soloTray =
+        soloCard != null && fbActive && allDone && _editHotPid == null;
+
     // **Points 5-3-1.** Same tray, the nets turned into points and the
     // standing against the target.
     _ensurePointsCard(rp);
@@ -4083,6 +4125,27 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                   _hasRealPending(_selectedHole),
               notSynced: rp.trayHoleUnsynced(_selectedHole),
               // Picks nobody — see the Sixes tray above.
+              picking: _trayEditing,
+              onEdit: () => setState(() {
+                _trayEditing = !_trayEditing;
+                _editHotPid = null;
+              }),
+            )
+          else if (soloTray)
+            SoloHoleTray(
+              card: soloCard,
+              // While this tray is up it IS the bottom bar — the pager below
+              // is hidden, so these are the only arrows on screen, and on
+              // the last hole the forward button finishes the round.
+              onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
+              onNext: rp.submitting
+                  ? null
+                  : (_nextHoleInOrder(rp) == null
+                      ? () => _completeRound(ctx, players, par)
+                      : _advance),
+              gettingResult: rp.trayResultPending(_selectedHole) ||
+                  _hasRealPending(_selectedHole),
+              notSynced: rp.trayHoleUnsynced(_selectedHole),
               picking: _trayEditing,
               onEdit: () => setState(() {
                 _trayEditing = !_trayEditing;
@@ -4417,10 +4480,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                games.contains('singles_18') ||
                games.contains('singles_nassau')))
             _CupSinglesStatusBar(data: mpData),
-          // Solo's one reading, above the pager — the match, or the net
-          // total. `handoff-solo-games`.
+          // **Solo's status bar is the tray's** (`handoff-solo-score-entry`):
+          // the match, or the net total, is what the tray reports. The old
+          // bar stays only for the moment before the hole's card arrives.
           if (soloVariantOf(games) != null &&
-              rp.soloSummary?['configured'] == true)
+              rp.soloSummary?['configured'] == true &&
+              rp.soloHoleCard(_selectedHole) == null)
             SoloStatusBar(solo: rp.soloSummary!),
           // (Irish Rumble balls-counted banner + borrowed-4th row moved to the
           // TOP of the entry body — see _buildBody — to match the Pink Ball
@@ -4435,7 +4500,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // has the tray overlaying this row, so this is the half that goes
           // (Paul, 30 Oct 2026).
           if (!sixTray && !spTray && !vgTray && !fourTray && !nasTray
-              && !skTray && !bkTray && !tcTray && !msTray && !m3Tray && !ptsTray)
+              && !skTray && !bkTray && !tcTray && !msTray && !m3Tray && !ptsTray && !soloTray)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Column(children: [
@@ -4801,7 +4866,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 // turn, so without this the only way to find your match was
                 // the leaderboard (Paul, 11 Nov 2026). Banker can never be
                 // on the same round — it is one of the tray owners.
-                aboveRows: _miniSinglesCard(rp) != null
+                aboveRows: _soloCard(rp) != null
+                    ? SoloHeader(card: _soloCard(rp)!)
+                    : _miniSinglesCard(rp) != null
                     ? MiniSinglesMatches(card: _miniSinglesCard(rp)!)
                     : _threeCard(rp) != null
                     ? MiniSinglesThreeHeader(card: _threeCard(rp)!)
@@ -4993,8 +5060,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               // order, and the reason for it is that the sentence is about
               // the hole just entered while the card is about the round — a
               // golfer reads down from the hole he is standing on.
+              // **With the hole's card the scorecard leaves score entry** — it
+              // stays on the leaderboard and the round view; the tray says
+              // what the hole did. The old line and card remain as the
+              // fallback until the card arrives.
               if (soloVariantOf(games) != null &&
-                  rp.soloSummary?['configured'] == true) ...[
+                  rp.soloSummary?['configured'] == true &&
+                  rp.soloHoleCard(_selectedHole) == null) ...[
                 const SizedBox(height: 6),
                 SoloHoleLine(
                   hole: rp.soloHole(_selectedHole),

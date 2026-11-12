@@ -2752,6 +2752,15 @@ class ApiClient {
     return MiniSinglesHoleCard.fromJson(map);
   }
 
+  /// GET /api/foursomes/{id}/solo/hole/{hole}/ — the solo score-entry card,
+  /// for a hole opened without posting (a save returns it as `solo_hole`).
+  Future<SoloHoleCard?> getSoloHoleCard(int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/solo/hole/$hole/');
+    final map = (data as Map).cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    return SoloHoleCard.fromJson(map);
+  }
+
   /// GET /api/foursomes/{id}/three-person-match/hole/{hole}/ — the three-man
   /// Mini Singles card, for a hole opened without posting.
   Future<MiniSinglesThreeCard?> getMiniSinglesThreeCard(

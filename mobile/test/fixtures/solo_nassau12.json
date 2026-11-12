@@ -1,0 +1,46 @@
+{
+ "hole": 12,
+ "par": 3,
+ "stroke_index": 16,
+ "thru": 12,
+ "variant": "nassau",
+ "title": "Nassau",
+ "net_percent": 100,
+ "golfer": {
+  "player_id": 11,
+  "name": "Paul Lipkin",
+  "first": "Paul",
+  "course_handicap": 12,
+  "gross": 3,
+  "net": 3,
+  "strokes": 0,
+  "strokes_total": 12,
+  "si_range": "SI 1\u201312"
+ },
+ "hole_complete": true,
+ "round_over": false,
+ "next_hole": 13,
+ "result": "halved",
+ "nassau": {
+  "chips": [
+   {
+    "label": "Front",
+    "text": "Front Par 1 UP",
+    "state": "final",
+    "leader": 2
+   },
+   {
+    "label": "Back",
+    "text": "Back AS",
+    "state": "live",
+    "leader": null
+   },
+   {
+    "label": "Overall",
+    "text": "Overall Par 1 UP",
+    "state": "live",
+    "leader": 2
+   }
+  ]
+ }
+}

@@ -1,0 +1,51 @@
+{
+ "hole": 18,
+ "par": 5,
+ "stroke_index": 14,
+ "thru": 18,
+ "variant": "nassau",
+ "title": "Nassau",
+ "net_percent": 100,
+ "golfer": {
+  "player_id": 11,
+  "name": "Paul Lipkin",
+  "first": "Paul",
+  "course_handicap": 12,
+  "gross": 6,
+  "net": 6,
+  "strokes": 0,
+  "strokes_total": 12,
+  "si_range": "SI 1\u201312"
+ },
+ "hole_complete": true,
+ "round_over": true,
+ "next_hole": null,
+ "result": "lost",
+ "nassau": {
+  "chips": [
+   {
+    "label": "Front",
+    "text": "Front Par 1 UP",
+    "state": "final",
+    "leader": 2
+   },
+   {
+    "label": "Back",
+    "text": "Back Paul 4&2",
+    "state": "final",
+    "leader": 1
+   },
+   {
+    "label": "Overall",
+    "text": "Overall Paul 3&2",
+    "state": "final",
+    "leader": 1
+   }
+  ]
+ },
+ "final": {
+  "line": "2 won \u00b7 1 lost",
+  "sub": "Against par: front lost, back won, overall won.",
+  "note": "For fun: nothing to settle."
+ }
+}
