@@ -12894,3 +12894,20 @@ Swift `known` set already lists it and it draws through the shared
 
 Tests: `scoring/tests/test_live_activity_{solo,nassau_nine,mini_singles,
 multi_skins}.py` (61 between them).
+
+### Nassau Nine's push — built (press and close-out)
+
+`services/live_activity_nassau_nine_push.py`, called from `push_round` beside
+Annandale's and merged into the same per-player map. Two events ring, only the
+golfers in that match: **a press** (auto or by hand) and **the match closing
+out**. A close-out outranks a press when one score produces both.
+
+**Fired once**, via `NassauGame.announced` (`games/0105`, NULL until the first
+score is pushed, which records a baseline without announcing it — the Annandale
+mechanism). Only `nassau_nine` rows are read; Nassau and Singles Match are
+untouched. A manual press names its presser only when the scores identify one.
+
+Still not built: Multi-Group Skins' one-per-closed-hole push and "Hole 11 is
+yours", which need the same once-only record on their own models.
+
+Tests: `scoring/tests/test_live_activity_nassau_nine_push.py` (7).

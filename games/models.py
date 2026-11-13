@@ -1478,6 +1478,13 @@ class NassauGame(models.Model):
                             'AnnandaleFridayGame', on_delete=models.CASCADE,
                             null=True, blank=True, related_name='matches',
                         )
+    # Lock-screen push events already sent (Nassau Nine only) — press and
+    # close-out keys (`services.live_activity_nassau_nine_push`). NULL until
+    # the first score is pushed, which takes a baseline, not a backlog.
+    announced           = models.JSONField(
+                            null=True, blank=True, default=None,
+                            help_text="Lock-screen push events already sent.",
+                        )
     handicap_mode       = models.CharField(
                             max_length=20,
                             choices=HandicapMode.choices,

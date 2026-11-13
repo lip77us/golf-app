@@ -525,6 +525,14 @@ def push_round(round_obj, *, final=False) -> int:
             logger.exception('live_activity_push: annandale alerts, round %s',
                              round_obj.id)
 
+    if not final:
+        from services.live_activity_nassau_nine_push import nassau_nine_alerts
+        try:
+            per_player = {**per_player, **nassau_nine_alerts(round_obj)}
+        except Exception:  # pragma: no cover - never blocks a score
+            logger.exception('live_activity_push: nassau nine alerts, round %s',
+                             round_obj.id)
+
     sent = 0
     for row in rows:
         try:
