@@ -69,6 +69,7 @@ import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../theme/halved_brand.dart';
 import '../widgets/hot_spot_order_sheet.dart';
+import '../widgets/pink_ball_order_sheet.dart';
 import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
 import '../utils/nassau_team_style.dart';
@@ -626,9 +627,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       Future.wait(futures).whenComplete(() {
         if (mounted) setState(() {});
         _maybeOpenHotSpotOrder();
+        _maybeOpenPinkBallOrder();
       });
     } else {
       _maybeOpenHotSpotOrder();
+      _maybeOpenPinkBallOrder();
     }
   }
 
@@ -2405,7 +2408,102 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   StrokePlayHoleCard? _sideGameMarks(RoundProvider rp) =>
       _activeGames(rp.round).contains(GameIds.strokePlay)
           ? rp.strokePlayHole(_selectedHole)
-          : null;
+          // A Stableford round carries the same marks: its card is the Stroke
+          // Play card with points, and the ball block rides on both.
+          : (_stablefordPrimary(rp) ? rp.stablefordHole(_selectedHole) : null);
+
+  // ── The ball rotation (Pink Ball / Red Ball) ───────────────────────────
+
+  bool _pinkOrderPrompted = false;
+
+  Foursome? _thisFoursome(RoundProvider rp) => rp.round?.foursomes
+      .where((f) => f.id == widget.foursomeId)
+      .firstOrNull;
+
+  /// The group owes a rotation: it plays a ball game and has not said who
+  /// carries it. An EMPTY order means nobody carries the ball and the lost-ball
+  /// switch files nothing, so this is not optional the way card order is for
+  /// Hot Seat.
+  bool _pinkOrderOwed(RoundProvider rp) {
+    final fs = _thisFoursome(rp);
+    return fs != null &&
+        _sideGameMarks(rp)?.ball != null &&
+        fs.pinkBallOrder.isEmpty;
+  }
+
+  /// Open the rotation sheet by itself on the first tee, once per visit.
+  /// Dismissible, with the banner and its Set order button left behind.
+  void _maybeOpenPinkBallOrder() {
+    if (!mounted || _pinkOrderPrompted) return;
+    final rp = context.read<RoundProvider>();
+    final fs = _thisFoursome(rp);
+    if (fs == null || fs.hasAnyScore || !_pinkOrderOwed(rp)) return;
+    _pinkOrderPrompted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _openPinkBallOrder(rp);
+    });
+  }
+
+  Future<void> _openPinkBallOrder(RoundProvider rp) async {
+    final fs = _thisFoursome(rp);
+    final rid = rp.round?.id;
+    final ball = _sideGameMarks(rp)?.ball;
+    if (fs == null || rid == null || ball == null) return;
+    final saved = await openPinkBallOrder(context,
+        foursome: fs, scorecard: rp.scorecard, gameName: ball.gameName);
+    if (!saved || !mounted) return;
+    // The round holds the order, and the card holds who carries THIS hole.
+    await rp.loadRound(rid);
+    if (!mounted) return;
+    await rp.loadStrokePlayHole(widget.foursomeId, _selectedHole);
+    if (mounted) setState(() {});
+  }
+
+  Widget _pinkBallBanner(BuildContext ctx, RoundProvider rp) {
+    final fs = _thisFoursome(rp);
+    final ball = _sideGameMarks(rp)?.ball;
+    if (fs == null || ball == null) return const SizedBox.shrink();
+    final theme = Theme.of(ctx);
+    final owed = fs.pinkBallOrder.isEmpty;
+    final members =
+        fs.memberships.where((m) => !m.player.isPhantom).toList();
+    final locked =
+        pinkBallLockedCount(members, rp.scorecard) >= members.length;
+    if (!owed && locked) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: owed
+            ? Halved.cautionGround
+            : theme.colorScheme.secondaryContainer.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(8),
+        border: owed
+            ? Border.all(color: Halved.caution.withValues(alpha: 0.4))
+            : null,
+      ),
+      child: Row(children: [
+        Icon(Icons.sports_golf, size: 16,
+            color: owed ? Halved.caution
+                        : theme.colorScheme.onSecondaryContainer),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            owed
+                ? 'Set who carries the ${ball.gameName} before the first score.'
+                : '${ball.gameName} rotation',
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: owed ? Halved.caution
+                            : theme.colorScheme.onSecondaryContainer),
+          ),
+        ),
+        TextButton(
+          onPressed: () => _openPinkBallOrder(rp),
+          child: Text(owed ? 'Set order' : 'Change'),
+        ),
+      ]),
+    );
+  }
 
   /// A hole tray stays down while the scorer has asked to edit — "Edit
   /// scores" reopens the keypad on the hole's first golfer.
@@ -4792,6 +4890,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               if (games.contains('irish_rumble')) _irBallsBanner(ctx, rp),
               if (games.contains(GameIds.hotSpot))
                 _hotSpotBanner(ctx, rp),
+              _pinkBallBanner(ctx, rp),
               // **Who is playing whom on this hole.**
               //
               // Four rows tinted blue and orange say which SIDE a golfer is

@@ -500,8 +500,13 @@ class _RoundScreenState extends State<RoundScreen> {
                       route = realCount == 3
                           ? '/three-person-match-setup'
                           : '/match-play-setup';
-                    } else if (fsGames.contains('pink_ball')) {
-                      // Pink ball always gets its own dedicated screen.
+                    } else if (fsGames.contains('pink_ball') &&
+                        round.scoringGame == null) {
+                      // Pink ball gets its own dedicated screen — unless the
+                      // round is scored on Stroke Play or Stableford, which
+                      // enter on the shared screen with the ball's badge and
+                      // lost-ball switch on their tray, and the rotation
+                      // sheet opened from there.
                       // The pink ball screen loads and displays match play
                       // status when match play is also active.
                       route = '/pink-ball';

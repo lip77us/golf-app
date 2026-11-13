@@ -12926,3 +12926,22 @@ rule for "last"). The card kind stays gated in `UNSHIPPED_KINDS`, so these
 pushes only matter once the build carrying it ships.
 
 Tests: `scoring/tests/test_live_activity_multi_skins_push.py` (5).
+
+### Pink Ball on the shared entry screen (14 Nov 2026)
+
+The hub sent EVERY group with `pink_ball` in its games to the old
+`/pink-ball` screen, so a tournament group scored on Stroke Play or Stableford
+could never reach the tray's carrier badge and lost-ball switch (built 8 Nov).
+Now it does that only when `round.scoringGame == null` (the ball game is the
+round's own entry); otherwise it falls through to `/score-entry`.
+
+What the shared screen gained to make that safe: the rotation sheet is a
+shared widget (`widgets/pink_ball_order_sheet.dart`, `openPinkBallOrder`),
+opened by itself on the first tee when the group's `pinkBallOrder` is empty
+(an empty order means nobody carries the ball and the switch files nothing),
+with an amber banner / Change button behind it; and `_sideGameMarks` falls back
+to the Stableford card, which carries the same `ball` block.
+
+`pink_ball_screen.dart` is unchanged apart from using the shared sheet. A
+Pink Ball PRIMARY tray (survival ranking, ball status) is not built.
+Tests: `mobile/test/pink_ball_entry_test.dart`. Not seen on a device.

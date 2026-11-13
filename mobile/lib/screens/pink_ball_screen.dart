@@ -33,6 +33,7 @@ import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/combo_tee_chip.dart';
 import '../widgets/side_game_marks.dart';
+import '../widgets/pink_ball_order_sheet.dart';
 
 
 class PinkBallScreen extends StatefulWidget {
@@ -375,7 +376,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
       isDismissible: lockedCount >= members.length, // locked → dismissible
       enableDrag: false,
       isScrollControlled: true,
-      builder: (ctx) => _OrderSetupSheet(
+      builder: (ctx) => PinkBallOrderSheet(
         gameName:   _gameName,
         members:     orderedMembers,
         lockedCount: lockedCount,
@@ -1220,182 +1221,6 @@ class _PlayerScoreRow extends StatelessWidget {
         ),
       ]),
     );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Order setup bottom sheet  (shown once per foursome before scoring starts)
-// ---------------------------------------------------------------------------
-
-class _OrderSetupSheet extends StatefulWidget {
-  final String           gameName;
-  final List<Membership> members;
-  /// Number of leading positions that are already fixed by played holes.
-  /// 0 = all positions freely reorderable.
-  final int              lockedCount;
-  final Future<void> Function(List<int>) onConfirm;
-
-  const _OrderSetupSheet({
-    required this.gameName,
-    required this.members,
-    required this.lockedCount,
-    required this.onConfirm,
-  });
-
-  @override
-  State<_OrderSetupSheet> createState() => _OrderSetupSheetState();
-}
-
-class _OrderSetupSheetState extends State<_OrderSetupSheet> {
-  late final List<Membership> _ordered;
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _ordered = List.of(widget.members);
-  }
-
-  bool get _allLocked => widget.lockedCount >= _ordered.length;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: MediaQuery.of(context).viewInsets,
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle bar
-            Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 4),
-              width: 40, height: 4,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Ball Rotation',
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text(
-                    _allLocked
-                        ? 'The rotation is locked — at least 3 holes have been scored.'
-                        : widget.lockedCount > 0
-                            ? 'The first ${widget.lockedCount} position${widget.lockedCount > 1 ? 's are' : ' is'} locked by scored holes. '
-                              'Drag the remaining players to set their order.'
-                            : 'Drag to set the order your group will carry the '
-                              '${widget.gameName}. The rotation repeats across all 18 holes.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 4),
-
-            // Reorderable player list.
-            // Uses ReorderableListView.builder with buildDefaultDragHandles: false
-            // so that ReorderableDragStartListener gives precise drag control.
-            // Locked rows get a lock icon instead of a drag handle.
-            SizedBox(
-              height: _ordered.length * 76.0,
-              child: ReorderableListView.builder(
-                buildDefaultDragHandles: false,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: _ordered.length,
-                onReorder: (oldIndex, newIndex) {
-                  // Prevent dragging a locked row or dropping into a locked slot.
-                  if (oldIndex < widget.lockedCount) return;
-                  final target = newIndex > oldIndex ? newIndex - 1 : newIndex;
-                  if (target < widget.lockedCount) return;
-                  setState(() {
-                    if (newIndex > oldIndex) newIndex--;
-                    final item = _ordered.removeAt(oldIndex);
-                    _ordered.insert(newIndex, item);
-                  });
-                },
-                itemBuilder: (context, idx) {
-                  final m        = _ordered[idx];
-                  final isLocked = idx < widget.lockedCount;
-                  return Card(
-                    key: ValueKey(m.player.id),
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: _posColor(idx),
-                        radius: 16,
-                        child: Text(
-                          '${idx + 1}',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13),
-                        ),
-                      ),
-                      title: Text(m.player.name,
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: Text('HCP ${m.playingHandicap}',
-                          style: theme.textTheme.bodySmall),
-                      trailing: isLocked
-                          ? Icon(Icons.lock_outline,
-                              size: 20,
-                              color: theme.colorScheme.onSurfaceVariant
-                                  .withOpacity(0.45))
-                          : ReorderableDragStartListener(
-                              index: idx,
-                              child: const Icon(Icons.drag_handle),
-                            ),
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: SizedBox(
-                width: double.infinity,
-                child: _allLocked
-                    ? OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Close'),
-                      )
-                    : FilledButton(
-                        onPressed: _saving
-                            ? null
-                            : () async {
-                                setState(() => _saving = true);
-                                final playerOrder =
-                                    _ordered.map((m) => m.player.id).toList();
-                                await widget.onConfirm(playerOrder);
-                                if (context.mounted) Navigator.of(context).pop();
-                              },
-                        child: _saving
-                            ? const SizedBox(
-                                width: 20, height: 20,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white))
-                            : const Text('Confirm Rotation'),
-                      ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static Color _posColor(int index) {
-    const colors = [Colors.blue, Colors.orange, Colors.green, Colors.purple];
-    return colors[index % colors.length];
   }
 }
 
