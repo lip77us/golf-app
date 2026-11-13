@@ -673,6 +673,17 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   Round? _createdRound;
   int?   _createdTournamentId;
 
+  // **What this visit has already made on the server.** Create is several
+  // requests (tournament, its configs, the rounds, then the groups), and when
+  // one of them fails the button comes back — so a retry used to start over
+  // and make a SECOND tournament beside the half-built first one. These let a
+  // retry pick up where the failure was. Reported 13 Nov 2026: two
+  // "Pink Test" tournaments forty seconds apart, the first with a round and
+  // no groups.
+  int?   _madeTournamentId;
+  Round? _madeRound1;
+  int    _madeExtraRounds = 0;
+
   // ---- reference data ----
   List<TeeInfo>    _tees        = [];
   List<Tournament> _tournaments = [];
@@ -1209,6 +1220,10 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   // ---- create ----
 
   Future<void> _createRound() async {
+    // **Synchronous**: the button greys out on the next frame, and a fast
+    // double tap lands before it. The field is set inside setState's callback,
+    // which runs immediately, so the second call sees it.
+    if (_creating) return;
     setState(() { _creating = true; _createError = null; });
     try {
       if (_isCupTournament) {
@@ -1262,13 +1277,14 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     final dateStr = DateFormat('yyyy-MM-dd').format(_date);
 
     // 1. Create tournament
-    final t = await client.createTournament(
-      name       : _nameCtrl.text.trim(),
-      startDate  : dateStr,
-      activeGames: _tournamentActiveGames.toList(),
-      totalRounds: _numRounds,
-    );
-    final tournamentId = t.id;
+    final tournamentId = _madeTournamentId ??
+        (await client.createTournament(
+          name       : _nameCtrl.text.trim(),
+          startDate  : dateStr,
+          activeGames: _tournamentActiveGames.toList(),
+          totalRounds: _numRounds,
+        )).id;
+    _madeTournamentId = tournamentId;
     if (!mounted) return;
 
     // 2. Create Round 1 as a stub (no foursomes; will be set up in Phase 3).
@@ -1291,22 +1307,24 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     }
     // Field-wide side game plays every round (no cup points / group count).
     if (_tournamentSideGame != 'none') round1Games.add(_tournamentSideGame);
-    final round1 = await client.createRound(
-      tournamentId    : tournamentId,
-      courseId        : _selectedCourseId!,
-      date            : dateStr,
-      activeGames     : round1Games,
-      gamePointValues : round1Points,
-      cupGroupCounts  : round1Counts,
-      roundNumber     : 1,
-      handicapMode    : _handicapMode,
-      netPercent      : _netPercent,
-      netMaxDoubleBogey: false, // struck — cup is match play, no total to cap
-    );
+    final round1 = _madeRound1 ??
+        await client.createRound(
+          tournamentId    : tournamentId,
+          courseId        : _selectedCourseId!,
+          date            : dateStr,
+          activeGames     : round1Games,
+          gamePointValues : round1Points,
+          cupGroupCounts  : round1Counts,
+          roundNumber     : 1,
+          handicapMode    : _handicapMode,
+          netPercent      : _netPercent,
+          netMaxDoubleBogey: false, // struck — cup is match play, no total to cap
+        );
+    _madeRound1 = round1;
     if (!mounted) return;
 
     // 3. Create stub rounds for rounds 2..N
-    for (int i = 0; i < _additionalRounds.length; i++) {
+    for (int i = _madeExtraRounds; i < _additionalRounds.length; i++) {
       final draft        = _additionalRounds[i];
       final draftDate    = DateFormat('yyyy-MM-dd').format(draft.date);
       List<String>        roundGames;
@@ -1335,6 +1353,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         netPercent      : _netPercent,
         netMaxDoubleBogey: false, // struck — cup is match play, no total to cap
       );
+      _madeExtraRounds = i + 1;
       if (!mounted) return;
     }
 
@@ -1394,7 +1413,9 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
 
     // 1. Resolve or create tournament
     int? tournamentId;
-    if (_createNewTournament) {
+    if (_createNewTournament && _madeTournamentId != null) {
+      tournamentId = _madeTournamentId;
+    } else if (_createNewTournament) {
       final t = await client.createTournament(
         name       : _nameCtrl.text.trim(),
         startDate  : dateStr,
@@ -1425,6 +1446,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             _activeGames.contains(GameIds.matchPlay) ? _miniCarvePct : 0,
       );
       tournamentId = t.id;
+      _madeTournamentId = tournamentId;
     } else {
       tournamentId = _existingTournament?.id;
     }
@@ -1521,7 +1543,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
 
     // 2. Create stub rounds for rounds 2..N
     if (_createNewTournament) {
-      for (int i = 0; i < _additionalRounds.length; i++) {
+      for (int i = _madeExtraRounds; i < _additionalRounds.length; i++) {
         final draft     = _additionalRounds[i];
         final draftDate = DateFormat('yyyy-MM-dd').format(draft.date);
         await client.createRound(
@@ -1534,21 +1556,24 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           netPercent  : _netPercent,
           netMaxDoubleBogey: _netMaxDoubleBogey,
         );
+        _madeExtraRounds = i + 1;
       }
     }
 
     // 3. Create Round 1 with foursomes
     final existing = _existingTournament?.rounds.length ?? 0;
-    final round = await client.createRound(
-      tournamentId: tournamentId,
-      courseId    : _selectedCourseId!,
-      date        : dateStr,
-      activeGames : games,
-      roundNumber : _createNewTournament ? 1 : existing + 1,
-      handicapMode: _handicapMode,
-      netPercent  : _netPercent,
-      netMaxDoubleBogey: _netMaxDoubleBogey,
-    );
+    final round = _madeRound1 ??
+        await client.createRound(
+          tournamentId: tournamentId,
+          courseId    : _selectedCourseId!,
+          date        : dateStr,
+          activeGames : games,
+          roundNumber : _createNewTournament ? 1 : existing + 1,
+          handicapMode: _handicapMode,
+          netPercent  : _netPercent,
+          netMaxDoubleBogey: _netMaxDoubleBogey,
+        );
+    _madeRound1 = round;
 
     // Compute per-player group_number when the TD overrode the
     // auto-balance.  The backend's setup endpoint takes the explicit-

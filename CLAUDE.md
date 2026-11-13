@@ -12953,3 +12953,20 @@ screen. Two fixes: the hub also checks `fsGames` for `low_net_round` /
 `stableford`, and `primaryGameOf` no longer hands the primary to Pink Ball when
 another game is playing (it is not side-game eligible, so it used to win the
 loop and keep the keypad off). A ball-only round still resolves to the ball.
+
+### Create makes one tournament (14 Nov 2026)
+
+Two "Pink Test" tournaments 40 seconds apart, the first with a round and no
+groups. Create (`new_round_wizard.dart`) is several requests — tournament,
+configs, rounds, then groups — and when one failed the button returned and a
+retry started over, making a second tournament beside the half-built first.
+(It was NOT a double tap: the button greys while creating.)
+
+Fixed client-side: `_createRound` returns at once if `_creating` (synchronous,
+so a same-frame double tap is caught too), and `_madeTournamentId` /
+`_madeRound1` / `_madeExtraRounds` let a retry resume instead of recreating, on
+both the cup and standard paths. The later steps (`setupRound`, config posts)
+are already safe to repeat. **Not covered:** editing the wizard after a partial
+failure and creating again still leaves the first tournament behind, and a
+server-side guard (same name/date/account within minutes) was not added.
+Tests: `mobile/test/create_once_test.dart`.
