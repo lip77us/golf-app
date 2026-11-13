@@ -145,7 +145,12 @@ private struct LockScreenView: View {
                                      "annandale_friday",
                                      // Scramble, Shamble, Better Ball and
                                      // Irish Rumble — four games, one card.
-                                     "foursome"]
+                                     "foursome",
+                                     // Multi-Group Skins: holes closing out
+                                     // across a field — the shared board
+                                     // layout with a winner's name as the
+                                     // headline.
+                                     "multi_skins"]
 
     let state: SixesActivityAttributes.ContentState
     var isStale: Bool = false

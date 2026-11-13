@@ -491,6 +491,7 @@ const List<GameMeta> kGameCatalog = [
     sizes       : {2, 4},
     excludes    : {GameIds.nassau, GameIds.match18,
                    GameIds.sixes, GameIds.points531},
+    hasLiveActivity: true,
   ),
   GameMeta(
     id          : GameIds.skins,
@@ -673,6 +674,7 @@ const List<GameMeta> kGameCatalog = [
     // Nassau read the same per-hole gross scores independently and so
     // can coexist; gross/stroke-play accumulators do too.
     excludes     : {GameIds.sixes, GameIds.points531, GameIds.tripleCup},
+    hasLiveActivity: true,
   ),
   GameMeta(
     id           : GameIds.threePersonMatch,
@@ -726,6 +728,7 @@ const List<GameMeta> kGameCatalog = [
     // It CAN combine with per-foursome side games (sixes / nassau / points
     // / single-foursome skins) which run independently inside each group.
     excludes    : const {},
+    hasLiveActivity: true,
   ),
 
   // ── Casual + Tournament ───────────────────────────────────────────────────
@@ -916,6 +919,7 @@ const List<GameMeta> kGameCatalog = [
     minPlayers  : 1,
     maxPlayers  : 1,
     sizes       : {1},
+    hasLiveActivity: true,
   ),
   GameMeta(
     id          : GameIds.soloNassau,
@@ -927,6 +931,7 @@ const List<GameMeta> kGameCatalog = [
     minPlayers  : 1,
     maxPlayers  : 1,
     sizes       : {1},
+    hasLiveActivity: true,
   ),
   GameMeta(
     id          : GameIds.soloMatch,
@@ -938,6 +943,7 @@ const List<GameMeta> kGameCatalog = [
     minPlayers  : 1,
     maxPlayers  : 1,
     sizes       : {1},
+    hasLiveActivity: true,
   ),
 
 ];

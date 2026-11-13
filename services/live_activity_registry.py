@@ -654,6 +654,42 @@ def _banker(foursome, player_id, *, final):
                                  thru=holes_played(foursome))
 
 
+def _multi_skins(foursome, player_id, *, final):
+    from services.live_activity_multi_skins import (
+        multi_skins_activity_state, multi_skins_final_state)
+    if final:
+        return multi_skins_final_state(foursome, player_id=player_id)
+    return multi_skins_activity_state(foursome, player_id=player_id,
+                                      thru=holes_played(foursome))
+
+
+def _mini_singles(foursome, player_id, *, final):
+    from services.live_activity_mini_singles import (
+        mini_singles_activity_state, mini_singles_final_state)
+    if final:
+        return mini_singles_final_state(foursome, player_id=player_id)
+    return mini_singles_activity_state(foursome, player_id=player_id,
+                                       thru=holes_played(foursome))
+
+
+def _nassau_nine(foursome, player_id, *, final):
+    from services.live_activity_nassau_nine import (
+        nassau_nine_activity_state, nassau_nine_final_state)
+    if final:
+        return nassau_nine_final_state(foursome, player_id=player_id)
+    return nassau_nine_activity_state(foursome, player_id=player_id,
+                                      thru=holes_played(foursome))
+
+
+def _solo(foursome, player_id, *, final):
+    from services.live_activity_solo import (solo_activity_state,
+                                             solo_final_state)
+    if final:
+        return solo_final_state(foursome, player_id=player_id)
+    return solo_activity_state(foursome, player_id=player_id,
+                               thru=holes_played(foursome))
+
+
 def _foursome(foursome, player_id, *, final, slug):
     """Scramble, Shamble, Better Ball and Irish Rumble — one card.
 
@@ -714,6 +750,23 @@ BUILDERS = {
     # The four foursome formats land on ONE card, the way singles and fourball
     # land on `match`. What differs between them is a title and one header
     # corner; what they share is the whole composition.
+    # The three solo games borrow the Stroke Play, Nassau and Match cards with
+    # Par as the opponent, so each declares an existing kind (set by the
+    # builder) and needs no new layout.
+    # Nassau Nine: one bet over a nine, so the match card's single number with
+    # Nassau's press chip and exposure range. The holes-remaining clock is the
+    # bet's own (`6 TO PLAY` / `HOLES 1–9`), never the round's.
+    # Mini Singles (`match_play`): the match card for the reader's own match,
+    # one footer line for the other. Groups of four and three; the round-robin
+    # variant is a different card (see the packet's Open list).
+    'match_play'  : _mini_singles,
+    # Multi-Group Skins: holes closing out across a whole field. Its own kind,
+    # so it is held in UNSHIPPED_KINDS until the build carrying the layout.
+    'multi_skins' : _multi_skins,
+    'nassau_nine' : _nassau_nine,
+    'solo_stroke' : _solo,
+    'solo_nassau' : _solo,
+    'solo_match'  : _solo,
     'scramble'    : _foursome,
     'better_ball' : _foursome,
     'irish_rumble': _foursome,
@@ -743,6 +796,10 @@ _SLUG_AWARE = {'match_18', 'fourball',
 # slug -> the card `kind` its builder declares, where that differs from the
 # slug. Only needed for a builder serving several games.
 CARD_KIND = {'match_18': 'match', 'fourball': 'match',
+             'match_play': 'match',
+             'nassau_nine': 'match',
+             'solo_stroke': 'stroke_play', 'solo_nassau': 'nassau',
+             'solo_match': 'match',
              'sequoya_threes': 'sequoya',
              'low_net_round': 'stroke_play',
              'points_531': 'points',
@@ -800,7 +857,12 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match',
 # and came out in 2.13.0+58, the build carrying its layout. Safe the same day:
 # the game itself first ships in that build, so no installed phone can be
 # playing one without the layout.
-UNSHIPPED_KINDS: set = {'foursome'}
+# `multi_skins` goes in the day its builder is written (12 Nov 2026): the game
+# has NO card today, so an ungated kind would replace nothing at all with a
+# lock-screen nag. It comes out in the commit that bumps the build carrying
+# the kind in `known` (the Swift side already lists it, drawn by the shared
+# board layout).
+UNSHIPPED_KINDS: set = {'foursome', 'multi_skins'}
 
 
 def card_kind(slug: str) -> str:

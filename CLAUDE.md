@@ -12839,3 +12839,58 @@ committing a change to `score_entry_screen`, not the feature's own file.**
 Tests: `scoring/tests/test_stableford_hole_card.py` (26),
 `api/test_stableford_hole_card.py` (5), `mobile/test/stableford_entry_test.dart`
 (17).
+
+## Lock screens for the last six rounds — Solo ×3, Nassau Nine, Mini Singles, Multi-Group Skins
+
+`~/Downloads/handoff-lock-screens-mgskins-minisingles-nassaunine-solo` (12 Nov
+2026). Until now these had no Live Activity. Server builders in
+`services/live_activity_{solo,nassau_nine,mini_singles,multi_skins}.py`,
+registered in `BUILDERS`, each a **projection** of an engine or of the
+score-entry card (so lock screen, tray and board cannot disagree); the
+catalog's `hasLiveActivity` is set on all six games (the three-sided gate test
+requires it).
+
+**Kinds.** Solo declares `stroke_play` / `nassau` / `match`; Nassau Nine and
+Mini Singles declare `match` — all already drawn by the installed app, so
+nothing is held back. **`multi_skins` is its own kind** (a winner's NAME as
+the headline) and sits in `UNSHIPPED_KINDS` until the build carrying it; the
+Swift `known` set already lists it and it draws through the shared
+`BoardView`. Typechecked with `swiftc -typecheck`, not seen on a device.
+
+- **Solo** (`live_activity_solo.py`): the net figure is the headline, the
+  footer corner says `THRU 12 · GROSS +9` (two signed numbers on one card),
+  reader blue / Par orange, Stroke Play's number mint. No money, no pushes.
+  Nassau drops the sides line; a settled nine goes to the footer
+  (`Front · Par 1 UP`). Match holds a close-out (`3 & 2`, `CLOSED` / `ON THE
+  16TH`, footer `17–18 for the card`).
+- **Nassau Nine**: the match card's single number plus Nassau's exposure
+  range. **The state slot is the BET's clock** (`6 TO PLAY` / `HOLES 1–9`),
+  never the round's.
+- **Mini Singles**: four-man reads `mini_singles_hole_card` (reader's own match
+  as the headline, the OTHER match as one footer line, `5 TO PLAY` / `OF 9`,
+  no yardage, higher seed blue); three-man reads `three_person_hole_card`
+  (place + margin over the cut; `T2` / `PLAYING ON` when level; `3RD` / `OUT`).
+  The final is **net of the entry**.
+- **Multi-Group Skins**: the last hole to close is the headline; no money until
+  `ROUND COMPLETE` (`$32 per skin — 6 won`); watchers get `WATCHING` /
+  `16 GOLFERS`; names ship as three tries in `number.alts`.
+
+**Not built (all deliberate, named so they are not mistaken for oversights):**
+- **The pushes.** Nassau Nine's press, Multi-Group Skins' one-per-closed-hole,
+  and "Hole 11 is yours" each need a once-only record of what has already been
+  announced (as `AnnandaleFridayGame.announced` is for Annandale) — a
+  migration and a service per game.
+- **Swift for the new fields:** `number.chip` (Nassau Nine's `+1 PRESS`) and a
+  solo Nassau row's `leader` (the leader's name in its colour) ride in the
+  payload and an older build ignores them, so those two details do not draw
+  yet. The leader's name is also in `note`, so nothing is lost.
+- **Nassau Nine on an 18-hole round** (the bet ends on the 9th and the card
+  holds): the engine's Nassau Nine is the whole round's holes, so a 9-hole
+  round is the case that exists.
+- **Dynamic Island** compact/expanded copy: the Swift derives it from the
+  shared slots.
+- Open in the packet: halved Finals, the round-robin variant, Claremont, and
+  shotgun-start wording for Multi-Group Skins.
+
+Tests: `scoring/tests/test_live_activity_{solo,nassau_nine,mini_singles,
+multi_skins}.py` (61 between them).
