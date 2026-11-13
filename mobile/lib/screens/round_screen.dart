@@ -501,7 +501,9 @@ class _RoundScreenState extends State<RoundScreen> {
                           ? '/three-person-match-setup'
                           : '/match-play-setup';
                     } else if (fsGames.contains('pink_ball') &&
-                        round.scoringGame == null) {
+                        round.scoringGame == null &&
+                        !fsGames.contains('low_net_round') &&
+                        !fsGames.contains('stableford')) {
                       // Pink ball gets its own dedicated screen — unless the
                       // round is scored on Stroke Play or Stableford, which
                       // enter on the shared screen with the ball's badge and

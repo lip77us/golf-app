@@ -6,6 +6,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:golf_mobile/game_catalog.dart';
 import 'package:golf_mobile/widgets/pink_ball_order_sheet.dart';
 
 String _read(String p) => File(p).readAsStringSync();
@@ -16,9 +17,10 @@ void main() {
 
     test('only sends a ball round to /pink-ball when the round has no scoring game',
         () {
-      expect(
-          src.contains("fsGames.contains('pink_ball') &&\n"
-              '                        round.scoringGame == null'),
+      expect(src.contains("fsGames.contains('pink_ball') &&\n"
+          '                        round.scoringGame == null &&\n'
+          "                        !fsGames.contains('low_net_round') &&\n"
+          "                        !fsGames.contains('stableford')"),
           isTrue);
     });
   });
@@ -43,6 +45,21 @@ void main() {
       final i = src.indexOf('StrokePlayHoleCard? _sideGameMarks');
       final body = src.substring(i, src.indexOf('bool _pinkOrderPrompted'));
       expect(body.contains('rp.stablefordHole(_selectedHole)'), isTrue);
+    });
+  });
+
+  group('who owns the entry', () {
+    test('Stroke Play beats the ball game as the primary', () {
+      expect(primaryGameOf(['pink_ball', 'low_net_round']),
+          GameIds.strokePlay);
+      expect(primaryGameOf(['low_net_round', 'pink_ball']),
+          GameIds.strokePlay);
+    });
+    test('Stableford does too', () {
+      expect(primaryGameOf(['pink_ball', 'stableford']), GameIds.stableford);
+    });
+    test('a ball-only round still has the ball as its primary', () {
+      expect(primaryGameOf(['pink_ball']), GameIds.pinkBall);
     });
   });
 

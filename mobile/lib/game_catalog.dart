@@ -1154,8 +1154,19 @@ String? primaryGameOf(Iterable<String> active) {
   bool acrossGroups(String g) => _kGameById[g]?.acrossGroups ?? false;
   // Prefer an entry-owning game (not side-game-eligible). A side-game-only
   // add-on (Spots) is never a primary.
+  //
+  // **The ball game rides on another game's entry** when there is one: a
+  // tournament group playing Stroke Play (or Stableford, or Skins) with Pink
+  // Ball beside it is scored on THAT game's keypad and tray, which carry the
+  // carrier badge and the lost-ball switch. Pink Ball is not side-game
+  // eligible, so the loop below used to hand it the primary and the group
+  // got the old entry. It is still the primary when nothing else is playing
+  // — the last line below returns it from the list.
   for (final g in list) {
-    if (!canBeSideGame(g) && !sideOnly(g) && !acrossGroups(g)) return g;
+    if (!canBeSideGame(g) && !sideOnly(g) && !acrossGroups(g) &&
+        g != GameIds.pinkBall) {
+      return g;
+    }
   }
   // All side-game types — pick by priority, else the first non-add-on.
   for (final p in _kSidePrimaryPriority) {

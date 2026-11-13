@@ -12945,3 +12945,11 @@ to the Stableford card, which carries the same `ball` block.
 `pink_ball_screen.dart` is unchanged apart from using the shared sheet. A
 Pink Ball PRIMARY tray (survival ranking, ball status) is not built.
 Tests: `mobile/test/pink_ball_entry_test.dart`. Not seen on a device.
+
+**Correction, same day.** The first cut tested only `round.scoringGame == null`,
+which is null whenever `low_net_round` is already in the round's games — a round
+set up with Stroke Play AND Pink Ball (the common one) still went to the old
+screen. Two fixes: the hub also checks `fsGames` for `low_net_round` /
+`stableford`, and `primaryGameOf` no longer hands the primary to Pink Ball when
+another game is playing (it is not side-game eligible, so it used to win the
+loop and keep the keypad off). A ball-only round still resolves to the ball.
