@@ -12970,3 +12970,21 @@ are already safe to repeat. **Not covered:** editing the wizard after a partial
 failure and creating again still leaves the first tournament behind, and a
 server-side guard (same name/date/account within minutes) was not added.
 Tests: `mobile/test/create_once_test.dart`.
+
+### The ball game's scorecard is the leaderboard's (14 Nov 2026)
+
+Scorecard off score entry on a ball round (the shared screen's `tournamentCard`
+is skipped when `pink_ball` is active; `pink_ball_screen` no longer draws
+`StrokePlayProgressGrid`) and onto the Red Ball board. `red_ball_summary` rows
+gained `scorecard` (`_group_scorecard`): every hole in play with gross + strokes
+and `role_id` = the CARRIER that hole, read through `carrier_at` over the
+group's own play order, so the card shows the carrier ahead of the group. The
+ball stops counting where it died: the loss hole keeps its carrier and is
+marked `lost`, nothing after names anybody. `ball_to_par` feeds a `Ball` footer.
+
+`_RedBallView` is stateful: each group's card taps open (a lone group opens
+itself) and draws the shared `HoleGridScorecard` with the carrier in gold
+(`Halved.roleFill`, a role not a result — Hot Seat's anchor reading), no
+strokes table. Tournament rounds WITHOUT a ball still draw the group card on the
+shared screen; say if that should come off too. Not seen on a device.
+Tests: `scoring/tests/test_red_ball.py` (+6), `mobile/test/red_ball_card_test.dart`.

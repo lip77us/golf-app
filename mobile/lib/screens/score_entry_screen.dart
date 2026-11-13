@@ -5305,8 +5305,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 fortyBallsPending: _fbPending[_selectedHole],
                 onFortyBallsPending: (n) =>
                     setState(() => _fbPending[_selectedHole] = n),
+                // **Not on a ball round**: the card is the leaderboard's there
+                // (the ball game's board draws it with the carrier in gold),
+                // and under the keypad and tray it only crowds the entry.
                 tournamentCard:
-                    (rp.scorecard?.fieldStanding.isNotEmpty ?? false),
+                    (rp.scorecard?.fieldStanding.isNotEmpty ?? false) &&
+                        !games.contains('pink_ball'),
                 stablefordResult:
                     games.contains('stableford') ? rp.stablefordResult : null,
                 holesInPlay:             _playOrderFor(rp),

@@ -13,7 +13,6 @@
 /// and syncs automatically (same path as all other entry screens).
 
 import '../widgets/standing_ribbon.dart';
-import '../widgets/stroke_play_progress_grid.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -955,22 +954,8 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
               //
               // The card draws only the holes the group plays, in order, now
               // that the screen knows them.
-              StrokePlayProgressGrid(
-                players:      realMembers,
-                scorecard:    sc,
-                currentHole:  _holeNumber,
-                holesInPlay:  _holes,
-                onTapHole: (h) => setState(() {
-                  // By POSITION. `h - 1` was an index into 1..18.
-                  final i = _holesInPlay.indexOf(h);
-                  if (i >= 0) _pos = i;
-                  _ballLost  = _ballLostOnHole == h;
-                  _pendingScores.clear();
-                  _editHotPid = null;
-                }),
-                handicapMode: sc.scoringMode.isNotEmpty ? sc.scoringMode : 'net',
-                netPercent:   sc.scoringNetPercent,
-              ),
+              // **No scorecard here** — it is the leaderboard's: the ball game's
+              // board draws each group's card with the carrier highlighted.
 
 
               // ── Match Play status (when match play is also active) ───────

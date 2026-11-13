@@ -1472,15 +1472,96 @@ class _StablefordView extends StatelessWidget {
 
 // ---- Red Ball / Pink Ball ----
 
-class _RedBallView extends StatelessWidget {
+class _RedBallView extends StatefulWidget {
+  final Map<String, dynamic> data;
+  const _RedBallView({required this.data});
+
+  @override
+  State<_RedBallView> createState() => _RedBallViewState();
+}
+
+class _RedBallViewState extends State<_RedBallView> {
   static String _ntpLabel(int? ntp) {
     if (ntp == null) return '—';
     if (ntp == 0)   return 'E';
     return ntp < 0 ? '$ntp' : '+$ntp';
   }
 
-  final Map<String, dynamic> data;
-  const _RedBallView({required this.data});
+  Map<String, dynamic> get data => widget.data;
+
+  /// Group numbers whose card is open. A board with ONE group opens it, since
+  /// there is nothing else to look at; with a field it stays closed until
+  /// tapped, because fourteen cards stacked is not a leaderboard.
+  final Set<int> _open = {};
+  bool _seeded = false;
+
+  /// **The group's card, with the ball's carrier in gold on every hole.** The
+  /// carrier's score is the one that counts, so the highlight IS the game —
+  /// gold because it is a role and not a result, the same reading Hot Seat's
+  /// anchor gets. The hole the ball was lost on keeps its carrier (whose ball
+  /// it was) and says `Lost`; nothing after it names anybody.
+  Widget _scorecard(ThemeData theme, Map sc, String gameName) {
+    final holes = (sc['holes'] as List? ?? []).cast<Map>();
+    if (holes.isEmpty) return const SizedBox.shrink();
+    final participants =
+        (sc['participants'] as List? ?? []).cast<Map<String, dynamic>>();
+    final inPlay = (sc['holes_in_play'] as List? ?? []).cast<int>();
+    String figure(Map h) {
+      if (h['lost'] == true) return 'Lost';
+      final t = h['ball_to_par'] as int?;
+      if (t == null) return '—';
+      return t == 0 ? 'E' : (t > 0 ? '+$t' : '$t');
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          HoleGridScorecard(
+            holes: [
+              for (final h in holes)
+                {
+                  'hole': h['hole'],
+                  'par': h['par'],
+                  'stroke_index': h['stroke_index'],
+                  'role_id': h['role_id'],
+                  'scores': h['scores'],
+                },
+            ],
+            participants: participants,
+            holesInPlay: inPlay,
+            title: '$gameName card',
+            legend: null,
+            showStrokes: false,
+            footerRows: [
+              HoleGridFooterRow(
+                label: 'Ball',
+                text: (hole) {
+                  final h = holes.firstWhere((x) => x['hole'] == hole,
+                      orElse: () => const {});
+                  return h.isEmpty ? null : figure(h);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(children: [
+            Container(
+              width: 14, height: 14,
+              decoration: BoxDecoration(
+                color: Halved.roleFill,
+                border: Border.all(color: Halved.roleLine),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text('Carrying the $gameName — this score counts',
+                style: theme.textTheme.bodySmall),
+          ]),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1502,6 +1583,14 @@ class _RedBallView extends StatelessWidget {
       final ntp = m['net_to_par'] as int?;
       if (m['status']?.toString() == 'Survived' && started && ntp != null) {
         if (bestNet == null || ntp < bestNet) bestNet = ntp;
+      }
+    }
+
+    if (!_seeded) {
+      _seeded = true;
+      if (results.length == 1) {
+        final g = (results.first as Map)['group_number'] as int?;
+        if (g != null) _open.add(g);
       }
     }
 
@@ -1622,7 +1711,14 @@ class _RedBallView extends StatelessWidget {
                   ? BorderSide(color: theme.colorScheme.primary.withOpacity(0.4))
                   : BorderSide(color: theme.colorScheme.outlineVariant),
             ),
-            child: ListTile(
+            child: Column(children: [
+             ListTile(
+              onTap: row['scorecard'] == null
+                  ? null
+                  : () => setState(() {
+                        final g = row['group_number'] as int? ?? 0;
+                        if (!_open.remove(g)) _open.add(g);
+                      }),
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               leading: CircleAvatar(
                 radius: 16,
@@ -1677,6 +1773,10 @@ class _RedBallView extends StatelessWidget {
                 ],
               ),
             ),
+             if (row['scorecard'] != null &&
+                 _open.contains(row['group_number'] as int? ?? 0))
+               _scorecard(theme, row['scorecard'] as Map, gameName),
+            ]),
           );
         }),
       ],

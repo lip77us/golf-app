@@ -180,9 +180,13 @@ void main() {
     // Source-level, because the alternative is booting two full screens with a
     // provider apiece. What it guards is the sweep, not the rendering: a third
     // screen added here without the card is the failure this catches.
+    //
+    // The Pink Ball screen is NOT in this list any more (14 Nov 2026): on a
+    // ball round the group's card is the leaderboard's, drawn by the ball
+    // game's board with the carrier in gold (`red_ball_card_test.dart`). The
+    // shared screen still draws it on tournament rounds that have no ball.
     const screens = [
       'lib/screens/score_entry_screen.dart',
-      'lib/screens/pink_ball_screen.dart',
     ];
 
     for (final path in screens) {

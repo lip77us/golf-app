@@ -303,3 +303,66 @@ class RotationDivergenceTests(_Base):
         self.assertEqual(row['display_thru'], 4)
         self.assertEqual(row['total_net_score'],
                          PAR[8] + PAR[9] + PAR[10] + PAR[11])
+
+
+class TheCardNamesTheCarrierTests(_Base):
+    """The board's scorecard: gross with strokes, and on each hole whose ball
+    counted (`role_id`)."""
+
+    def card(self, group):
+        return self.row(group)['scorecard']
+
+    def test_every_hole_in_play_names_its_carrier_through_the_rotation(self):
+        self.play(self.g1, 4)
+        o = self.order(self.g1)
+        holes = self.card(1)['holes']
+        self.assertEqual(len(holes), 18)             # unplayed holes too
+        self.assertEqual([h['role_id'] for h in holes[:4]],
+                         [o[0], o[1], o[2], o[0]])
+        self.assertEqual(holes[10]['role_id'], o[10 % 3])   # ahead of the group
+
+    def test_scores_carry_gross_and_stroke_dots(self):
+        self.play(self.g1, 1, gross=6)
+        first = self.card(1)['holes'][0]
+        self.assertEqual({s['gross'] for s in first['scores']}, {6})
+        self.assertTrue(all('strokes' in s for s in first['scores']))
+        self.assertEqual({p['player_id']
+                          for p in self.card(1)['participants']},
+                         set(self.order(self.g1)))
+
+    def test_the_ball_stops_counting_where_it_died(self):
+        self.play(self.g1, 6)
+        record_hole(self.round, self.g1, 3, net_score=None, ball_lost=True)
+        holes = self.card(1)['holes']
+        o = self.order(self.g1)
+        self.assertEqual(holes[2]['role_id'], o[2])   # whose ball it was
+        self.assertTrue(holes[2]['lost'])
+        self.assertTrue(all(h['role_id'] is None for h in holes[3:]))
+        self.assertFalse(any(h['lost'] for h in holes[:2] + holes[3:]))
+
+    def test_the_balls_own_net_to_par_is_on_the_hole(self):
+        self.play(self.g1, 2)
+        holes = self.card(1)['holes']
+        self.assertEqual(holes[0]['ball_to_par'], 0)   # level par, no strokes
+
+    def test_an_unset_order_names_nobody_and_still_draws(self):
+        self.g1.pink_ball_order = []
+        self.g1.save(update_fields=['pink_ball_order'])
+        self.play(self.g1, 2)
+        self.assertTrue(all(h['role_id'] is None
+                            for h in self.card(1)['holes']))
+
+
+class TheCardFollowsAShotgunStartTests(_Base):
+    start = 13
+
+    def test_the_first_tee_carries_the_first_golfer_and_holes_run_in_order(self):
+        self.play(self.g1, 3)
+        card = self.card_of()
+        o = self.order(self.g1)
+        self.assertEqual([h['hole'] for h in card['holes'][:3]], [13, 14, 15])
+        self.assertEqual(card['holes'][0]['role_id'], o[0])
+        self.assertEqual(card['holes_in_play'][:2], [13, 14])
+
+    def card_of(self):
+        return self.row(1)['scorecard']

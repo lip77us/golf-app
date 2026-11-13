@@ -370,6 +370,57 @@ def calculate_red_ball(round_obj) -> list:
 # Summary helper
 # ---------------------------------------------------------------------------
 
+def _group_scorecard(foursome, members, fs_holes, order, eliminated_on,
+                     hole_pars, hole_sis, card_lookup) -> dict:
+    """The group's card for the board: gross with stroke dots, and on each hole
+    WHO CARRIED THE BALL (`role_id`) — the score that counted.
+
+    **The carrier is read through `carrier_at` over the group's own play
+    order**, like everything else here, so a shotgun group off the 13th has
+    him on the 13th. The ball stops counting where it died: the hole it was
+    lost on still names its carrier (that is whose ball it was), and nothing
+    after it does. `lost` marks that hole.
+
+    Every hole in play is listed, scored or not, so the card shows the
+    carrier AHEAD of the group — the question a spectator asks.
+    """
+    lost_pos = (fs_holes.index(eliminated_on)
+                if eliminated_on in fs_holes else None)
+    holes = []
+    for pos, hole in enumerate(fs_holes):
+        alive_here = lost_pos is None or pos <= lost_pos
+        carrier = carrier_at(order, pos) if (order and alive_here) else None
+        scores = []
+        for m in members:
+            got = card_lookup.get((foursome.pk, m.player_id, hole))
+            if got is None:
+                continue
+            gross, strokes, _net = got
+            scores.append({'player_id': m.player_id, 'gross': gross,
+                           'strokes': strokes})
+        ball = (card_lookup.get((foursome.pk, carrier, hole))
+                if carrier else None)
+        par = hole_pars.get(hole)
+        holes.append({
+            'hole'        : hole,
+            'par'         : par,
+            'stroke_index': hole_sis.get(hole),
+            'role_id'     : carrier,
+            'lost'        : lost_pos is not None and pos == lost_pos,
+            # The ball's own net to par on the hole, for the card's footer.
+            'ball_to_par' : (ball[2] - par) if (ball and par is not None)
+                            else None,
+            'scores'      : scores,
+        })
+    return {
+        'holes'        : holes,
+        'participants' : [{'player_id': m.player_id,
+                           'short_name': m.player.short_name or m.player.name}
+                          for m in members],
+        'holes_in_play': list(fs_holes),
+    }
+
+
 def red_ball_summary(round_obj) -> dict:
     """
     Return a serialisable dict:
@@ -436,15 +487,19 @@ def red_ball_summary(round_obj) -> dict:
                  .select_related('tee')
                  .first())
     hole_pars: dict = {}
+    hole_sis: dict = {}
     if first_mem:
         for h in first_mem.tee.holes:
             hole_pars[h['number']] = h['par']
+            hole_sis[h['number']] = h.get('stroke_index')
 
     # Pre-load HoleScores (gross scored only) so we can compute net-to-par
     # and carrier net totals fresh — bypassing the stored total_net_score which
     # can be stale when Django's update_or_create() doesn't persist net_score.
     # Key: (foursome_id, player_id, hole_number) → net_score
     hs_lookup_summary: dict = {}
+    # What the board's scorecard draws: gross with its stroke dots.
+    card_lookup: dict = {}
     for hs in (HoleScore.objects
                .filter(foursome__round=round_obj, gross_score__isnull=False)
                .values('foursome_id', 'player_id', 'hole_number',
@@ -452,7 +507,9 @@ def red_ball_summary(round_obj) -> dict:
         gs  = hs['gross_score']
         hcp = hs['handicap_strokes'] or 0
         ns  = hs['net_score'] if hs['net_score'] is not None else (gs - hcp)
-        hs_lookup_summary[(hs['foursome_id'], hs['player_id'], hs['hole_number'])] = ns
+        key = (hs['foursome_id'], hs['player_id'], hs['hole_number'])
+        hs_lookup_summary[key] = ns
+        card_lookup[key] = (gs, hcp, ns)
 
     summary_rows = []
     for r in result_list:
@@ -556,6 +613,10 @@ def red_ball_summary(round_obj) -> dict:
             carrier = next((m.player.name for m in members
                             if m.player_id == carrier_pk), None)
 
+        scorecard = _group_scorecard(
+            r.foursome, members, fs_holes, order_list,
+            r.eliminated_on_hole, hole_pars, hole_sis, card_lookup)
+
         group_payout = rank_payout.get(r.rank, 0.0)
         # `display_thru` is what spectator pages render in the Thru
         # column.  After the ball is lost, freeze at the elimination
@@ -596,6 +657,7 @@ def red_ball_summary(round_obj) -> dict:
             # group best. An eliminated group reads a dash; its real total is
             # still on the card above.
             'ball_net_to_par'   : net_to_par if alive else None,
+            'scorecard'         : scorecard,
             'payout'            : group_payout,
             # The place pays the GROUP and splits among its real golfers — the
             # borrowed 4th is not a person and cannot be paid.
