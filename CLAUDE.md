@@ -12988,3 +12988,15 @@ itself) and draws the shared `HoleGridScorecard` with the carrier in gold
 strokes table. Tournament rounds WITHOUT a ball still draw the group card on the
 shared screen; say if that should come off too. Not seen on a device.
 Tests: `scoring/tests/test_red_ball.py` (+6), `mobile/test/red_ball_card_test.dart`.
+
+### "Where we get strokes" on every leaderboard (14 Nov 2026)
+
+A slim tappable row under the game switcher (`_strokesRow`, leaderboard_screen)
+opens `ScorecardGrid(strokesOnly: true)` for the viewer's group (the same
+`_landscapeFoursomeId` the rotate gate uses). It renders the shared
+`StrokesTable` from the grid's OWN `_strokesForHole`, so it can never disagree
+with the dots, and it inherits what the grid already loads per game
+(strokes-off, net %, Sixes per-segment, Triple Cup per-pair). A game where
+nobody strokes says so instead of drawing a blank grid. It shows the primary
+game's allowance; a side game with its own handicap can differ. Not seen on a
+device. Tests: `mobile/test/strokes_row_test.dart`.

@@ -11,6 +11,7 @@ import '../utils/sixes_handicap.dart';
 import 'net_score_button.dart' show scoreCellWithDots;
 import 'solo_board.dart';
 import 'score_mark.dart';
+import 'strokes_table.dart';
 
 // ---------------------------------------------------------------------------
 // ScorecardGrid — the full 18-hole, all-players stacked scorecard.
@@ -72,10 +73,20 @@ class ScorecardGrid extends StatefulWidget {
   /// there's no route to pop — the user rotates back to portrait to dismiss.
   final bool showClose;
 
+  /// **Just where the group gets its strokes**, as the shared [StrokesTable]
+  /// — one row a golfer, one dot a stroke, every hole including the ones not
+  /// yet played. It is built from the SAME `_strokesForHole` the grid's dots
+  /// use, so the two cannot disagree about a stroke, and the grid already
+  /// loads whatever each game needs (strokes-off, a net percentage, Sixes'
+  /// per-segment spread, Triple Cup's per-pair). Opened from the leaderboard's
+  /// "Where we get strokes" row.
+  final bool strokesOnly;
+
   const ScorecardGrid({
     super.key,
     required this.foursomeId,
     this.showClose = true,
+    this.strokesOnly = false,
   });
 
   @override
@@ -411,6 +422,72 @@ class _ScorecardGridState extends State<ScorecardGrid> {
     return strokesOnHole(effective, si);
   }
 
+  Widget _strokesOnlyView(
+      BuildContext context, RoundProvider rp, Scorecard? sc, String modeLabel) {
+    final theme = Theme.of(context);
+    Widget body;
+    if (sc == null) {
+      body = Center(
+        child: rp.loadingScorecard
+            ? const CircularProgressIndicator()
+            : Text(rp.error ?? 'No scorecard available yet.'),
+      );
+    } else {
+      final players = _realPlayers(sc, rp.round);
+      var total = 0;
+      final holes = <Map<String, dynamic>>[];
+      for (final h in sc.holes) {
+        final scores = <Map<String, dynamic>>[];
+        for (final m in players) {
+          final n = _strokesForHole(m, h);
+          total += n;
+          scores.add({'player_id': m.player.id, 'strokes': n});
+        }
+        holes.add({'hole': h.holeNumber, 'scores': scores});
+      }
+      body = ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(modeLabel,
+              style: theme.textTheme.labelLarge
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          const SizedBox(height: 8),
+          if (total == 0)
+            Text('Nobody gets a stroke in this game.',
+                style: theme.textTheme.bodyMedium)
+          else
+            StrokesTable(
+              holes: holes,
+              participants: [
+                for (final m in players)
+                  {
+                    'player_id': m.player.id,
+                    'short_name': m.player.shortName.isNotEmpty
+                        ? m.player.shortName
+                        : m.player.name,
+                  },
+              ],
+              holesInPlay: _holesInPlay(sc, rp),
+            ),
+        ],
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+            'Where we get strokes${sc == null ? '' : ' — Group ${sc.groupNumber}'}',
+            style: const TextStyle(fontSize: 16)),
+        leading: widget.showClose
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.of(context).maybePop(),
+              )
+            : null,
+      ),
+      body: SafeArea(child: body),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final rp   = context.watch<RoundProvider>();
@@ -418,6 +495,8 @@ class _ScorecardGridState extends State<ScorecardGrid> {
     final (modeName, modePct) = _handicapParams(rp);
     final modeLabel           = _modeLabel(modeName, modePct);
     final sc                  = rp.scorecard;
+
+    if (widget.strokesOnly) return _strokesOnlyView(context, rp, sc, modeLabel);
 
     return Scaffold(
       appBar: AppBar(

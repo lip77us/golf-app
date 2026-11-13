@@ -7,6 +7,7 @@ import '../config.dart';
 import '../game_catalog.dart';
 import '../game_colors.dart';
 import '../utils/match_notation.dart';
+import '../widgets/scorecard_grid.dart';
 import '../widgets/stableford_standings.dart';
 import '../widgets/triple_cup_board.dart';
 import '../widgets/match_panel.dart';
@@ -586,6 +587,34 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     );
   }
 
+  Widget _strokesRow(BuildContext context, RoundProvider rp) {
+    final fsId = _landscapeFoursomeId(rp);
+    if (fsId == null) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ScorecardGrid(
+            foursomeId: fsId, showClose: true, strokesOnly: true),
+      )),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(children: [
+          Icon(Icons.fiber_manual_record,
+              size: 10, color: theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text('Where we get strokes',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600)),
+          ),
+          Icon(Icons.chevron_right,
+              size: 18, color: theme.colorScheme.primary),
+        ]),
+      ),
+    );
+  }
+
   Widget _buildBody(BuildContext context, RoundProvider rp) {
     if (rp.loadingLeaderboard) {
       return const Center(child: CircularProgressIndicator());
@@ -632,6 +661,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
               ]),
             ),
           ),
+
+        // **Where does my group get strokes** — one tap, from any board. The
+        // answer lives in the grid's own stroke plan (the dots), so this opens
+        // that, in its strokes-only mode.
+        _strokesRow(context, rp),
 
         // **What the board is MISSING.** Reported of a 60-player Ryder Cup
         // run on paper: a third of the field was not using the app, so the
