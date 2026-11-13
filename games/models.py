@@ -1250,6 +1250,12 @@ class MultiSkinsGame(models.Model):
                         Round, on_delete=models.CASCADE,
                         related_name='multi_skins_game',
                     )
+    # Lock-screen push events already sent (`services.live_activity_multi_
+    # skins_push`). NULL until the first score is pushed: a baseline.
+    announced       = models.JSONField(
+                        null=True, blank=True, default=None,
+                        help_text="Lock-screen push events already sent.",
+                    )
     status          = models.CharField(
                         max_length=20,
                         choices=MatchStatus.choices,

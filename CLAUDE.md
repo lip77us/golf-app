@@ -12911,3 +12911,18 @@ Still not built: Multi-Group Skins' one-per-closed-hole push and "Hole 11 is
 yours", which need the same once-only record on their own models.
 
 Tests: `scoring/tests/test_live_activity_nassau_nine_push.py` (7).
+
+### Multi-Group Skins' push — built (a skin won); "Hole 11 is yours" is not
+
+`services/live_activity_multi_skins_push.py`, merged into `push_round`'s
+per-player map. When the last group posts a hole and it awards a skin, every
+golfer in the pool is rung (the winner in the second person); several holes
+closing on one score name the latest. **A halved hole does not ring** — it
+moves the card silently. Fired once via `MultiSkinsGame.announced`
+(`games/0106`, NULL = baseline, as Annandale and Nassau Nine).
+
+Not built: "Hole 11 is yours" (needs per-group pace across every foursome and a
+rule for "last"). The card kind stays gated in `UNSHIPPED_KINDS`, so these
+pushes only matter once the build carrying it ships.
+
+Tests: `scoring/tests/test_live_activity_multi_skins_push.py` (5).
