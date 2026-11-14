@@ -4,8 +4,10 @@
 ///
 /// By the second season "everybody you have ever played with" is a scroll, and
 /// the fourth man you are looking for is usually one of the same nine people.
-/// Two filters answer the questions a golfer actually asks on the first tee:
-/// who here is on Halved, and who do I play with every week.
+/// The question a golfer asks on the first tee that a list can answer: who here
+/// is on Halved. (A Favorites filter sat beside it until 14 Nov 2026, when the
+/// flag was removed: the Add players screen's regulars come from rounds played,
+/// and two ways to mark the same golfers was confusing.)
 ///
 /// One filter at a time — not multi-select — and [RosterFilter.all] on every
 /// entry to the screen.  A filter does not survive into the next round's setup:
@@ -18,9 +20,8 @@ library;
 import 'package:flutter/material.dart';
 
 import '../theme/halved_brand.dart';
-import 'favorite_flag.dart';
 
-enum RosterFilter { all, favorites, onHalved }
+enum RosterFilter { all, onHalved }
 
 /// Fill and border of an active chip — soft pine, distinct from the sage the
 /// screen sits on.
@@ -32,7 +33,6 @@ class RosterFilterChips extends StatelessWidget {
     required this.value,
     required this.onChanged,
     required this.allCount,
-    required this.favoriteCount,
     required this.onHalvedCount,
   });
 
@@ -42,7 +42,6 @@ class RosterFilterChips extends StatelessWidget {
   /// Counts of the WHOLE roster, not of what a search has narrowed it to: a
   /// filter that could empty the list has to say so before it is tapped.
   final int allCount;
-  final int favoriteCount;
   final int onHalvedCount;
 
   @override
@@ -52,16 +51,12 @@ class RosterFilterChips extends StatelessWidget {
       child: Row(children: [
         _chip(RosterFilter.all, 'All', allCount),
         const SizedBox(width: 7),
-        _chip(RosterFilter.favorites, 'Favorites', favoriteCount,
-            glyph: true),
-        const SizedBox(width: 7),
         _chip(RosterFilter.onHalved, 'On Halved', onHalvedCount),
       ]),
     );
   }
 
-  Widget _chip(RosterFilter filter, String label, int count,
-      {bool glyph = false}) {
+  Widget _chip(RosterFilter filter, String label, int count) {
     final active = value == filter;
     final ink = active ? Halved.pine : Halved.muted;
     return InkWell(
@@ -76,17 +71,6 @@ class RosterFilterChips extends StatelessWidget {
           borderRadius: BorderRadius.circular(Halved.rPill),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          // Only Favorites carries the mark; the other two are text, so the
-          // glyph reads as "this is the flag filter" rather than decoration.
-          if (glyph) ...[
-            SizedBox(
-              width: 13,
-              height: 13,
-              child: CustomPaint(
-                  painter: PinFlagGlyph(color: ink, strokeWidth: 1.9)),
-            ),
-            const SizedBox(width: 6),
-          ],
           Text(label,
               style: TextStyle(
                   fontSize: 12.5, fontWeight: FontWeight.w600, color: ink)),

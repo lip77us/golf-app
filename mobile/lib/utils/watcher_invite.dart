@@ -59,15 +59,11 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
 
   final TextEditingController _searchCtrl = TextEditingController();
   String _search    = '';
-  /// The same chip row the player picker uses — All / Favorites / On Halved.
+  /// The same chip row the player picker uses — All / On Halved.
   ///
-  /// This sheet already had the On Halved half as a lone toggle, and the
-  /// distinction is real: a watcher on Halved opens the link in the app and
-  /// follows live, anyone else lands on the read-only web page. What it was
-  /// missing is the half that actually shortens the list. **The man you ask to
-  /// rail you is one of the same few people you always play with** — which is
-  /// exactly what Favorites already knows, and it was answering that question
-  /// on one screen only.
+  /// The distinction is real: a watcher on Halved opens the link in the app and
+  /// follows live, anyone else lands on the read-only web page. (A Favorites
+  /// chip sat beside it until 14 Nov 2026, when the flag was removed.)
   RosterFilter _filter = RosterFilter.all;
 
   @override
@@ -85,7 +81,6 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
     final q = _search.trim().toLowerCase();
     return widget.golfers.where((p) {
       if (_filter == RosterFilter.onHalved && !p.isOnApp) return false;
-      if (_filter == RosterFilter.favorites && !p.isFavorite) return false;
       if (q.isEmpty) return true;
       return p.name.toLowerCase().contains(q)
           || p.phone.toLowerCase().contains(q);
@@ -420,8 +415,6 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
                       // narrowed it to: a filter that could empty the list has
                       // to say so before it is tapped.
                       allCount: widget.golfers.length,
-                      favoriteCount:
-                          widget.golfers.where((p) => p.isFavorite).length,
                       onHalvedCount:
                           widget.golfers.where((p) => p.isOnApp).length,
                     ),
@@ -456,9 +449,6 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
                           RosterFilter.onHalved =>
                             'No golfers on Halved match that. Invite by phone '
                             'number, or switch to All.',
-                          RosterFilter.favorites =>
-                            'None of your favorites match that. Switch to All, '
-                            'or invite by phone number.',
                           RosterFilter.all =>
                             'No golfers match that. Invite by phone number '
                             'instead.',

@@ -393,14 +393,14 @@ void main() {
       expect(s.zombieOption, isFalse);
     });
 
-    test('PlayerProfile.isOnApp and isFavorite default FALSE', () {
-      // Both are computed per REQUEST from context the single-player
-      // endpoints do not pass. An unknown golfer is not on Halved and is
-      // nobody's favourite — absence must not promote him.
+    test('PlayerProfile.isOnApp defaults FALSE', () {
+      // Computed per REQUEST from context the single-player endpoints do not
+      // pass. An unknown golfer is not on Halved — absence must not promote
+      // him. (`is_favorite` is still sent by the server for shipped builds; this
+      // client no longer reads it.)
       final p = PlayerProfile.fromJson(
-          const {'id': 1, 'name': 'A', 'short_name': 'A'});
+          const {'id': 1, 'name': 'A', 'short_name': 'A', 'is_favorite': true});
       expect(p.isOnApp, isFalse);
-      expect(p.isFavorite, isFalse);
     });
 
     test('FieldPlace.metric defaults to stroke', () {

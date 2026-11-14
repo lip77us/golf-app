@@ -11,7 +11,6 @@ import '../utils/skins_cards.dart';
 import '../widgets/scorecard_groups.dart';
 import '../utils/roster_sections.dart';
 import '../widgets/error_view.dart';
-import '../widgets/favorite_flag.dart';
 import '../widgets/game_chip.dart';
 import '../utils/golfer_invite.dart';
 import '../widgets/halved_mark.dart';
@@ -71,16 +70,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   /// Which cut of the roster the list is showing.  Always [RosterFilter.all]
   /// on entry: a filter does not survive into the next round's setup.
   RosterFilter _rosterFilter = RosterFilter.all;
-
-  /// The golfers on this user's shortlist.  Seeded from the roster's
-  /// `is_favorite` and then owned here, so a tap can fill the flag before the
-  /// round trip comes back.
-  final Set<int> _favoriteIds = {};
-
-  /// Favorites unset inside the Favorites filter that are still within their
-  /// Undo window.  The row would otherwise vanish from under the thumb that
-  /// tapped it, so it keeps drawing (flag empty) until the toast expires.
-  final Set<int> _undoPending = {};
 
   CourseInfo? _selectedCourse;
   // Map of Player ID to Tee ID
@@ -468,9 +457,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             .where((p) => !p.isPhantom)
             .toList()
           ..sort((a, b) => a.name.compareTo(b.name));
-        _favoriteIds
-          ..clear()
-          ..addAll(_players.where((p) => p.isFavorite).map((p) => p.id));
 
         // Automatically select the logged-in user if available.
         if (authPlayer != null) {
@@ -643,8 +629,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         _players = [..._players, created]
           ..sort((a, b) => a.name.compareTo(b.name));
       }
-      // A golfer pulled back off Halved may already be on the shortlist.
-      if (created.isFavorite) _favoriteIds.add(created.id);
       _addedGolfers = true;
     });
     // With seats there is nowhere to put a golfer once they are all taken; he
@@ -670,11 +654,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       });
   }
 
-  /// Whether the flag on this golfer's row is planted.  A golfer inside his
-  /// Undo window reads as UNSET here even though the row is still held on
-  /// screen — the flag empties on the tap, which is what the toast is undoing.
-  bool _isFavorite(int id) => _favoriteIds.contains(id);
-
   /// The picker's list, cut by the active filter and split into sections.
   ///
   /// Filtering never touches the SELECTION — a golfer already added stays added
@@ -683,97 +662,11 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   List<RosterSection> _rosterSections() => rosterSections(
         filter: _rosterFilter,
         roster: _sorted(_players),
-        // A golfer inside his Undo window still draws in the Favorites list —
-        // the row does not go until the toast does.
-        shortlist: {..._favoriteIds, ..._undoPending},
         query: _playerSearch,
       );
 
-  /// Plant or pull the flag.
-  ///
-  /// The write is optimistic — the flag fills on tap, before the round trip —
-  /// because a shortlist is not worth a spinner.  On failure the flag reverts
-  /// and says so; the picker is never blocked.
-  Future<void> _toggleFavorite(PlayerProfile player) async {
-    final wasFavorite = _isFavorite(player.id);
-    final undoable = wasFavorite && _rosterFilter == RosterFilter.favorites;
-
-    setState(() {
-      if (wasFavorite) {
-        _favoriteIds.remove(player.id);
-        // Inside the Favorites filter the row is about to disappear from under
-        // the thumb that tapped it, so hold it on screen for the Undo window.
-        if (undoable) _undoPending.add(player.id);
-      } else {
-        _favoriteIds.add(player.id);
-        _undoPending.remove(player.id);
-      }
-    });
-
-    if (undoable) _offerUndo(player);
-    await _writeFavorite(player, !wasFavorite);
-  }
-
-  /// "<Name> removed from Favorites · Undo", five seconds, above the Back /
-  /// Next bar.  No confirmation dialog: this is a shortlist, not a deletion.
-  ///
-  /// The packet writes the line as "<Name> removed", which on a screen whose
-  /// whole job is adding golfers TO a round reads as though he has been taken
-  /// out of it.  Naming the list says which of the two things just happened.
-  void _offerUndo(PlayerProfile player) {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger
-        .showSnackBar(SnackBar(
-          content: Text('${player.name} removed from Favorites'),
-          duration: const Duration(seconds: 5),
-          behavior: SnackBarBehavior.floating,
-          action: SnackBarAction(
-            label: 'Undo',
-            onPressed: () {
-              if (!mounted) return;
-              setState(() {
-                _favoriteIds.add(player.id);
-                _undoPending.remove(player.id);
-              });
-              _writeFavorite(player, true);
-            },
-          ),
-        ))
-        .closed
-        .then((_) {
-      // Whether it expired or was undone, the row stops being held: by now it
-      // is either a favorite again or genuinely gone.
-      if (mounted && _undoPending.contains(player.id)) {
-        setState(() => _undoPending.remove(player.id));
-      }
-    });
-  }
-
-  Future<void> _writeFavorite(PlayerProfile player, bool favorite) async {
-    final client = context.read<AuthProvider>().client;
-    try {
-      await client.setPlayerFavorite(player.id, favorite);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        // Put the flag back the way it was.
-        if (favorite) {
-          _favoriteIds.remove(player.id);
-        } else {
-          _favoriteIds.add(player.id);
-        }
-        _undoPending.remove(player.id);
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Couldn't save that favorite.")),
-      );
-    }
-  }
-
   /// Section header: the label on the left, whatever belongs on the trailing
-  /// edge on the right — a count, "A – Z", or the hint that a flag comes off
-  /// with a tap.
+  /// edge on the right — a count, or "A – Z".
   Widget _sectionHeader(RosterSection section) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(2, 2, 2, 7),
@@ -837,8 +730,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     switch (_rosterFilter) {
       case RosterFilter.all:
         return 'No golfers yet — search above to add one.';
-      case RosterFilter.favorites:
-        return 'No favorites yet — tap a flag to start your shortlist.';
       case RosterFilter.onHalved:
         return 'Nobody on your roster is on Halved yet.';
     }
@@ -909,9 +800,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     ];
   }
 
-  /// One golfer in the picker: the round checkbox at the leading edge, the
-  /// name / badge / index in the middle, the favorites flag at the trailing
-  /// edge.
+  /// One golfer in the picker: the round checkbox at the trailing edge, the
+  /// name / badge / index in the middle.
   /// One golfer, laid out like the tournament wizard's Select Players step —
   /// flat row, monogram, name over index, control on the trailing edge.
   ///
@@ -999,14 +889,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       ]),
       subtitle: Text('Index ${player.handicapIndex}'),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        // Adding a golfer to the ROUND and adding him to your SHORTLIST are
-        // different things, so the flag keeps its own 44pt target and its own
-        // gesture — it never selects the row.
-        FavoriteFlag(
-          isFavorite: _isFavorite(player.id),
-          golferName: player.name,
-          onPressed: () => _toggleFavorite(player),
-        ),
         // Per D-06: the logged-in user's checkbox is LOCKED, not disabled —
         // the active brand green rather than a dead grey, so the row reads
         // "you're in", with the You chip saying why it cannot come off.
@@ -1734,11 +1616,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                 value: _rosterFilter,
                 onChanged: (f) => setState(() => _rosterFilter = f),
                 allCount: _players.length,
-                favoriteCount: _favoriteIds.length,
                 onHalvedCount: _players.where((p) => p.isOnApp).length,
               ),
               // The list below narrows to the same query and draws each golfer
-              // with a checkbox and a flag, so the ladder's own YOUR GOLFERS
+              // with a checkbox, so the ladder's own YOUR GOLFERS
               // rung would be the same man a second time.
               showLocalMatches: false,
             ),

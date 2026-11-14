@@ -13198,9 +13198,14 @@ not texted.
 - **The push to Halved accounts at Start round.** The toast says "A push goes out at
   Start round" for Use account; nothing sends it yet. Check this before relying on
   that sentence.
-- **Favorites** (the pin flag from the 31 Oct Select Players work) has no place in
-  the new screen; regulars come from rounds played, not from the shortlist. The
-  backend and the flag are untouched and still draw on the Across-groups list.
+- **Favorites were REMOVED from the app** (Paul, 14 Nov 2026): regulars come from
+  rounds played, and a flag was a second way to mark the same golfers. The pin flag,
+  the Favorites filter chip (here and in the watcher picker), `setPlayerFavorite`
+  and `PlayerProfile.isFavorite` are gone, and a source test guards against them
+  returning. **The SERVER keeps its endpoint, `FavoriteGolfer` model and
+  `is_favorite` field**, because shipped builds (2.14 and earlier) still call and
+  read them — removing them is an API-compatibility break, not a cleanup. Old
+  favorites are simply never shown by this client.
 - **A new guest's sex defaults to M**, which only affects the suggested tee on the
   tee step (the handoff removed the tee choice from the sheet).
 

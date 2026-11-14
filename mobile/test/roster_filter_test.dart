@@ -1,19 +1,21 @@
 /// test/roster_filter_test.dart
 /// ---------------------------
-/// The player picker's roster filters and the favorites flag
-/// (Downloads/handoff-select-players §§1–5).
+/// The player picker's roster filter (Downloads/handoff-select-players §1–2).
 ///
-/// Three things here are easy to "fix" into wrongness later, so they are
-/// pinned: favorites are PINNED under All rather than moved out of the
-/// alphabet, a filter never touches the selection, and search composes with
-/// the filter instead of replacing it.
+/// The Favorites flag and its filter were REMOVED on 14 Nov 2026: the Add
+/// players screen's regulars come from rounds played, and two ways to mark the
+/// same golfers was confusing. What is pinned here is what is left — a filter
+/// never touches the selection, search composes with the filter instead of
+/// replacing it, and the order handed in is the order handed back — plus a
+/// guard that the flag does not quietly come back.
 library;
+
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/utils/roster_sections.dart';
-import 'package:golf_mobile/widgets/favorite_flag.dart';
 import 'package:golf_mobile/widgets/roster_filter.dart';
 
 PlayerProfile golfer(int id, String name, {bool onApp = false}) =>
@@ -35,78 +37,20 @@ final roster = [
   golfer(5, 'Sam Reid', onApp: true),
 ];
 
-const favorites = {1, 3, 4}; // Al, Dave, Ray — Ray is a guest.
-
 List<String> namesIn(RosterSection s) => s.players.map((p) => p.name).toList();
 
 void main() {
-  group('under All, favorites are pinned rather than moved', () {
-    test('they appear twice — once at the top, once under their letter', () {
-      final sections = rosterSections(
-          filter: RosterFilter.all, roster: roster, shortlist: favorites);
-
-      expect(sections.map((s) => s.label), ['Favorites', 'All golfers']);
-      expect(namesIn(sections[0]), ['Al Bronson', 'Dave Moran', 'Ray Okafor']);
-      // Somebody scrolling to M for Dave Moran must still find him under M.
-      expect(namesIn(sections[1]), roster.map((p) => p.name).toList());
-    });
-
-    test('the pinned section carries its count', () {
-      final sections = rosterSections(
-          filter: RosterFilter.all, roster: roster, shortlist: favorites);
-      expect(sections[0].trailing, '3');
-      expect(sections[1].trailing, 'A – Z');
-    });
-
-    test('with no favorites there is no empty pinned section', () {
-      final sections = rosterSections(
-          filter: RosterFilter.all, roster: roster, shortlist: const {});
+  group('the two cuts', () {
+    test('All is everyone, A–Z, in the one section', () {
+      final sections = rosterSections(filter: RosterFilter.all, roster: roster);
       expect(sections.map((s) => s.label), ['All golfers']);
-    });
-
-    test('but NOT while searching — the shortcut has nothing left to shorten',
-        () {
-      // Pinning exists so a long roster does not have to be scrolled. A query
-      // has already done that, so the pinned copy would only print the same
-      // golfer twice in a list of two.
-      final sections = rosterSections(
-          filter: RosterFilter.all,
-          roster: roster,
-          shortlist: favorites,
-          query: 'moran');
-
-      expect(sections.map((s) => s.label), ['All golfers']);
-      expect(namesIn(sections.single), ['Dave Moran']);
-    });
-
-    test('and it comes back the moment the query is cleared', () {
-      final sections = rosterSections(
-          filter: RosterFilter.all,
-          roster: roster,
-          shortlist: favorites,
-          query: '   ');
-      expect(sections.map((s) => s.label), ['Favorites', 'All golfers']);
-    });
-  });
-
-  group('the two filters', () {
-    test('Favorites is exactly the shortlist, guests included', () {
-      final sections = rosterSections(
-          filter: RosterFilter.favorites,
-          roster: roster,
-          shortlist: favorites);
-      expect(sections.single.label, 'Your favorites');
-      // Ray Okafor has no Halved account. A regular fourth who never signs up
-      // is the case the filter exists for.
-      expect(namesIn(sections.single),
-          ['Al Bronson', 'Dave Moran', 'Ray Okafor']);
+      expect(sections.single.trailing, 'A – Z');
+      expect(namesIn(sections.single), roster.map((p) => p.name).toList());
     });
 
     test('On Halved is the accounts, and says how many', () {
-      final sections = rosterSections(
-          filter: RosterFilter.onHalved,
-          roster: roster,
-          shortlist: favorites);
+      final sections =
+          rosterSections(filter: RosterFilter.onHalved, roster: roster);
       expect(namesIn(sections.single),
           ['Al Bronson', 'Dave Moran', 'Sam Reid']);
       expect(sections.single.trailing, '3');
@@ -114,14 +58,13 @@ void main() {
   });
 
   group('search and filter compose', () {
-    test('typing inside Favorites searches favorites only', () {
+    test('typing inside a filter searches that filter only', () {
       final sections = rosterSections(
-        filter: RosterFilter.favorites,
+        filter: RosterFilter.onHalved,
         roster: roster,
-        shortlist: favorites,
         query: 'al',
       );
-      // Alan Petersen matches the text but is not on the shortlist.
+      // Alan Petersen matches the text but is not on Halved.
       expect(namesIn(sections.single), ['Al Bronson']);
     });
 
@@ -129,7 +72,6 @@ void main() {
       final sections = rosterSections(
         filter: RosterFilter.onHalved,
         roster: roster,
-        shortlist: favorites,
         query: 'okafor',
       );
       expect(sections.single.players, isEmpty);
@@ -139,7 +81,6 @@ void main() {
       final sections = rosterSections(
         filter: RosterFilter.all,
         roster: roster,
-        shortlist: const {},
         query: '  MORAN ',
       );
       expect(namesIn(sections.single), ['Dave Moran']);
@@ -150,39 +91,10 @@ void main() {
     // The screen floats selected golfers (and You) to the top; sectioning must
     // not quietly re-sort underneath that.
     final selectedFirst = [roster[4], roster[0], roster[1], roster[2], roster[3]];
-    final sections = rosterSections(
-        filter: RosterFilter.all,
-        roster: selectedFirst,
-        shortlist: const {});
+    final sections =
+        rosterSections(filter: RosterFilter.all, roster: selectedFirst);
     expect(namesIn(sections.single),
         selectedFirst.map((p) => p.name).toList());
-  });
-
-  group('the flag control', () {
-    testWidgets('is a 44pt target and reports its state', (tester) async {
-      var taps = 0;
-      final semantics = tester.ensureSemantics();
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: FavoriteFlag(
-            isFavorite: true,
-            golferName: 'Dave Moran',
-            onPressed: () => taps++,
-          ),
-        ),
-      ));
-
-      final box = tester.getSize(find.byType(FavoriteFlag));
-      expect(box.width, greaterThanOrEqualTo(44));
-      expect(box.height, greaterThanOrEqualTo(44));
-
-      await tester.tap(find.byType(FavoriteFlag));
-      expect(taps, 1);
-
-      // The control says WHICH golfer it belongs to, not just "favorite".
-      expect(find.bySemanticsLabel(RegExp('Dave Moran')), findsWidgets);
-      semantics.dispose();
-    });
   });
 
   group('the chip row', () {
@@ -195,7 +107,6 @@ void main() {
             value: RosterFilter.all,
             onChanged: (f) => picked = f,
             allCount: 128,
-            favoriteCount: 9,
             onHalvedCount: 46,
           ),
         ),
@@ -203,11 +114,47 @@ void main() {
 
       // A filter that could empty the list has to say so before it is tapped.
       expect(find.text('128'), findsOneWidget);
-      expect(find.text('9'), findsOneWidget);
       expect(find.text('46'), findsOneWidget);
 
-      await tester.tap(find.text('Favorites'));
-      expect(picked, RosterFilter.favorites);
+      await tester.tap(find.text('On Halved'));
+      expect(picked, RosterFilter.onHalved);
+    });
+
+    testWidgets('there is no Favorites chip', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: RosterFilterChips(
+              value: RosterFilter.all,
+              onChanged: (_) {},
+              allCount: 1,
+              onHalvedCount: 0),
+        ),
+      ));
+      expect(find.text('Favorites'), findsNothing);
+      expect(RosterFilter.values, [RosterFilter.all, RosterFilter.onHalved]);
+    });
+  });
+
+  group('the favorites flag stays removed', () {
+    // Two ways to mark the same golfers was confusing, so there is none. The
+    // server's endpoint and field remain for the shipped builds that call
+    // them; nothing in THIS app may.
+    final offenders = <String>[];
+    final pattern = RegExp(
+        r'setPlayerFavorite|FavoriteFlag|PinFlagGlyph|isFavorite|'
+        r'RosterFilter\.favorites|_favoriteIds|/favorite/');
+    for (final f in Directory('lib').listSync(recursive: true)) {
+      if (f is File && f.path.endsWith('.dart')) {
+        if (pattern.hasMatch(f.readAsStringSync())) offenders.add(f.path);
+      }
+    }
+
+    test('no screen, widget or client call references it', () {
+      expect(offenders, isEmpty, reason: offenders.join(', '));
+    });
+
+    test('the flag widget is gone', () {
+      expect(File('lib/widgets/favorite_flag.dart').existsSync(), isFalse);
     });
   });
 }
