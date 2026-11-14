@@ -1864,6 +1864,42 @@ class DeleteAccountView(APIView):
 # Reference data
 # ---------------------------------------------------------------------------
 
+def _phone_taken_by(account, raw_phone, exclude_pk=None):
+    """The golfer in [account] already holding [raw_phone], or None.
+
+    **A number belongs to one golfer** (Paul, 14 Nov 2026: "I won't support
+    that"). The phone is this app's cross-account identity key -- it is what
+    lights the Halved badge, carries a handicap across, and finds a friend's
+    rounds -- so two golfers on one number cannot both be right, and every
+    lookup keyed on it (``by_phone``) would quietly pick one of them.
+
+    Compared normalized, so ``(415) 555-0100`` and ``+14155550100`` are the
+    same number. A blank or unparseable one never conflicts: plenty of golfers
+    have no number. Phantoms are padding and never hold one.
+    """
+    from accounts.phone import normalize
+    want = normalize(raw_phone or '')
+    if not want:
+        return None
+    qs = (Player.objects.for_account(account).filter(is_phantom=False)
+          .exclude(phone=''))
+    if exclude_pk is not None:
+        qs = qs.exclude(pk=exclude_pk)
+    for p in qs:
+        if normalize(p.phone) == want:
+            return p
+    return None
+
+
+def _phone_taken_response(player):
+    return Response(
+        {'detail': f"That number is already {player.name}'s. "
+                   'A number can belong to one golfer.',
+         'phone': ['That number is already in use.'],
+         'existing_player_id': player.pk},
+        status=status.HTTP_400_BAD_REQUEST)
+
+
 class PlayerListView(APIView):
     def get(self, request):
         players = list(
@@ -1892,6 +1928,10 @@ class PlayerListView(APIView):
             )
         ser = PlayerCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
+        taken = _phone_taken_by(request.user.account,
+                                ser.validated_data.get('phone'))
+        if taken is not None:
+            return _phone_taken_response(taken)
         # account is injected via save() so the client can never
         # spoof which tenant a new Player belongs to.
         player = ser.save(account=request.user.account)
@@ -1926,6 +1966,18 @@ class PlayerDetailView(APIView):
             )
         before_index = player.handicap_index
         before_name = player.name
+        # Only a CHANGE of number is checked, so an unrelated edit to a golfer
+        # who already shares a number (older data, or a couple's home phone)
+        # is not suddenly refused.
+        if 'phone' in request.data:
+            from accounts.phone import normalize
+            if normalize(request.data.get('phone') or '') != normalize(
+                    player.phone or ''):
+                taken = _phone_taken_by(request.user.account,
+                                        request.data.get('phone'),
+                                        exclude_pk=player.pk)
+                if taken is not None:
+                    return _phone_taken_response(taken)
         ser = PlayerSerializer(player, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         player = ser.save()

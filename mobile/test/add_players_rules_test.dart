@@ -256,6 +256,74 @@ void main() {
     });
   });
 
+  group('finding a golfer you already have', () {
+    final roster = [
+      g(1, 'You'),
+      g(2, 'Bill Sinn', phone: '(415) 555-0101'),
+      g(3, 'Bill Jones'),
+      g(4, 'Jo Guest', phone: '(510) 555-0166'),
+      g(5, 'Ghost', phantom: true),
+    ];
+
+    List<int> ids(List<DuplicateGolfer> d) => d.map((x) => x.player.id).toList();
+
+    test('the same name is found, ignoring case and spacing', () {
+      for (final typed in ['Bill Sinn', 'bill sinn', '  BILL   sinn ']) {
+        final d = findDuplicateGolfers(roster, name: typed, mobile: '',
+            meId: 1);
+        expect(ids(d), [2], reason: typed);
+        expect(d.single.byName, isTrue);
+      }
+    });
+
+    test('a first name alone matches a saved Guest of that name', () {
+      // Typing "Jo" would be saved as "Jo Guest", which is who you already have.
+      expect(ids(findDuplicateGolfers(roster, name: 'jo', mobile: '', meId: 1)),
+          [4]);
+    });
+
+    test('a different name, or just the same first name, is not a duplicate',
+        () {
+      expect(findDuplicateGolfers(roster, name: 'Bill', mobile: '', meId: 1),
+          isEmpty,
+          reason: '"Bill" alone would be saved as "Bill Guest"');
+      expect(
+          findDuplicateGolfers(roster, name: 'Bill Smith', mobile: '', meId: 1),
+          isEmpty);
+    });
+
+    test('the same mobile is found even under a different name', () {
+      final d = findDuplicateGolfers(roster,
+          name: 'William Sinn', mobile: '4155550101', meId: 1);
+      expect(ids(d), [2]);
+      expect(d.single.byPhone, isTrue);
+      expect(d.single.byName, isFalse);
+    });
+
+    test('an incomplete mobile never matches', () {
+      expect(
+          findDuplicateGolfers(roster, name: 'x', mobile: '(415) 555-01',
+              meId: 1),
+          isEmpty);
+    });
+
+    test('name and mobile together are one golfer, flagged for both', () {
+      final d = findDuplicateGolfers(roster,
+          name: 'Bill Sinn', mobile: '(415) 555-0101', meId: 1);
+      expect(d.length, 1);
+      expect(d.single.byName && d.single.byPhone, isTrue);
+    });
+
+    test('never you, never a phantom, and nothing typed finds nothing', () {
+      expect(findDuplicateGolfers(roster, name: 'You', mobile: '', meId: 1),
+          isEmpty);
+      expect(findDuplicateGolfers(roster, name: 'Ghost', mobile: '', meId: 1),
+          isEmpty);
+      expect(findDuplicateGolfers(roster, name: '', mobile: '', meId: 1),
+          isEmpty);
+    });
+  });
+
   group('the strokes line, against YOUR index', () {
     String say(({String before, String? number, String after}) l) =>
         '${l.before}${l.number ?? ''}${l.after}';

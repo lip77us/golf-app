@@ -309,3 +309,59 @@ String seatsHeader(String gameLabel, int seated, int seats) {
 /// The right-hand side of the seats header, or null when there is none.
 String seatsStatus(int seated, int seats) =>
     seated >= seats ? 'Full' : 'Add ${seats - seated} more';
+
+/// A golfer already in your list who looks like the one being added.
+class DuplicateGolfer {
+  final PlayerProfile player;
+
+  /// The same name (case and spacing ignored), counting *Jo* as the same as a
+  /// saved *Jo Guest*.
+  final bool byName;
+
+  /// The same mobile. The number is what ties a golfer to a Halved account and
+  /// to rounds shared with friends, so two golfers on one number is worse than
+  /// two with one name.
+  final bool byPhone;
+
+  const DuplicateGolfer(this.player,
+      {required this.byName, required this.byPhone});
+}
+
+String _squash(String s) => s.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
+
+String _last10(String s) {
+  final d = digitsOf(s);
+  return d.length > kMobileDigits ? d.substring(d.length - kMobileDigits) : d;
+}
+
+/// Who in [roster] the golfer being added might already be — by name or by
+/// mobile. Never a phantom or [meId].
+///
+/// **A warning, not a refusal**: two golfers really can share a name, and the
+/// sheet lets him add anyway. What it must not do is let him add a duplicate
+/// without having been told, which is how a second *Bill Sinn* got in after a
+/// search for "Bill" returned a screenful of Bills.
+List<DuplicateGolfer> findDuplicateGolfers(
+  List<PlayerProfile> roster, {
+  required String name,
+  required String mobile,
+  int? meId,
+}) {
+  final typed = _squash(capitalizeName(name));
+  final asGuest = _squash(savedGuestName(name));
+  final number = mobileComplete(mobile) ? _last10(mobile) : '';
+  if (typed.isEmpty && number.isEmpty) return const [];
+
+  final out = <DuplicateGolfer>[];
+  for (final p in roster) {
+    if (p.isPhantom || p.id == meId) continue;
+    final have = _squash(p.name);
+    final byName = typed.isNotEmpty && (have == typed || have == asGuest);
+    final byPhone =
+        number.isNotEmpty && _last10(p.phone) == number && number.length == 10;
+    if (byName || byPhone) {
+      out.add(DuplicateGolfer(p, byName: byName, byPhone: byPhone));
+    }
+  }
+  return out;
+}

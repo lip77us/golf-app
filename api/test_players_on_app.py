@@ -65,9 +65,15 @@ class PlayersOnAppTests(TestCase):
         # the next My Golfers reload.
         self.me.is_account_admin = True
         self.me.save(update_fields=['is_account_admin'])
+        # Her OWN registered number: a number belongs to one golfer, so she
+        # cannot reuse Bob's (see test_player_unique_phone).
+        other = Account.objects.get(name='Other')
+        erin = User.objects.create_user(username='erin', account=other)
+        erin.phone = '+13105550202'
+        erin.save(update_fields=['phone'])
         resp = self.client.post(reverse('api-players'), {
             'name': 'Erin', 'handicap_index': '7.0',
-            'phone': '(310) 555-0101', 'sex': 'M',
+            'phone': '(310) 555-0202', 'sex': 'M',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
         self.assertTrue(resp.data['is_on_app'])

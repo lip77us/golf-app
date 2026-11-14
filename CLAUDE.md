@@ -13229,3 +13229,39 @@ mutation-checked.
 `picker_reselect_search_test` guard points at it). Found by that existing test
 failing when the casual screen's own list was deleted — worth remembering that a
 source guard naming a file is also a record of behaviour the file owns.
+
+### A golfer you already have — a name warns, a number blocks (14 Nov 2026)
+
+Reported from a round: a search for "Bill" returned a screenful of Bills, and a
+second **Bill Sinn** was added without anyone noticing the first. The New golfer
+sheet now checks your list as you type (`findDuplicateGolfers` in
+`utils/add_players.dart`):
+
+- **Same NAME** (case and spacing ignored, and *Jo* counts as a saved *Jo Guest*) →
+  an amber **warning** naming him, his index and how often you have played, with
+  **Use Bill** to take the one you have instead (nothing is created). It does not
+  block: two golfers can share a name.
+- **Same MOBILE** → **blocked**. Paul, 14 Nov: *"I won't support that."* A number
+  belongs to one golfer in an account — it is the cross-account identity key (the
+  Halved badge, the handicap, a friend's rounds), so two golfers on one number cannot
+  both be right and every lookup keyed on it would quietly pick one. The Add button is
+  dead and reads *That number is already in use*, with Use Bill as the way forward,
+  and *Use account* is not offered for a number you already have.
+- **Enforced on the server too** (`_phone_taken_by` in `api/views.py`), on
+  `POST /api/players/` and on a `PATCH` that CHANGES the number, normalized so
+  `(415) 555-0100` and `+14155550100` are one number, returning a 400 whose `detail`
+  names the golfer. **Only a change is checked**, so an unrelated edit to a golfer who
+  already shares a number (older data, a couple's home phone) is not suddenly
+  refused; blank numbers never conflict; another account may hold the same number
+  (a friend's copy of the same golfer is the whole point of the model).
+- On My Golfers there is nowhere to seat him, so the warning has no *Use* button.
+
+**An older build gets the server's 400** if it tries a duplicate number, and shows its
+message; that is deliberate. One existing test (`test_players_on_app`) had created a
+second golfer on Bob's number; it now gives Erin her own.
+
+Tests: `api/test_player_unique_phone.py` (9), the `finding a golfer you already
+have` group in `add_players_rules_test.dart` (7) and `a golfer you already have` in
+`add_players_screen_test.dart` (9). Client and server enforcement were each
+mutation-checked.
+

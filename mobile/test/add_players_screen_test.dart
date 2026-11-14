@@ -435,7 +435,11 @@ void main() {
 
   group('the New golfer sheet', () {
     Future<_Stub> openSheet(WidgetTester t,
-        {String seed = '', double? myIndex = 10.0, _Stub? stub}) async {
+        {String seed = '',
+        double? myIndex = 10.0,
+        _Stub? stub,
+        List<PlayerProfile> roster = const [],
+        bool allowUseExisting = true}) async {
       final s = stub ?? _Stub();
       await t.binding.setSurfaceSize(const Size(390, 1000));
       addTearDown(() => t.binding.setSurfaceSize(null));
@@ -445,8 +449,12 @@ void main() {
           home: Builder(
             builder: (c) => TextButton(
               onPressed: () async =>
-                  _result = await showNewGolferSheet(c, seed: seed,
-                      myIndex: myIndex),
+                  _result = await showNewGolferSheet(c,
+                      seed: seed,
+                      myIndex: myIndex,
+                      roster: roster,
+                      counts: _counts,
+                      allowUseExisting: allowUseExisting),
               child: const Text('open'),
             ),
           ),
@@ -587,6 +595,134 @@ void main() {
       expect(_result!.viaAccount, isTrue);
     });
 
+    group('a golfer you already have', () {
+      final bill = g(30, 'Bill Sinn', index: '12.4', phone: '(415) 555-0199');
+      final withBill = [..._roster, bill];
+
+      testWidgets('typing his name warns, and names him', (t) async {
+        await openSheet(t, seed: 'bill sinn', roster: withBill);
+        expect(find.textContaining('You already have', findRichText: true),
+            findsOneWidget);
+        expect(find.textContaining('Bill Sinn', findRichText: true),
+            findsWidgets);
+        expect(find.textContaining('Index 12.4', findRichText: true),
+            findsOneWidget);
+      });
+
+      testWidgets('no warning for a different name', (t) async {
+        await openSheet(t, seed: 'bill smith', roster: withBill);
+        expect(find.textContaining('You already have', findRichText: true),
+            findsNothing);
+      });
+
+      testWidgets('the warning appears as you type, and goes when you change it',
+          (t) async {
+        await openSheet(t, roster: withBill);
+        final name = find.byWidgetPredicate((w) =>
+            w is TextField && w.decoration?.labelText == 'FULL NAME');
+        await t.enterText(name, 'Bill Sinn');
+        await t.pump();
+        expect(find.textContaining('You already have', findRichText: true),
+            findsOneWidget);
+        await t.enterText(name, 'Bill Sinclair');
+        await t.pump();
+        expect(find.textContaining('You already have', findRichText: true),
+            findsNothing);
+      });
+
+      testWidgets('Use Bill returns the golfer you already have, creating none',
+          (t) async {
+        final stub = await openSheet(t, seed: 'bill sinn', roster: withBill);
+        await t.tap(find.text('Use Bill'));
+        await t.pumpAndSettle();
+        expect(_result!.existing, isTrue);
+        expect(_result!.player.id, 30);
+        expect(stub.created, isEmpty, reason: 'nobody new was written');
+      });
+
+      testWidgets('it warns but does not block: adding anyway still works',
+          (t) async {
+        final stub = await openSheet(t, seed: 'bill sinn', roster: withBill);
+        await t.tap(find.text('Add Bill'));
+        await t.pumpAndSettle();
+        expect(stub.created.single['name'], 'Bill Sinn');
+        expect(_result!.existing, isFalse);
+      });
+
+      testWidgets('the same mobile blocks the add: a number belongs to one golfer',
+          (t) async {
+        final stub = await openSheet(t, seed: 'William', roster: withBill);
+        await t.enterText(
+            find.byWidgetPredicate(
+                (w) => w is TextField && w.decoration?.labelText == 'MOBILE'),
+            '4155550199');
+        await t.pump();
+        expect(find.textContaining('That number is already',
+                findRichText: true),
+            findsWidgets);
+        expect(find.text('That number is already in use'), findsOneWidget,
+            reason: 'the button says why it is dead');
+        await t.tap(find.text('That number is already in use'),
+            warnIfMissed: false);
+        await t.pumpAndSettle();
+        expect(stub.created, isEmpty, reason: 'nothing was written');
+        expect(_result, isNull);
+      });
+
+      testWidgets('a number you already have still offers Use Bill',
+          (t) async {
+        final stub = await openSheet(t, seed: 'William', roster: withBill);
+        await t.enterText(
+            find.byWidgetPredicate(
+                (w) => w is TextField && w.decoration?.labelText == 'MOBILE'),
+            '(415) 555-0199');
+        await t.pump();
+        await t.ensureVisible(find.text('Use Bill'));
+        await t.pumpAndSettle();
+        await t.tap(find.text('Use Bill'));
+        await t.pumpAndSettle();
+        expect(_result!.existing, isTrue);
+        expect(_result!.player.id, 30);
+        expect(stub.created, isEmpty);
+      });
+
+      testWidgets('a number on Halved is not offered as a second account when it is already yours',
+          (t) async {
+        final stub = _Stub()
+          ..phoneHit = {
+            'found': true,
+            'name': 'Bill Sinn',
+            'handicap_index': '12.4',
+            'sex': 'M',
+            'short_name': 'BS',
+          };
+        await openSheet(t, seed: 'bill', roster: withBill, stub: stub);
+        await t.enterText(
+            find.byWidgetPredicate(
+                (w) => w is TextField && w.decoration?.labelText == 'MOBILE'),
+            '4155550199');
+        await t.pump(const Duration(milliseconds: 500));
+        await t.pump();
+        expect(find.text('Use account'), findsNothing,
+            reason: 'creating him again would be the duplicate');
+      });
+
+      testWidgets('a name match alone does not block', (t) async {
+        await openSheet(t, seed: 'bill sinn', roster: withBill);
+        expect(find.text('That number is already in use'), findsNothing);
+        expect(find.text('Add Bill'), findsOneWidget);
+      });
+
+      testWidgets('where there is nowhere to seat him it is only a warning',
+          (t) async {
+        await openSheet(t,
+            seed: 'bill sinn', roster: withBill, allowUseExisting: false);
+        expect(find.textContaining('You already have', findRichText: true),
+            findsOneWidget);
+        expect(find.text('Use Bill'), findsNothing);
+      });
+    });
+
     testWidgets('Cancel closes with no golfer', (t) async {
       final stub = await openSheet(t, seed: 'jo');
       await t.tap(find.text('Cancel'));
@@ -623,6 +759,13 @@ void main() {
       expect(body, isNot(contains('textTheGame')));
     });
 
+    test('the sheet is given who you already have, so it can warn', () {
+      final at = src.indexOf('Future<void> _openNewGolfer(');
+      final body = src.substring(at, src.indexOf('void _onHalvedAdded'));
+      expect(body, contains('roster: _players'));
+      expect(body, contains('result.existing'));
+    });
+
     test('a full table still saves the golfer, and says so', () {
       expect(src, contains('Take someone out to seat them.'));
     });
@@ -631,8 +774,13 @@ void main() {
   group('My Golfers uses the sheet to add', () {
     final src = File('lib/screens/player_list_screen.dart').readAsStringSync();
 
+    test('it warns about a duplicate but has nowhere to seat him', () {
+      expect(src, contains('roster: _all'));
+      expect(src, contains('allowUseExisting: false'));
+    });
+
     test('a new golfer is the New golfer sheet; an edit is still the form', () {
-      expect(src, contains('showNewGolferSheet(context)'));
+      expect(src, contains('showNewGolferSheet('));
       expect(src, contains('PlayerFormScreen(player: player'));
     });
   });

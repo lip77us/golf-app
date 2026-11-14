@@ -114,7 +114,12 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
     // players screen opens, so the two cannot differ. Editing one still opens
     // the full form, which has the fields the sheet deliberately leaves out.
     if (isNew && !readOnly) {
-      final result = await showNewGolferSheet(context);
+      final result = await showNewGolferSheet(
+        context,
+        roster: _all,
+        // Nowhere to seat him here, so the warning is only a warning.
+        allowUseExisting: false,
+      );
       if (result == null || !mounted) return;
       await _load();
       if (!mounted) return;

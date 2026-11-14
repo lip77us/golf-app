@@ -266,10 +266,19 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       seed: query,
       myIndex: me == null ? null : double.tryParse(me.handicapIndex),
       slope: _myTeeSlope,
+      roster: _players,
+      counts: _regularCounts,
     );
     if (result == null || !mounted) return;
     _addCreatedGolfer(result.player);
     final first = result.player.name.split(' ').first;
+    if (result.existing) {
+      // He was already in your list: nothing was created, he is just seated.
+      _toast(_playerTees.containsKey(result.player.id)
+          ? '$first added from your golfers.'
+          : '$first is in your golfers. Take someone out to seat them.');
+      return;
+    }
     // Every seat taken: the golfer is saved to your golfers for next time but
     // there is nowhere to put him in this round.
     _toast(_playerTees.containsKey(result.player.id)
