@@ -272,4 +272,51 @@ void main() {
       expect(body, contains('_sideGames.remove(picked)'));
     });
   });
+  sideGameTests();
+}
+
+void sideGameTests() {
+  GameMeta m(String id) => gameMeta(id)!;
+  final all = [
+    for (final id in ['nassau', 'match_18', 'skins', 'spots', 'honors',
+      'low_net_round', 'stableford'])
+      m(id)
+  ];
+
+  group('side games: two chips, the rest behind More side games', () {
+    test('Skins and Spots are the chips, in that order', () {
+      final s = splitSideGames(all, 'sixes');
+      expect(s.pinned.map((g) => g.id), ['skins', 'spots']);
+      expect(s.other.map((g) => g.id),
+          ['nassau', 'match_18', 'honors', 'low_net_round', 'stableford']);
+    });
+
+    test('under Skins the pair is Spots and Stroke Play', () {
+      // Skins cannot be its own side game, so it is not in the eligible list.
+      final eligible = all.where((g) => g.id != 'skins').toList();
+      final s = splitSideGames(eligible, 'skins');
+      expect(s.pinned.map((g) => g.id), ['spots', 'low_net_round']);
+      expect(s.other.map((g) => g.id),
+          ['nassau', 'match_18', 'honors', 'stableford']);
+    });
+
+    test('nothing is lost: pinned plus other is everything eligible', () {
+      for (final p in ['skins', 'sixes', 'nassau', 'wolf']) {
+        final eligible = all.where((g) => g.id != p).toList();
+        final s = splitSideGames(eligible, p);
+        expect({...s.pinned, ...s.other}.length, eligible.length, reason: p);
+      }
+    });
+
+    test('a pinned game that is not eligible is left out, not invented', () {
+      // Spots does not ride every primary; no chip appears for what cannot run.
+      final s = splitSideGames([m('nassau'), m('stableford')], 'sixes');
+      expect(s.pinned, isEmpty);
+      expect(s.other.length, 2);
+    });
+
+    test('the row has More side games only when something is behind it', () {
+      expect(splitSideGames([m('skins'), m('spots')], 'sixes').other, isEmpty);
+    });
+  });
 }

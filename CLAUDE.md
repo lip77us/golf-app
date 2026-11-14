@@ -13127,6 +13127,17 @@ Tests: `api/test_game_history.py` (9), `mobile/test/game_suggestions_test.dart`
 (25, the handoff's r1–r5 against the real catalog, four mutations killed),
 `mobile/test/all_games_sheet_test.dart` (19).
 
+**Side games: two chips, the rest behind More side games.** Skins and Spots
+are the chips (`pinnedSideGamesFor`); **under a Skins primary, where Skins
+cannot be its own side game, the pair is Spots and Stroke Play.** Every other
+eligible side game goes in a checkbox sheet (`widgets/side_games_sheet.dart`)
+that stays open until Done, because side games are any number. A side game that
+is ticked from the sheet also shows as a chip, so it can be unticked from the
+row. The chips and the sheet share `_setSide`, so the conflict rule (a game that
+cannot run beside another) is one function. Spots and Honors gained `summary`
+lines for the sheet. Tests: `side_games_sheet_test.dart` (7) and the
+`side games` group in `game_suggestions_test.dart` (5).
+
 **Not built:** side games are not re-ordered to the handoff's Skins, Spots, Stableford, Honors,
 Stroke Play (they come from `sideGamesFor`, unchanged); and Solo and Across
 groups keep the existing size control rather than guessing a group size.

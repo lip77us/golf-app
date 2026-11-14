@@ -22,6 +22,7 @@ import '../widgets/unified_player_search.dart';
 import '../widgets/course_bar.dart';
 import '../utils/game_suggestions.dart';
 import '../widgets/all_games_sheet.dart';
+import '../widgets/side_games_sheet.dart';
 import '../widgets/dashed_border.dart';
 import 'player_form_screen.dart';
 
@@ -266,6 +267,23 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     }
   }
 
+  /// The side-game row: Skins and Spots, any other side game that is already
+  /// ticked (so it can be unticked from here), then **More side games** when
+  /// there is anything behind it.
+  List<Widget> _sideChips() {
+    final split = splitSideGames(_eligibleSideGames, _primaryGame);
+    return [
+      for (final m in split.pinned) _buildSideChip(m),
+      for (final m in split.other)
+        if (_sideGames.contains(m.id)) _buildSideChip(m),
+      if (split.other.isNotEmpty)
+        _MoreGamesChip(
+          label: 'More side games',
+          onTap: () => _openMoreSideGames(split.other),
+        ),
+    ];
+  }
+
   /// How many primary games fit this group and round.
   int get _allGamesFit =>
       casualGames.where((m) => _fitsGame(m.id)).length;
@@ -460,18 +478,36 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   Widget _buildSideChip(GameMeta meta) => GameSelectableChip(
         gameId:   meta.id,
         selected: _sideGames.contains(meta.id),
-        onSelected: (picked) => setState(() {
-          if (picked) {
-            _sideGames.add(meta.id);
-            // Drop any already-selected side game that conflicts with this one
-            // (e.g. Spots and Skins are mutually exclusive).
-            _sideGames.removeWhere(
-                (g) => g != meta.id && !gamesCompatible(meta.id, g));
-          } else {
-            _sideGames.remove(meta.id);
-          }
-        }),
+        onSelected: (picked) => setState(() => _setSide(meta.id, picked)),
       );
+
+  /// Turn a side game on or off. **Mutates only; callers wrap it in
+  /// `setState`.** Shared by the chips and the More side games sheet so a game
+  /// cannot behave differently depending on which one ticked it.
+  void _setSide(String id, bool picked) {
+    if (picked) {
+      _sideGames.add(id);
+      // Drop any already-selected side game that conflicts with this one
+      // (e.g. a game that cannot run beside it).
+      _sideGames.removeWhere((g) => g != id && !gamesCompatible(id, g));
+    } else {
+      _sideGames.remove(id);
+    }
+  }
+
+  /// **More side games** — the eligible ones that have no chip. Toggles stay
+  /// live under the sheet, so the chips behind it already show the result.
+  Future<void> _openMoreSideGames(List<GameMeta> other) async {
+    await showSideGamesSheet(
+      context,
+      games: other,
+      selected: _sideGames,
+      onToggle: (id, picked) {
+        setState(() => _setSide(id, picked));
+        return {..._sideGames};
+      },
+    );
+  }
 
   /// Inline-create a login-less golfer during casual-round setup. Adds them to
   /// the roster and, if a course is already chosen, auto-selects them with their
@@ -1487,10 +1523,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: [
-                  for (final meta in _eligibleSideGames)
-                    _buildSideChip(meta),
-                ],
+                children: _sideChips(),
               ),
             ),
           ],

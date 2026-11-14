@@ -179,3 +179,33 @@ List<String> chipsWithPick(List<String> chips, String? pick, int cap) {
   final kept = chips.take(cap - 1).toList();
   return [...kept, pick];
 }
+
+/// The side games that get a chip of their own on New Round. Everything else
+/// that is eligible sits behind **More side games** (Paul, 14 Nov 2026) — Skins
+/// and Spots are what groups reach for, and a row of seven chips buries them.
+///
+/// **Except under Skins**, where Skins cannot be its own side game, so the pair
+/// is Spots and Stroke Play instead: the row never has a hole where the
+/// favourite would have been.
+List<String> pinnedSideGamesFor(String? primaryId) =>
+    primaryId == GameIds.skins
+        ? const [GameIds.spots, GameIds.strokePlay]
+        : const [GameIds.skins, GameIds.spots];
+
+/// [eligible] split into the pinned chips and the rest, each in the order it
+/// arrived. The pinned ones follow [pinnedSideGamesFor]'s own order, not the
+/// eligible list's, so the favourite is always ahead.
+({List<GameMeta> pinned, List<GameMeta> other}) splitSideGames(
+    List<GameMeta> eligible, String? primaryId) {
+  final want = pinnedSideGamesFor(primaryId);
+  final pinned = <GameMeta>[
+    for (final id in want)
+      for (final m in eligible)
+        if (m.id == id) m,
+  ];
+  final other = [
+    for (final m in eligible)
+      if (!want.contains(m.id)) m,
+  ];
+  return (pinned: pinned, other: other);
+}

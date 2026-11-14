@@ -528,6 +528,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id          : GameIds.spots,
     displayName : 'Spots',
+    summary      : "Birdies, sandies, greenies",
     casual      : true,
     minPlayers  : 2,
     maxPlayers  : 4,
@@ -544,6 +545,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id          : GameIds.honors,
     displayName : 'Honors',
+    summary      : "Hold the honor, earn the point",
     casual      : true,
     minPlayers  : 2,
     maxPlayers  : 4,
