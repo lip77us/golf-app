@@ -1423,6 +1423,16 @@ class ApiClient {
   /// new account with no rounds.
   /// The course finder's Recents: five at most, newest first, home course
   /// included and flagged, each with its last date and tees.
+  /// The primary game of each finished casual round this golfer played,
+  /// newest first. Drives the game guess on New Round.
+  Future<List<GameHistoryEntry>> getGameHistory() async {
+    final data = await _get('/rounds/game-history/');
+    return ((data as Map)['games'] as List)
+        .map((g) => GameHistoryEntry.fromJson(g as Map<String, dynamic>))
+        .where((g) => g.game.isNotEmpty)
+        .toList();
+  }
+
   Future<List<RecentPlay>> getRecentPlays() async {
     final data = await _get('/courses/recent-plays/');
     return (data as List)

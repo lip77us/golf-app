@@ -13057,3 +13057,62 @@ Tests: `api/test_auto_home_course.py` (14), `api/test_backfill_course_coordinate
 (7), `mobile/test/course_find_test.dart` (26), `mobile/test/default_course_test.dart`
 (24). `near_me_picker_test.dart` was deleted with the widget it tested. Not seen
 on a device.
+
+## Game selection — a guess from history, and the All games sheet (14 Nov 2026)
+
+`~/Downloads/handoff-game-selection-more-games`. New Round now offers **four
+primary chips worked out from the golfer's history** (three across groups),
+then a dashed **More games** chip that opens an **All games** sheet. Built and
+tested; **not seen on a device.**
+
+**The rules** (`utils/game_suggestions.dart`, pure, `suggestGames`): the last
+game he finished, if it fits; then the games he has finished most often among
+those that fit (a tie to the more recent); then the default list for the group
+size. Selected is the last game if it fits, otherwise the first chip, so **a
+primary is always chosen**. A tap on a chip, or a pick from the sheet, is kept
+across a group-size change while it still fits (`_tapped`). A sheet pick that
+is not already a chip **takes the fourth slot** (`chipsWithPick`), never a
+fifth, and leaves the side games.
+
+**History** is `GET /api/rounds/game-history/` (`GameHistoryView`): the primary
+of each FINISHED casual round the golfer has a membership in, own account only,
+newest first, all time. The stored `primary_game`, else a round with exactly one
+active game; a round with several and no stored primary is skipped, because
+guessing is why the primary is stored at all. Tournament rounds never count.
+Loaded best-effort once on open; a failure leaves the defaults showing.
+
+**The catalog wins over the handoff's table** where they disagree, because the
+handoff says the registry is the source of truth and the screen's own `fits`
+filter is what both the chips and the sheet ask. Concretely: Skins is 2–4 in
+the app (the handoff's default list for 5–6 names it, and it is skipped), so 5–6
+shows Annandale Friday alone; Across groups shows only Multi-Group Skins, since
+Stroke Play and Stableford are not across-group games here. Skipped defaults are
+not padded, so those sizes show fewer than four chips.
+
+**Behaviour changes worth knowing:**
+- A game is now **selected from the first moment** (Nassau on a foursome with no
+  history). It used to start null and Next stayed disabled until a pick, so
+  `_hasWork` stopped asking `_primaryGame != null` — the guess always selects
+  something — and asks `_tapped` instead. Backing out of an untouched form is
+  still silent.
+- A short round (segment games hidden) and a group-size change both re-guess
+  through `_recomputeGames`, replacing the two places that used to null the
+  primary.
+- **The sheet's descriptions are a new catalog field**, `GameMeta.summary` — one
+  short phrase. `blurb` stays as it was: it is a sentence or two on the picker
+  cards, and several games have none.
+- The sheet hides a one-golfer game outside Solo, and a game that does not fit
+  but shares its name with one that does (Solo Stroke Play vs Stroke Play), so no
+  two rows read alike. A game that fits the group but needs 18 holes sits under
+  its own label, **Needs 18 holes**, rather than under "Not for four".
+- The chip says **Vegas**, the sheet **Las Vegas** (`gameChipLabel`).
+
+Tests: `api/test_game_history.py` (9), `mobile/test/game_suggestions_test.dart`
+(25, the handoff's r1–r5 against the real catalog, four mutations killed),
+`mobile/test/all_games_sheet_test.dart` (19).
+
+**Not built:** the sheet reads the catalog order, not the prototype's;
+side games are not re-ordered to the handoff's Skins, Spots, Stableford, Honors,
+Stroke Play (they come from `sideGamesFor`, unchanged); and Solo and Across
+groups keep the existing size control rather than guessing a group size.
+

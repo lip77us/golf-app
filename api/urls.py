@@ -34,6 +34,7 @@ urlpatterns = [
     path('players/<int:pk>/favorite/', views.PlayerFavoriteView.as_view(), name='api-player-favorite'),
     path('courses/',           views.CourseListView.as_view(),   name='api-courses'),
     path('courses/recent/',    views.RecentCoursesView.as_view(), name='api-recent-courses'),
+    path('rounds/game-history/', views.GameHistoryView.as_view(), name='api-game-history'),
     path('courses/recent-plays/', views.RecentPlaysView.as_view(), name='api-recent-plays'),
     path('courses/<int:pk>/',  views.CourseDetailView.as_view(), name='api-course-detail'),
     path('tees/',              views.TeeListView.as_view(),      name='api-tees'),

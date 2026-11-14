@@ -161,6 +161,11 @@ class GameMeta {
   /// same words, by being in the catalog.
   final String? blurb;
 
+  /// One short line for the All games sheet on New Round — what the game IS,
+  /// in a phrase. Separate from [blurb], which is a sentence or two for the
+  /// picker cards and says more than a list row has room for.
+  final String? summary;
+
   /// Where this game's entry and payouts are actually set, when they are not
   /// set on the picker. Irish Rumble, Better Ball and Hot Spot each own a
   /// setup screen that asks for rules AND money, and the payout table there
@@ -283,6 +288,7 @@ class GameMeta {
     required this.displayName,
     this.casual               = false,
     this.blurb,
+    this.summary,
     this.moneyNote,
     this.tournament           = false,
     this.canBePrimary         = false,
@@ -325,6 +331,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id           : GameIds.sixes,
     displayName  : 'Sixes',
+    summary      : "Three six-hole matches, partners rotate",
     casual       : true,
     exactPlayers : 4,
     hasLiveActivity: true,
@@ -344,6 +351,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id           : GameIds.vegas,
     displayName  : 'Las Vegas',
+    summary      : "Team scores read as a two-digit number",
     casual       : true,
     exactPlayers : 4,
     allowsSideGames: false,
@@ -361,6 +369,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id           : GameIds.fourball,
     displayName  : 'Fourball',
+    summary      : "Better ball match, two v two",
     casual       : true,
     exactPlayers : 4,
     // Shares the match-play card with Singles Match — one match between two
@@ -383,6 +392,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id           : GameIds.points531,
     displayName  : 'Points (5-3-1)',
+    summary      : "Nine points a hole for three",
     casual       : true,
     exactPlayers : 3,
     // Owns the hole-by-hole ENTRY screen (can't co-host an entry-owning game),
@@ -398,6 +408,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id          : GameIds.nassau,
     displayName : 'Nassau',
+    summary      : "Front, back and overall match",
     casual      : true,
     hasLiveActivity: true,
     // F9 / B9 / Overall bets + presses — needs a full 18.
@@ -422,6 +433,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id          : GameIds.tripleNassau,
     displayName : 'Triple Nassau',
+    summary      : "Three Nassaus for a threesome",
     casual      : true,
     // Three simultaneous F9/B9/Overall 1v1 Nassaus — needs a full 18.
     requiresFullRound: true,
@@ -438,6 +450,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id          : GameIds.annandaleFriday,
     displayName : 'Annandale Friday',
+    summary      : "Three better-ball Nassaus for five or six",
     casual      : true,
     canBePrimary: true,
     blurb       : 'The only game for a group of 5 or 6: pairs Nassaus between '
@@ -462,6 +475,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id          : GameIds.match18,
     displayName : 'Singles Match',
+    summary      : "One v one match play",
     casual      : true,
     hasLiveActivity: true,
     // A heads-up 18-hole match (Overall-only Nassau).  Always 1-v-1: in a 3-4
@@ -480,6 +494,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id          : GameIds.nassauNine,
     displayName : 'Nassau Nine',
+    summary      : "One match over nine holes, with presses",
     casual      : true,
     // One match over the holes actually played (no F9/B9 split), with presses —
     // the Nassau to use on a 9-hole / back-9 round. Runs on partial rounds
@@ -496,6 +511,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id          : GameIds.skins,
     displayName : 'Skins',
+    summary      : "Low score wins the hole, ties carry",
     casual      : true,
     minPlayers  : 2,
     maxPlayers  : 4,
@@ -543,6 +559,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id          : GameIds.wolf,
     displayName : 'Wolf',
+    summary      : "Wolf picks a partner or goes alone",
     casual      : true,
     minPlayers  : 3,
     maxPlayers  : 4,
@@ -562,6 +579,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id          : GameIds.rabbit,
     displayName : 'Rabbit',
+    summary      : "Hold the rabbit at the end of each stretch",
     casual      : true,
     exactPlayers: 3,
     hasLiveActivity: true,
@@ -577,6 +595,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id           : GameIds.banker,
     displayName  : 'Banker',
+    summary      : "One golfer banks each hole against the rest",
     casual       : true,
     // One golfer banks and the rest bet against him individually, so the
     // format works from three golfers up. Four is the usual table.
@@ -600,6 +619,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id           : GameIds.sequoyaThrees,
     displayName  : 'Sequoya 3s',
+    summary      : "Six three-hole matches with presses",
     casual       : true,
     // Six 2v2 matches have no other shape — four golfers split 2v2 in exactly
     // three ways, and the format's whole point is that those three repeat.
@@ -613,6 +633,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id          : GameIds.survivor,
     displayName : 'Survivor',
+    summary      : "Lose a hole and you're out",
     casual      : true,
     exactPlayers: 3,
     hasLiveActivity: true,
@@ -628,6 +649,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id           : GameIds.tripleCup,
     displayName  : 'One-Round Triple Cup',
+    summary      : "Four matches make one cup, four golfers",
     casual       : true,
     // Three segments (fourball / foursomes / singles) — needs a full 18.
     requiresFullRound: true,
@@ -655,6 +677,7 @@ const List<GameMeta> kGameCatalog = [
     blurb     : "A four-man knockout inside every group on day 1; the group winners play day 2 as one foursome.",
     moneyNote : "Funded by a carve-out from the championship pot, set on the bracket screen.",
     displayName  : 'Mini Singles Bracket',
+    summary      : "Singles knockout inside the group",
     // Single user-facing pick that auto-dispatches per foursome:
     //   4-player groups → single-elimination bracket (two semis on
     //                     holes 1–9, Final + 3rd-place on holes 10–18).
@@ -698,6 +721,7 @@ const List<GameMeta> kGameCatalog = [
     // the server's leaderboard label, the hub card and the screen title all
     // say this, and a rename has to move all of them at once.
     displayName : 'Multi-Group Skins',
+    summary      : "One skins pool across the groups",
     blurb     : "One skins pool across the groups, played by whoever is in "
                 "it — tick the names and their scores come off the cards "
                 "their groups are already keeping. Low score on a hole takes "
@@ -738,6 +762,7 @@ const List<GameMeta> kGameCatalog = [
     blurb     : "Every golfer ranked on net to par, against the whole field.",
     moneyNote : "Entry and payouts are set on the Stroke Play screen.",
     displayName  : 'Stroke Play',
+    summary      : "Total strokes, gross or net",
     casual       : true,
     tournament   : true,
     canBePrimary : true,
@@ -756,6 +781,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id           : GameIds.stableford,
     displayName  : 'Stableford',
+    summary      : "Points for each hole against par",
     // Casual Stableford is live (editable points table + Low-Net-style money).
     // Tournament-side use is the separate `stableford_championship` entry in
     // kChampionshipGames (still deferred — casual first).
@@ -913,6 +939,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id          : GameIds.soloStroke,
     displayName : 'Stroke Play',
+    summary      : "Your net total against par",
     casual      : true,
     blurb       : 'Count every shot. Your score is your net total against par '
                   'for the round.',
@@ -924,6 +951,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id          : GameIds.soloNassau,
     displayName : 'Nassau',
+    summary      : "Front, back and overall, each against par",
     casual      : true,
     blurb       : 'A simple Nassau against par: the front nine, the back nine '
                   'and all 18 are three matches. Beat par to win a hole, make '
@@ -936,6 +964,7 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id          : GameIds.soloMatch,
     displayName : 'Match Play',
+    summary      : "An 18-hole match against par",
     casual      : true,
     blurb       : 'An 18-hole match against par. Beat par to win the hole, '
                   'make par to halve it, make bogey or worse to lose it. The '

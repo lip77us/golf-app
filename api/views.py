@@ -2138,6 +2138,60 @@ class RecentCoursesView(APIView):
         return Response(CourseSerializer(courses, many=True).data)
 
 
+class GameHistoryView(APIView):
+    """
+    GET /api/rounds/game-history/
+
+    The primary game of every FINISHED casual round this golfer played,
+    newest first, so New Round can guess which game he wants
+    (``handoff-game-selection-more-games``):
+
+        {"games": [{"game": "nassau", "date": "2026-11-13"}, ...]}
+
+    * **Finished only** -- ``status == complete``.  A round somebody set up and
+      abandoned, or is still playing, is not a game he plays.
+    * **Played in** -- the golfer holds a membership in it.  Own account only:
+      a friend's round is not in this account's history.
+    * **The stored primary, else the only game.**  Rounds made before
+      ``primary_game`` existed carry none; a round with exactly one active game
+      has an unambiguous primary, and one with several does not, so it is
+      skipped rather than guessed (the same reason the primary is stored at
+      all).
+    * Tournament rounds are not casual and never count.
+    * **All time**, no cap: "most played" is over his whole history, and one
+      short row a round is cheap.
+    """
+
+    def get(self, request):
+        from tournament.models import FoursomeMembership, Round
+        from core.models import RoundStatus
+
+        try:
+            pp = request.user.player_profile
+        except Exception:
+            pp = None
+        if pp is None:
+            return Response({'games': []})
+
+        round_ids = set(
+            FoursomeMembership.objects
+            .filter(player=pp, foursome__round__account=request.user.account,
+                    foursome__round__tournament__isnull=True,
+                    foursome__round__status=RoundStatus.COMPLETE)
+            .values_list('foursome__round_id', flat=True))
+
+        out = []
+        for r in (Round.objects.filter(id__in=round_ids)
+                  .order_by('-date', '-created_at')):
+            game = r.primary_game
+            if not game:
+                active = list(r.active_games or [])
+                game = active[0] if len(active) == 1 else None
+            if game:
+                out.append({'game': game, 'date': r.date.isoformat()})
+        return Response({'games': out})
+
+
 class RecentPlaysView(APIView):
     """
     GET /api/courses/recent-plays/

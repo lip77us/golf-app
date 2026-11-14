@@ -20,6 +20,9 @@ import '../widgets/roster_filter.dart';
 import '../widgets/tee_assignment.dart';
 import '../widgets/unified_player_search.dart';
 import '../widgets/course_bar.dart';
+import '../utils/game_suggestions.dart';
+import '../widgets/all_games_sheet.dart';
+import '../widgets/dashed_border.dart';
 import 'player_form_screen.dart';
 
 class CasualRoundScreen extends StatefulWidget {
@@ -86,6 +89,20 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   // catalog drives which games are primaries and which can be side games.
   String? _primaryGame;
   final Set<String> _sideGames = {};
+
+  /// The primary of each finished round this golfer played, newest first.
+  /// Loaded once, best effort: with none the chips come from the defaults.
+  List<String> _historyGames = const [];
+
+  /// The game the golfer chose himself — a chip tap or a sheet pick. Kept
+  /// across a group-size change for as long as it still fits; the guess never
+  /// overrides it.
+  String? _tapped;
+
+  /// The four (three across groups) primary chips, worked out by
+  /// [suggestGames] and re-worked whenever the group size, the round length or
+  /// the history changes.
+  List<String> _chips = const [];
 
   // Advanced: how many holes and which hole to start on (docs/hole-flexibility).
   // Defaults reproduce a normal full round from hole 1.
@@ -197,7 +214,75 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   @override
   void initState() {
     super.initState();
+    _recomputeGames();
     _loadData();
+    _loadGameHistory();
+  }
+
+  /// Fetch the golfer's game history for the guess. Failing is fine — the
+  /// chips are already showing the defaults for this group size.
+  Future<void> _loadGameHistory() async {
+    try {
+      final h = await context.read<AuthProvider>().client.getGameHistory();
+      if (!mounted) return;
+      setState(() {
+        _historyGames = [for (final e in h) e.game];
+        _recomputeGames();
+      });
+    } catch (_) {
+      // No history is the same answer as a new golfer.
+    }
+  }
+
+  /// Whether [id] is offered as a primary for this group and this round.
+  bool _fitsGame(String id) {
+    final m = gameMeta(id);
+    if (m == null || !m.enabled || m.sideGameOnly) return false;
+    if (_isPartial && m.requiresFullRound) return false;
+    return _fitsSizeFilter(m);
+  }
+
+  /// Work out the chips and the selected game. **Mutates only; callers wrap
+  /// it in `setState`.** The golfer's own pick survives while it still fits.
+  void _recomputeGames() {
+    final s = suggestGames(
+        sizeKey: _sizeFilter, history: _historyGames, fits: _fitsGame);
+    var chips = s.chips;
+    var selected = s.selected;
+    final t = _tapped;
+    if (t != null && _fitsGame(t)) {
+      selected = t;
+      chips = chipsWithPick(chips, t, chipCountFor(_sizeFilter));
+    } else {
+      _tapped = null;
+    }
+    _chips = chips;
+    _primaryGame = selected;
+    if (selected == null) {
+      _sideGames.clear();
+    } else {
+      final eligible = _eligibleSideGames.map((m) => m.id).toSet();
+      _sideGames.removeWhere((g) => !eligible.contains(g));
+    }
+  }
+
+  /// **More games** — the whole list, with what does not fit greyed under its
+  /// own label. A pick that is not already a chip takes the fourth slot.
+  Future<void> _openAllGames() async {
+    final rows = buildAllGamesRows(
+      sizeKey: _sizeFilter,
+      fitsSize: _fitsSizeFilter,
+      fitsRound: (m) => !(_isPartial && m.requiresFullRound),
+    );
+    final picked = await showAllGamesSheet(context,
+        rows: rows, current: _primaryGame, sizeKey: _sizeFilter);
+    if (picked == null || !mounted) return;
+    setState(() {
+      _tapped = picked;
+      // A game that was a side game stops being one the moment it is primary.
+      _sideGames.remove(picked);
+      _recomputeGames();
+    });
   }
 
   @override
@@ -359,8 +444,12 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   /// [GameSelectableChip] (green fill, white bold text).
   Widget _buildPrimaryChip(GameMeta meta) => GameSelectableChip(
         gameId:   meta.id,
+        label:    gameChipLabel(meta.id),
         selected: _primaryGame == meta.id,
-        onSelected: (_) => _setPrimary(meta.id),
+        onSelected: (_) {
+          _tapped = meta.id;
+          _setPrimary(meta.id);
+        },
       );
 
   /// One SIDE-GAME chip — toggle add/remove.
@@ -966,7 +1055,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       // A course the form filled in itself (home / nearby) is not work.
       (_selectedCourse != null &&
           _selectedCourse!.id != _defaultedCourseId) ||
-      _primaryGame != null ||
+      _tapped != null ||
       !_setEq(_playerTees.keys.toSet(), _seeded);
 
   static bool _setEq(Set<int> a, Set<int> b) =>
@@ -1184,11 +1273,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     setState(() {
       _numHoles = holes;
       if (start != null) _startingHole = start;
-      final p = _primaryGame;
-      if (p != null && holes < 18 && (gameMeta(p)?.requiresFullRound ?? false)) {
-        _primaryGame = null;
-        _sideGames.clear();
-      }
+      // A segment game no longer fits a short round: the chips are worked
+      // out again, which drops it and picks the next best.
+      _recomputeGames();
     });
   }
 
@@ -1311,18 +1398,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                 _playerTees.removeWhere((id, _) => id != keep);
                 _playerGroups.removeWhere((id, _) => id != keep);
               }
-              // Deselect the primary if it no longer fits the new size
-              // (e.g. an 18-Hole Match when switching off "2", or a
-              // single-foursome game when switching to "Across groups").
-              final p = _primaryGame;
-              if (p != null) {
-                final meta = gameMeta(p);
-                if (meta == null || !_fitsSizeFilter(meta)) _primaryGame = null;
-              }
-              // Drop any side games that no longer fit (also clears them all
-              // when the primary was just deselected).
-              final eligible = _eligibleSideGames.map((m) => m.id).toSet();
-              _sideGames.removeWhere((g) => !eligible.contains(g));
+              // The chips are worked out again for the new size, and a game the
+              // golfer tapped stays selected if it still fits. (Dropping side
+              // games that no longer fit happens in the same call.)
+              _recomputeGames();
             }),
           ),
           const SizedBox(height: 16),
@@ -1335,8 +1414,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final meta in _filteredCasualGames)
-                  _buildPrimaryChip(meta),
+                for (final id in _chips)
+                  if (gameMeta(id) != null) _buildPrimaryChip(gameMeta(id)!),
+                _MoreGamesChip(onTap: _openAllGames),
               ],
             ),
           ),
@@ -1616,4 +1696,31 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       child: InlineMessage(text: text, kind: kind),
     );
   }
+}
+
+/// The dashed chip at the end of the primary games: it opens the sheet and is
+/// never itself selected.
+class _MoreGamesChip extends StatelessWidget {
+  final VoidCallback onTap;
+  const _MoreGamesChip({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: CustomPaint(
+          painter: const DashedRRect(
+              color: Halved.cardBorder, width: 1, radius: 12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.search, size: 16, color: Halved.pine),
+              const SizedBox(width: 5),
+              Text('More games',
+                  style: Halved.body(color: Halved.pine, weight: FontWeight.w600)
+                      .copyWith(fontSize: 13)),
+            ]),
+          ),
+        ),
+      );
 }

@@ -427,6 +427,21 @@ class RecentPlay {
       );
 }
 
+/// One finished casual round in this golfer's history: the PRIMARY game he
+/// played and when. New Round reads the list to guess which game he wants
+/// (`utils/game_suggestions.dart`).
+class GameHistoryEntry {
+  final String game;
+  final DateTime? date;
+
+  const GameHistoryEntry({required this.game, this.date});
+
+  factory GameHistoryEntry.fromJson(Map<String, dynamic> j) => GameHistoryEntry(
+        game: j['game'] as String? ?? '',
+        date: DateTime.tryParse(j['date'] as String? ?? ''),
+      );
+}
+
 class CourseHit {
   final String source; // 'account' | 'catalog' | 'api'
   final String name;
