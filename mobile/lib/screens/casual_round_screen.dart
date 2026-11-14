@@ -280,7 +280,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         _MoreGamesChip(
           // Short enough to share the row with the two pinned chips; the
           // heading above already says these are side games.
-          label: 'More games',
+          label: 'More',
           onTap: () => _openMoreSideGames(split.other),
         ),
     ];
@@ -1464,7 +1464,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                 _MoreGamesChip(
                   label: _allGamesFit <= _chips.length
                       ? 'All games'
-                      : 'More games',
+                      : 'More',
                   onTap: _openAllGames,
                 ),
               ],

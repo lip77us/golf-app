@@ -13127,9 +13127,10 @@ Tests: `api/test_game_history.py` (9), `mobile/test/game_suggestions_test.dart`
 (25, the handoff's r1–r5 against the real catalog, four mutations killed),
 `mobile/test/all_games_sheet_test.dart` (19).
 
-**Side games: two chips, the rest behind a More games chip** (the sheet it opens
-is titled More side games; the chip is shorter so it shares the row with the
-two pinned ones). Skins and Spots
+**Side games: two chips, the rest behind a More chip.** Both dashed chips (primary
+and side) say just **More**, so the side-games one shares the row with the two
+pinned chips; the sheets keep their full titles (All games, More side games), and
+the primary chip reads **All games** when nothing more is left to find. Skins and Spots
 are the chips (`pinnedSideGamesFor`); **under a Skins primary, where Skins
 cannot be its own side game, the pair is Spots and Stroke Play.** Every other
 eligible side game goes in a checkbox sheet (`widgets/side_games_sheet.dart`)
