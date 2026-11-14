@@ -36,8 +36,8 @@ void main() {
   group('the handoff cases', () {
     test('r1 — no history, four: the default list, first selected', () {
       final s = guess('4', const []);
-      expect(s.chips, ['nassau', 'skins', 'wolf', 'sixes']);
-      expect(s.selected, 'nassau');
+      expect(s.chips, ['skins', 'nassau', 'fourball', 'sixes']);
+      expect(s.selected, 'skins');
     });
 
     test('r2 — last game fits: it is first and selected, then most played', () {
@@ -53,13 +53,13 @@ void main() {
       final s = guess('4', ['triple_nassau', 'skins', 'banker', 'skins', 'skins',
         'banker', 'skins']);
       expect(s.chips, isNot(contains('triple_nassau')));
-      expect(s.chips, ['skins', 'banker', 'nassau', 'wolf']);
+      expect(s.chips, ['skins', 'banker', 'nassau', 'fourball']);
       expect(s.selected, 'skins');
     });
 
     test('r4 — one round only: that game, then the defaults', () {
       final s = guess('4', ['sixes']);
-      expect(s.chips, ['sixes', 'nassau', 'skins', 'wolf']);
+      expect(s.chips, ['sixes', 'skins', 'nassau', 'fourball']);
       expect(s.selected, 'sixes');
     });
 
@@ -83,7 +83,7 @@ void main() {
     test('a game counts toward most played whatever size it was played at', () {
       // Nassau at two is the same game as Nassau at four.
       final s = guess('4', ['sixes', 'nassau', 'nassau', 'nassau', 'skins']);
-      expect(s.chips, ['sixes', 'nassau', 'skins', 'wolf']);
+      expect(s.chips, ['sixes', 'nassau', 'skins', 'fourball']);
     });
 
     test('no game appears twice', () {
@@ -151,6 +151,45 @@ void main() {
     });
   });
 
+  group("Paul's list of the best-known games", () {
+    test('the order for each size is the one he gave', () {
+      expect(kGameOrder['2'], ['skins', 'nassau', 'nassau_nine', 'match_18',
+        'low_net_round', 'stableford']);
+      expect(kGameOrder['3'], ['points_531', 'skins', 'rabbit', 'survivor',
+        'wolf', 'triple_nassau', 'banker', 'match_play', 'match_18',
+        'low_net_round', 'stableford']);
+      expect(kGameOrder['4'], ['skins', 'nassau', 'fourball', 'sixes', 'wolf',
+        'sequoya_threes', 'vegas', 'banker', 'triple_cup', 'match_play',
+        'low_net_round', 'stableford', 'match_18', 'nassau_nine']);
+      expect(kGameOrder['solo'], ['solo_stroke', 'solo_nassau', 'solo_match']);
+      expect(kGameOrder[kFiveOrSix], ['annandale_friday']);
+      expect(kGameOrder['groups'], ['multi_skins']);
+    });
+
+    test('every game he named exists, and plays at the size he named it for',
+        () {
+      kGameOrder.forEach((size, ids) {
+        final fits = fitsFor(size);
+        for (final id in ids) {
+          expect(gameMeta(id), isNotNull, reason: '$size names $id');
+          // Nothing on his list is silently skipped by the catalog's ranges —
+          // if one is, the list or the registry is wrong and one must move.
+          expect(fits(id), isTrue, reason: '$size: $id does not fit');
+        }
+      });
+    });
+
+    test('solo, five or six and across groups each have fewer than four', () {
+      for (final size in ['solo', kFiveOrSix, 'groups']) {
+        expect(guess(size, const []).chips.length, lessThan(4), reason: size);
+      }
+      expect(guess('solo', const []).chips,
+          ['solo_stroke', 'solo_nassau', 'solo_match']);
+      expect(guess(kFiveOrSix, const []).chips, ['annandale_friday']);
+      expect(guess('groups', const []).chips, ['multi_skins']);
+    });
+  });
+
   group('a pick from the sheet', () {
     test('takes the fourth slot, never a fifth chip', () {
       final out = chipsWithPick(['nassau', 'skins', 'wolf', 'sixes'], 'banker', 4);
@@ -190,7 +229,13 @@ void main() {
     test('the chips come from the suggestion, not a filtered catalog', () {
       expect(src, contains('suggestGames('));
       expect(src, contains('for (final id in _chips)'));
-      expect(src, contains('_MoreGamesChip(onTap: _openAllGames)'));
+      expect(src, contains('_MoreGamesChip('));
+      expect(src, contains('onTap: _openAllGames'));
+    });
+
+    test('the chip says All games when nothing more is left to find', () {
+      expect(src, contains("'All games'"));
+      expect(src, contains('_allGamesFit <= _chips.length'));
     });
 
     test('the history is loaded, and a failure is not an error', () {

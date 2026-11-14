@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 
 import '../game_catalog.dart';
 import '../theme/halved_brand.dart';
+import '../utils/game_suggestions.dart' show orderRank;
 
 /// Why a game is where it is on the sheet.
 enum AllGamesGroup {
@@ -83,7 +84,8 @@ String notForLabel(String sizeKey) {
   }
 }
 
-/// Every primary candidate, grouped for the sheet, in catalog order.
+/// Every primary candidate, grouped for the sheet: the games that fit in the
+/// best-known order, then the rest in catalog order.
 ///
 /// [fitsSize] is the screen's group-size question and [fitsRound] its
 /// partial-round one; both are asked rather than re-derived here.
@@ -123,12 +125,17 @@ List<AllGamesRow> buildAllGamesRows({
       group: group,
     ));
   }
-  // Playable first, each group keeping the catalog's order.
-  int rank(AllGamesRow r) => r.group.index;
+  // Playable first. Within the games that fit, the best-known first — the
+  // same list the chips are filled from — then anything it does not name in
+  // catalog order. The greyed games keep catalog order: they are not what the
+  // golfer is choosing between.
   final indexed = [for (var i = 0; i < rows.length; i++) (i, rows[i])];
   indexed.sort((a, b) {
-    final g = rank(a.$2).compareTo(rank(b.$2));
-    return g != 0 ? g : a.$1.compareTo(b.$1);
+    final g = a.$2.group.index.compareTo(b.$2.group.index);
+    if (g != 0) return g;
+    if (a.$2.group == AllGamesGroup.notForGroup) return a.$1.compareTo(b.$1);
+    return orderRank(sizeKey, a.$2.id, a.$1)
+        .compareTo(orderRank(sizeKey, b.$2.id, b.$1));
   });
   return [for (final e in indexed) e.$2];
 }

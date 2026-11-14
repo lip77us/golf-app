@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/game_catalog.dart';
+import 'package:golf_mobile/utils/game_suggestions.dart';
 import 'package:golf_mobile/widgets/all_games_sheet.dart';
 
 bool _fitsSize(String size, GameMeta m) {
@@ -66,14 +67,39 @@ void main() {
       expect(three['sixes']!.group, AllGamesGroup.notForGroup);
     });
 
-    test('catalog order is kept inside each group', () {
-      final order = [for (final g in casualGames) g.id];
-      final rows = rowsFor('4');
-      for (final grp in AllGamesGroup.values) {
-        final ids = [for (final r in rows) if (r.group == grp) r.id];
-        final idx = ids.map(order.indexOf).toList();
-        expect(idx, [...idx]..sort(), reason: '$grp');
+    test('the games that fit come in the best-known order', () {
+      for (final size in ['2', '3', '4']) {
+        final rows = rowsFor(size);
+        final ids = [for (final r in rows) if (r.playable) r.id];
+        final named = kGameOrder[size]!.where(ids.contains).toList();
+        expect(ids.take(named.length).toList(), named, reason: size);
       }
+    });
+
+    test('a fitting game the list does not name follows it, in catalog order',
+        () {
+      // Nothing on the three-player list is unnamed that fits three, so use a
+      // size where the registry plays a game the list leaves out.
+      final order = [for (final g in casualGames) g.id];
+      for (final size in ['2', '3', '4']) {
+        final named = kGameOrder[size]!.toSet();
+        final rest = [
+          for (final r in rowsFor(size))
+            if (r.playable && !named.contains(r.id)) r.id
+        ];
+        final idx = rest.map(order.indexOf).toList();
+        expect(idx, [...idx]..sort(), reason: size);
+      }
+    });
+
+    test('the greyed games keep catalog order', () {
+      final order = [for (final g in casualGames) g.id];
+      final ids = [
+        for (final r in rowsFor('4'))
+          if (r.group == AllGamesGroup.notForGroup) r.id
+      ];
+      final idx = ids.map(order.indexOf).toList();
+      expect(idx, [...idx]..sort());
     });
 
     test('a side-game-only game is never a primary candidate', () {

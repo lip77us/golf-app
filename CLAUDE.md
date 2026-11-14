@@ -13081,13 +13081,29 @@ active game; a round with several and no stored primary is skipped, because
 guessing is why the primary is stored at all. Tournament rounds never count.
 Loaded best-effort once on open; a failure leaves the defaults showing.
 
-**The catalog wins over the handoff's table** where they disagree, because the
-handoff says the registry is the source of truth and the screen's own `fits`
-filter is what both the chips and the sheet ask. Concretely: Skins is 2–4 in
-the app (the handoff's default list for 5–6 names it, and it is skipped), so 5–6
-shows Annandale Friday alone; Across groups shows only Multi-Group Skins, since
-Stroke Play and Stableford are not across-group games here. Skipped defaults are
-not padded, so those sizes show fewer than four chips.
+**The order is Paul's list, not the handoff's** (`kGameOrder`, 14 Nov 2026), after
+a count of production's 120 finished casual rounds showed the handoff's defaults
+were not what people play (Sixes was nearly half of all foursomes and last in the
+handoff's list; Stroke Play led twosomes). It is the list of the best-known games
+per size, and it does two jobs from one constant: the first four that fit fill any
+chip the history cannot, and the All games sheet shows the games that fit in that
+order, then any fitting game it does not name in catalog order. Greyed games keep
+catalog order.
+
+| Size | Order |
+|---|---|
+| 2 | Skins, Nassau, Nassau Nine, Singles Match, Stroke Play, Stableford |
+| 3 | Points 5-3-1, Skins, Rabbit, Survivor, Wolf, Triple Nassau, Banker, Mini Singles Bracket, Singles Match, Stroke Play, Stableford |
+| 4 | Skins, Nassau, Fourball, Sixes, Wolf, Sequoya 3s, Las Vegas, Banker, One-Round Triple Cup, Mini Singles Bracket, Stroke Play, Stableford, Singles Match, Nassau Nine |
+| Solo | the three solo games (order does not matter) |
+| 5–6 | Annandale Friday |
+| Across groups | Multi-Group Skins |
+
+The catalog still has the last word on player ranges, and a test asserts every
+game named plays at the size it is named for, so a list and the registry cannot
+quietly disagree. **Solo, 5–6 and Across groups have fewer than four games**, so
+there the chip reads **All games** rather than More games (nothing more to find;
+the sheet is still the one place with every game's description).
 
 **Behaviour changes worth knowing:**
 - A game is now **selected from the first moment** (Nassau on a foursome with no
@@ -13111,8 +13127,7 @@ Tests: `api/test_game_history.py` (9), `mobile/test/game_suggestions_test.dart`
 (25, the handoff's r1–r5 against the real catalog, four mutations killed),
 `mobile/test/all_games_sheet_test.dart` (19).
 
-**Not built:** the sheet reads the catalog order, not the prototype's;
-side games are not re-ordered to the handoff's Skins, Spots, Stableford, Honors,
+**Not built:** side games are not re-ordered to the handoff's Skins, Spots, Stableford, Honors,
 Stroke Play (they come from `sideGamesFor`, unchanged); and Solo and Across
 groups keep the existing size control rather than guessing a group size.
 

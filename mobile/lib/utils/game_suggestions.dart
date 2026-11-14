@@ -29,49 +29,74 @@ import '../game_catalog.dart';
 /// five or six ([kFiveOrSix]), or a plain count (`'2'`, `'3'`, `'4'`).
 const String kAcrossGroupsKey = 'groups';
 
-/// The default games per group size, in order. Used only to fill chips the
-/// history cannot (rule 3).
+/// The games in the order they are offered, per group size — Paul's list of the
+/// best-known games first (14 Nov 2026).
 ///
-/// A default the catalog says does not fit (Skins on a 5–6 card, for one) is
-/// skipped like any other, so this can name the design's list without the
-/// app having to agree with it on every player range.
-const Map<String, List<String>> kDefaultGames = {
+/// It does two jobs from one list, so they cannot drift apart: the first four
+/// that fit fill any chip the history cannot (rule 3), and the All games sheet
+/// shows the games that fit in this order, with anything it does not name after
+/// them in catalog order.
+///
+/// A game the catalog says does not fit a size is skipped like any other, so
+/// the list can be written as the golfer thinks of it and the registry still
+/// has the last word on player ranges.
+const Map<String, List<String>> kGameOrder = {
   'solo': [
     GameIds.soloStroke,
-    GameIds.stableford,
     GameIds.soloNassau,
     GameIds.soloMatch,
   ],
   '2': [
-    GameIds.nassau,
     GameIds.skins,
+    GameIds.nassau,
+    GameIds.nassauNine,
     GameIds.match18,
-    GameIds.strokePlay,
-  ],
-  '3': [
-    GameIds.skins,
-    GameIds.points531,
-    GameIds.tripleNassau,
-    GameIds.banker,
-  ],
-  '4': [
-    GameIds.nassau,
-    GameIds.skins,
-    GameIds.wolf,
-    GameIds.sixes,
-  ],
-  kFiveOrSix: [
-    GameIds.skins,
-    GameIds.annandaleFriday,
-    GameIds.banker,
-    GameIds.strokePlay,
-  ],
-  kAcrossGroupsKey: [
-    GameIds.multiSkins,
     GameIds.strokePlay,
     GameIds.stableford,
   ],
+  '3': [
+    GameIds.points531,
+    GameIds.skins,
+    GameIds.rabbit,
+    GameIds.survivor,
+    GameIds.wolf,
+    GameIds.tripleNassau,
+    GameIds.banker,
+    GameIds.matchPlay,
+    GameIds.match18,
+    GameIds.strokePlay,
+    GameIds.stableford,
+  ],
+  '4': [
+    GameIds.skins,
+    GameIds.nassau,
+    GameIds.fourball,
+    GameIds.sixes,
+    GameIds.wolf,
+    GameIds.sequoyaThrees,
+    GameIds.vegas,
+    GameIds.banker,
+    GameIds.tripleCup,
+    GameIds.matchPlay,
+    GameIds.strokePlay,
+    GameIds.stableford,
+    GameIds.match18,
+    GameIds.nassauNine,
+  ],
+  kFiveOrSix: [
+    GameIds.annandaleFriday,
+  ],
+  kAcrossGroupsKey: [
+    GameIds.multiSkins,
+  ],
 };
+
+/// Where [gameId] sits in the list for [sizeKey]; games the list does not name
+/// sort after it (by [fallback], so catalog order is kept among them).
+int orderRank(String sizeKey, String gameId, int fallback) {
+  final i = (kGameOrder[sizeKey] ?? const <String>[]).indexOf(gameId);
+  return i >= 0 ? i : 1000 + fallback;
+}
 
 /// How many primary chips a group size shows. Across groups offers fewer
 /// games than there is room for, so it shows three.
@@ -134,7 +159,7 @@ GameSuggestion suggestGames({
   }
 
   // Rule 3 — most likely.
-  for (final g in kDefaultGames[sizeKey] ?? const <String>[]) {
+  for (final g in kGameOrder[sizeKey] ?? const <String>[]) {
     add(g, 'most likely');
   }
 

@@ -266,6 +266,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     }
   }
 
+  /// How many primary games fit this group and round.
+  int get _allGamesFit =>
+      casualGames.where((m) => _fitsGame(m.id)).length;
+
   /// **More games** — the whole list, with what does not fit greyed under its
   /// own label. A pick that is not already a chip takes the fourth slot.
   Future<void> _openAllGames() async {
@@ -1416,7 +1420,15 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               children: [
                 for (final id in _chips)
                   if (gameMeta(id) != null) _buildPrimaryChip(gameMeta(id)!),
-                _MoreGamesChip(onTap: _openAllGames),
+                // When every game that fits is already a chip there is nothing
+                // MORE to find, but the sheet still carries each game's
+                // description — so it stays, under the honest name.
+                _MoreGamesChip(
+                  label: _allGamesFit <= _chips.length
+                      ? 'All games'
+                      : 'More games',
+                  onTap: _openAllGames,
+                ),
               ],
             ),
           ),
@@ -1701,8 +1713,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
 /// The dashed chip at the end of the primary games: it opens the sheet and is
 /// never itself selected.
 class _MoreGamesChip extends StatelessWidget {
+  final String label;
   final VoidCallback onTap;
-  const _MoreGamesChip({required this.onTap});
+  const _MoreGamesChip({required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) => InkWell(
@@ -1716,7 +1729,7 @@ class _MoreGamesChip extends StatelessWidget {
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.search, size: 16, color: Halved.pine),
               const SizedBox(width: 5),
-              Text('More games',
+              Text(label,
                   style: Halved.body(color: Halved.pine, weight: FontWeight.w600)
                       .copyWith(fontSize: 13)),
             ]),
