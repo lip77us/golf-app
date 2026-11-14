@@ -589,7 +589,7 @@ void main() {
       // **Bounded by `_keypadRound`'s own body.** `primary ==
       // GameIds.banker` appears elsewhere in this file (the handicap
       // params), so an unbounded search passes with the gate removed.
-      final i = src.indexOf('bool _keypadRound(RoundProvider rp) {');
+      final i = src.indexOf('bool _hasSpecificTray(RoundProvider rp) {');
       expect(i, greaterThan(0));
       expect(src.substring(i, src.indexOf('\n  }', i)),
           contains('primary == GameIds.banker'));

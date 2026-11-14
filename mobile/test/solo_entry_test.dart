@@ -142,7 +142,7 @@ void main() {
     test('solo is on the keypad, the tray gate and the pager', () {
       expect(src, contains('_soloRound(rp);'));
       expect(src, contains('_soloCard(rp) != null ||'));
-      expect(src, contains('&& !soloTray)'));
+      expect(src, contains('&& !soloTray'));
     });
 
     test('the keypad takes the strokes from the card', () {

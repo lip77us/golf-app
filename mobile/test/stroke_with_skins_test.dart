@@ -137,7 +137,7 @@ void main() {
       final games = ['multi_skins', 'low_net_round'];
       expect(resolvePrimary(null, games), GameIds.strokePlay);
       final src = _src('lib/screens/score_entry_screen.dart');
-      final i = src.indexOf('bool _keypadRound(RoundProvider rp) {');
+      final i = src.indexOf('bool _hasSpecificTray(RoundProvider rp) {');
       final body = src.substring(i, src.indexOf('\n  }', i));
       expect(body, contains('GameIds.strokePlay'));
     });

@@ -37,6 +37,8 @@ import '../utils/skins_standing.dart';
 import '../utils/stableford_standing.dart';
 import '../utils/vegas_standing.dart';
 import '../utils/auto_post.dart';
+import '../widgets/generic_entry.dart';
+import '../utils/generic_tray.dart';
 import '../widgets/score_box.dart';
 import '../widgets/score_entry_title.dart';
 import '../widgets/vegas_entry.dart';
@@ -1642,7 +1644,21 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// the same entry (E2+3) because five or six golfers is a lot of inline
   /// pickers. The keypad is the same widget in both, so a `4` means the same
   /// thing on either card.
-  bool _keypadRound(RoundProvider rp) {
+  /// **Every round enters on the keypad** (`handoff-score-entry-template`): a
+  /// game with a tray of its own uses it, and every other game gets the generic
+  /// one. The old inline picker is no longer drawn for any round on this screen.
+  bool _keypadRound(RoundProvider rp) =>
+      _hasSpecificTray(rp) || _genericTrayRound(rp);
+
+  /// A game with NO tray of its own — Irish Rumble, Better Ball, Hot Seat, a
+  /// cup match, a tournament group game — which takes the generic tray: this
+  /// hole's scores and each golfer's gross against par.
+  bool _genericTrayRound(RoundProvider rp) =>
+      !_hasSpecificTray(rp) && rp.round != null && rp.scorecard != null;
+
+  /// This round's game owns a keypad and a tray of its own (the old
+  /// `_keypadRound`).
+  bool _hasSpecificTray(RoundProvider rp) {
     final games = _activeGames(rp.round);
     final primary = resolvePrimary(rp.round?.primaryGame, games);
     return _fortyBallsRound(rp) ||
@@ -1881,7 +1897,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       _nassauCard(rp) != null ||
       _skinsCard(rp) != null ||
       _bankerHoleOpen(rp) ||
-      _strokePlayCard(rp) != null;
+      _strokePlayCard(rp) != null ||
+      _genericTrayRound(rp);
 
   /// The hole we have asked the server for; see `_ensureSixesCard`.
   int? _sixesCardAsked;
@@ -4159,6 +4176,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final nasTray =
         nasCard != null && fbActive && allDone && _editHotPid == null;
 
+    // **Every other game.** The generic tray: this hole's scores and each
+    // golfer's gross against par. It needs no server card, so it rises the
+    // moment the scores are in.
+    final genTray = _genericTrayRound(rp) &&
+        fbActive && allDone && _editHotPid == null;
+
     // Every hole that ends in a tray saves itself once it is complete.
     _ensureHolePosted(rp, players, sc, par, fourCard);
 
@@ -4511,6 +4534,31 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               }),
               onPress  : (m, start) => _afPress(rp, m, start),
             )
+          else if (genTray)
+            GenericHoleTray(
+              label: 'Hole $_selectedHole · ${gameDisplayName(
+                  resolvePrimary(rp.round?.primaryGame, games) ?? 'Score entry')}',
+              rows: genericTrayRows(
+                players: players,
+                scorecard: sc,
+                hole: _selectedHole,
+                scores: scores,
+              ),
+              picking: _trayEditing,
+              onEdit: () => setState(() {
+                _trayEditing = !_trayEditing;
+                _editHotPid = null;
+              }),
+              onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
+              nextLabel: _nextHoleInOrder(rp) == null
+                  ? 'Finish round'
+                  : 'Hole ${_nextHoleInOrder(rp)}',
+              onNext: rp.submitting
+                  ? null
+                  : (_nextHoleInOrder(rp) == null
+                      ? () => _completeRound(ctx, players, par)
+                      : _advance),
+            )
           else if (fbMember != null)
             FortyBallsKeypad(
               playerName: fbMember.player.name,
@@ -4637,7 +4685,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // has the tray overlaying this row, so this is the half that goes
           // (Paul, 30 Oct 2026).
           if (!sixTray && !spTray && !vgTray && !fourTray && !nasTray
-              && !skTray && !bkTray && !tcTray && !msTray && !m3Tray && !ptsTray && !soloTray)
+              && !skTray && !bkTray && !tcTray && !msTray && !m3Tray && !ptsTray && !soloTray
+              && !genTray)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Column(children: [

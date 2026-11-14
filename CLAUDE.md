@@ -13311,31 +13311,43 @@ the dark tray; everything else is the template. This is a 3.0.0 change, in slice
 - **Keypad progress dots**: one per golfer, pine when entered, a 20pt deep pill for
   the active one (`FortyBallsKeypad.progress` / `activeIndex`).
 
+**Also done (14 Nov, later):**
+- **The generic tray** (`widgets/generic_entry.dart`, `utils/generic_tray.dart`):
+  every round on the main screen is now a keypad round (`_keypadRound =
+  _hasSpecificTray || _genericTrayRound`), so the old inline picker is only drawn
+  for a COMPLETED round. A game with no tray of its own (Irish Rumble, Better Ball,
+  Hot Seat, cup match, tournament group games) gets a `Hole / Gross` table:
+  this hole's score and each golfer's gross against par through the holes played,
+  measured against his OWN par. **It shows no net and no money on purpose** — net
+  depends on the game's handicap treatment (allowance, strokes-off, cap) and a
+  wrong net on a tray is worse than none; a game that wants its money on the tray
+  writes its own. It posts the hole on its last score like every other tray.
+- **`TrayFrame` / `TrayBlock`** (`widgets/tray_frame.dart`): the template's tray
+  frame — `HOLE 7 · GAME` in caps with an underlined Edit scores, the blocks, and a
+  round ‹ with a white `Hole 8 ›` pill (`Finish round ›` on the 18th), no
+  "All N scores in" line. Only the generic tray uses it so far.
+- **Sides are pine, clay and slate in every game** (Paul, 14 Nov): see the rewritten
+  `docs/color-standard.md`. `GameColors.team1/team2/team3`, the dark-tray side
+  colours (`sideColour`), the Nassau/Triple Cup defaults, the hard-coded team
+  literals and the web watch page all follow. Solo keeps its own palette.
+  **Where the server names or colours a team (a cup's configured colours, the
+  casual Triple Cup team names) the app shows what it sent** — so a casual Triple
+  Cup the server still calls "Blue" and "Orange" will say so until that is changed.
+
 **Not done yet — the next slices:**
-1. **The remaining games on the main screen** that still use the old inline picker
-   (Irish Rumble, Better Ball, Hot Seat, cup match play, Pink Ball as a side game)
-   need a generic tray — the Stroke Play `Gross / Net / $` table is the obvious one
-   — so they can use the keypad too.
+1. **Move the nine existing trays onto `TrayFrame`** and drop their "All N scores
+   in" line (`TrayEditHeader`), checking each against the template's rule that
+   **money rides on a golfer's row or the standing line, not a block of its own**.
 2. **The dedicated casual screens** (Wolf, Rabbit, Survivor, Sequoya 3s, Points,
-   Nassau, Quota Nassau, Triple Nassau) still draw their own chrome; they get the
-   kit pieces above (title, line, hole card — already via `HoleHeader` — rows).
-3. **Tray frame audit** against the template's rules: the label line is
-   `HOLE 7 · FOURBALL` with an underlined Edit scores, **money rides on a golfer's
-   row or the standing line, not a block of its own**, and there is no
-   "All N scores in" line. Most existing trays already follow this; each needs
-   checking.
-4. **Chat badge** (red `#B23A1E`, white, 18pt) — `RoundChatButton` is unchanged.
+   Nassau, Quota Nassau, Triple Nassau) still draw their own app bar and rows; they
+   share the hole card already (via `HoleHeader`).
+3. **Chat badge** (red `#B23A1E`, white, 18pt) — `RoundChatButton` is unchanged.
+4. **Side swatches in the generic tray** (a cup match's two colours) — the rows are
+   neutral grey for now, because the side colour is decided inside `_HoleScoreCard`.
 
 **Left out on purpose:** Foursome Play / team scramble (it scores a team, not a
 golfer) and the paper-card entry (a whole card in one go); cup match screens wait
 until their team colours are looked at.
-
-**A real conflict, not resolved:** the template's sides are pine / clay / slate.
-`docs/color-standard.md` says green is a win and never a team, which is why Sixes,
-Las Vegas and Fourball draw their sides blue and orange (`widgets/side_colour.dart`).
-The rows keep whatever colour each game already passes (`nameColor`); only the
-header band and the row layout changed. Annandale Friday already uses pine/clay/
-slate. Worth a design answer before the colours are unified.
 
 **Not seen on a device.** The score box was rendered to an image (shapes, dots and
 the eagle's rings checked); the screen itself was not. Tests:
