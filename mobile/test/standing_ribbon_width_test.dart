@@ -62,20 +62,48 @@ void main() {
     expect(gap, lessThan(20));
   });
 
-  testWidgets('it starts immediately after the glyph, not centred', (t) async {
+  testWidgets('it starts immediately after the trophy, not centred',
+      (t) async {
     // The slot expands; the text paints from the start, so a short standing
     // stays on the left and the slack sits between it and the qualifier.
     await _pump(t, '1 UP thru 2', '');
-    final glyph = _text(t, '🏆');
+    final glyph = t.getRect(find.byIcon(Icons.emoji_events));
     final standing = _text(t, '1 UP thru 2');
-    expect(standing.left - glyph.right, lessThan(10));
+    expect(standing.left - glyph.right, lessThan(14));
   });
 
-  testWidgets('the row is still exactly 27px', (t) async {
-    // The whole case for D2 over a pinned strip is made in these pixels, so a
-    // layout change that grew the bar would be a different feature.
+  testWidgets('the line is 40px: the 30px row plus the 10 below it',
+      (t) async {
+    // `handoff-score-entry-template` spells the pill out at 13.5pt, so the line
+    // grew from the 27px it was when the pill was 24 and 11.5pt. A layout
+    // change that grew it further would be a different feature.
     await _pump(t, pairs, 'thru 1');
-    expect(StandingRibbon.height, 27);
-    expect(t.getSize(find.byType(StandingRibbon)).height, 27);
+    expect(StandingRibbon.height, 40);
+    expect(t.getSize(find.byType(StandingRibbon)).height, 40);
+  });
+
+  testWidgets('the trophy is gold, and there is one glyph for every game',
+      (t) async {
+    await _pump(t, pairs, '');
+    final icon = t.widget<Icon>(find.byIcon(Icons.emoji_events));
+    expect(icon.color, const Color(0xFFC9962B));
+    // The 💰 a money standing used to draw is gone.
+    expect(find.text('💰'), findsNothing);
+  });
+
+  testWidgets('the pill is spelled out at 13.5pt 700', (t) async {
+    await _pump(t, pairs, '');
+    final label = t.widget<Text>(find.text('Leaderboard'));
+    expect(label.style!.fontSize, 13.5);
+    expect(label.style!.fontWeight, FontWeight.w700);
+  });
+
+  testWidgets('a game with no standing still draws the trophy and the link',
+      (t) async {
+    // The line is on EVERY game; one with nothing to report leaves the middle
+    // empty rather than dropping the way to the leaderboard.
+    await _pump(t, '', '');
+    expect(find.byIcon(Icons.emoji_events), findsOneWidget);
+    expect(find.text('Leaderboard'), findsOneWidget);
   });
 }

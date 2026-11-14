@@ -37,6 +37,7 @@ import '../utils/skins_standing.dart';
 import '../utils/stableford_standing.dart';
 import '../utils/vegas_standing.dart';
 import '../utils/auto_post.dart';
+import '../widgets/score_entry_title.dart';
 import '../widgets/vegas_entry.dart';
 import '../widgets/fourball_entry.dart';
 import '../widgets/nassau_entry.dart';
@@ -3005,6 +3006,31 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     return pct == null ? name : '$name — Net $pct%';
   }
 
+  /// Holes this group has finished — every real golfer has a score — counted
+  /// along its own play order, for `Thru 6` in the app bar's subtitle.
+  ///
+  /// A hole with a score still waiting in the sync queue counts as played: the
+  /// golfer typed it, and the bar should not say otherwise because the phone is
+  /// offline.
+  int _holesThru(RoundProvider rp) {
+    final sc = rp.scorecard;
+    if (sc == null) return 0;
+    final realIds = _orderedPlayers(sc, rp.round, rp.nassauSummary)
+        .map((m) => m.player.id)
+        .toSet();
+    var n = 0;
+    for (final h in _playOrderFor(rp)) {
+      final hd = sc.holeData(h);
+      if (hd == null) continue;
+      final scored = hd.scores
+          .where((s) => realIds.contains(s.playerId))
+          .where((s) => !_isInactiveAltShotPlayerAt(s.playerId, h))
+          .every((s) => s.grossScore != null);
+      if (scored || rp.localPendingByHole.containsKey(h)) n++;
+    }
+    return n;
+  }
+
   String _appBarTitle(List<String> games, NassauSummary? nas, SkinsSummary? sk) {
     final parts = <String>[];
     for (final g in games) {
@@ -3603,11 +3629,31 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // replaces the leaderboard ICON below — a bare glyph was the weak
     // target the whole proposal exists to fix, and keeping both would put
     // two ways in at the same corner.
-    final ribbon = _standingRibbon(rp, games);
+    // **The leaderboard line is on every game** (`handoff-score-entry-template`):
+    // golfers missed the icon and the menu, so a game with no standing of its
+    // own still draws the trophy and the spelled-out Leaderboard › link, with
+    // nothing between them.
+    final StandingRibbon? ribbon = _standingRibbon(rp, games) ??
+        (rp.round == null
+            ? null
+            : StandingRibbon(
+                kind: StandingKind.result,
+                standing: '',
+                figure: '',
+                onOpenLeaderboard: () => Navigator.of(context)
+                    .pushNamed('/leaderboard', arguments: rp.round!.id),
+              ));
 
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
+        // The template's bar sits on the sage surface with dark ink — the
+        // course name, not a green band.
+        backgroundColor: Halved.surface,
+        foregroundColor: Halved.deepPine,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         bottom: ribbon,
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -3617,14 +3663,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                   (r) => r.settings.name == '/casual-rounds' || r.isFirst)
               : () => Navigator.of(context).maybePop(),
         ),
-        title: Text(
-          _soloTitle(games, rp) ?? _appBarTitle(games, nas, skins),
-          // **Demoted to 14 bold when the ribbon is there.** A golfer
-          // knows which game he is playing; he does not know where he
-          // stands. Still a title — just no longer the loudest thing.
-          style: TextStyle(
-              fontSize: ribbon != null ? 14 : 15,
-              fontWeight: ribbon != null ? FontWeight.w700 : null),
+        // The course is the title; the game and `Thru 6` sit under it.
+        title: ScoreEntryTitle(
+          course: rp.round?.course.name ?? '',
+          subtitle: ScoreEntryTitle.subtitleFor(
+              _soloTitle(games, rp) ?? _appBarTitle(games, nas, skins),
+              _holesThru(rp)),
         ),
         centerTitle: true,
         actions: [
@@ -3656,18 +3700,6 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // is the (push-less) notification that a message arrived.
           if (rp.round != null)
             RoundChatButton(roundId: rp.round!.id),
-          // The named pill in the ribbon is this, done properly — so the
-          // icon stands down wherever the ribbon draws rather than
-          // competing with it two rows apart.
-          if (ribbon == null)
-            IconButton(
-              tooltip: 'Leaderboard',
-              icon: const Icon(Icons.leaderboard_outlined),
-              onPressed: rp.round == null
-                  ? null
-                  : () => Navigator.of(context)
-                      .pushNamed('/leaderboard', arguments: rp.round!.id),
-            ),
           // Overflow: low-frequency actions — finishing the round early (soft
           // gate) and the icon-legend help sheet.
           PopupMenuButton<String>(
@@ -6077,65 +6109,74 @@ class _HoleScoreCard extends StatelessWidget {
         ? _currentCarryPot(skins!, holeNumber)
         : 1;
 
-    return Card(
+    // `handoff-score-entry-template`: the hole is its OWN card above the
+    // golfers', not the top of the same one.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // The shared header — `widgets/hole_header.dart`. It was written
+        // inline here and every game with its own play screen drew a
+        // different one; the `?` legend is score entry's own and rides in
+        // as `trailing`, which is the only part of it that is.
+        HoleHeader(
+          holeData:    holeData,
+          holeNumber:  holeNumber,
+          players:     players,
+          // The course is the app bar's title now, so the hole card does not
+          // repeat it.
+          courseName:  '',
+          holesInPlay: holesInPlay,
+          // 40 Balls only: the group's net, which the reworked packet moves
+          // out of the picker and onto the header.
+          badge: fortyBallsNet == null
+              ? null
+              : FortyBallsNetBadge(net: fortyBallsNet!),
+          // "?" legend — explains the row meta (handicap chip, dots, tee,
+          // totals, game-specific badges). Adaptive to the active game(s)
+          // so we don't show irrelevant rows.
+          trailing: IconButton(
+            tooltip: 'What do these mean?',
+            icon: Icon(
+              Icons.help_outline,
+              size: 22,
+              color: theme.colorScheme.primary,
+            ),
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            onPressed: () => showModalBottomSheet<void>(
+              context: context,
+              showDragHandle: true,
+              builder: (_) => _ScoreEntryLegendSheet(
+                hasSkins:        skins != null,
+                hasNassau:       nassau != null,
+                hasSixes:        sixesSummary != null,
+                hasTripleCup:    tripleCupSummary != null,
+                hasPoints531:    points531Summary != null,
+                hasVegas:        vegasSummary != null,
+                // The 4-player bracket also feeds matchPlayData for cup
+                // singles; isCupSingles tells those apart.
+                hasMatchPlay:    matchPlayData != null && !isCupSingles,
+                hasThreePersonMatch: hasThreePersonMatch,
+                isEighteenHoleMatch: nassau?.isEighteenHoleMatch ?? false,
+                isCupSingles:    isCupSingles,
+                handicapMode:    handicapMode,
+              ),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 10),
+        Card(
       elevation: 0,
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Halved.cardBorder, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // The shared header — `widgets/hole_header.dart`. It was written
-          // inline here and every game with its own play screen drew a
-          // different one; the `?` legend is score entry's own and rides in
-          // as `trailing`, which is the only part of it that is.
-          HoleHeader(
-            holeData:    holeData,
-            holeNumber:  holeNumber,
-            players:     players,
-            courseName:  courseName,
-            holesInPlay: holesInPlay,
-            // 40 Balls only: the group's net, which the reworked packet moves
-            // out of the picker and onto the header.
-            badge: fortyBallsNet == null
-                ? null
-                : FortyBallsNetBadge(net: fortyBallsNet!),
-            // "?" legend — explains the row meta (handicap chip, dots, tee,
-            // totals, game-specific badges). Adaptive to the active game(s)
-            // so we don't show irrelevant rows.
-            trailing: IconButton(
-              tooltip: 'What do these mean?',
-              icon: Icon(
-                Icons.help_outline,
-                size: 22,
-                color: theme.colorScheme.primary,
-              ),
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              onPressed: () => showModalBottomSheet<void>(
-                context: context,
-                showDragHandle: true,
-                builder: (_) => _ScoreEntryLegendSheet(
-                  hasSkins:        skins != null,
-                  hasNassau:       nassau != null,
-                  hasSixes:        sixesSummary != null,
-                  hasTripleCup:    tripleCupSummary != null,
-                  hasPoints531:    points531Summary != null,
-                  hasVegas:        vegasSummary != null,
-                  // The 4-player bracket also feeds matchPlayData for cup
-                  // singles; isCupSingles tells those apart.
-                  hasMatchPlay:    matchPlayData != null && !isCupSingles,
-                  hasThreePersonMatch: hasThreePersonMatch,
-                  isEighteenHoleMatch: nassau?.isEighteenHoleMatch ?? false,
-                  isCupSingles:    isCupSingles,
-                  handicapMode:    handicapMode,
-                ),
-              ),
-            ),
-          ),
-
           // Irish Rumble: how many of the group's balls count here. Nothing
           // is entered for it — this strip is the whole of what the game
           // needs on score entry, and it is drawn only when the server sends
@@ -6401,6 +6442,8 @@ class _HoleScoreCard extends StatelessWidget {
           if (cardFooter != null) cardFooter!,
         ],
       ),
+        ),
+      ],
     );
   }
 }

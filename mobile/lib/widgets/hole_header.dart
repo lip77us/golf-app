@@ -1,7 +1,8 @@
 /// widgets/hole_header.dart
 /// -----------------------
-/// The grey block at the top of a score-entry card: the course, `Hole 7`, and
-/// the hole's own facts — `Par 4  |  412 yds.  |  SI: 7`.
+/// The hole card at the top of score entry (`handoff-score-entry-template`): its
+/// OWN white card with the hole tile, `412 yds` and `SI 7 · front nine`. It used
+/// to be a grey block at the top of the golfers' card, reading `Par 4  |  412 yds.  |  SI: 7`.
 ///
 /// **Extracted from `score_entry_screen.dart` 25 Sep 2026.** Almost every game
 /// is scored through that screen and got this header; the games with their own
@@ -23,14 +24,18 @@ library;
 import 'package:flutter/material.dart';
 
 import '../api/models.dart';
+import '../theme/halved_brand.dart';
 
-/// `Par 4  |  412 yds.  |  SI: 7`, slashing any fact the tees disagree on.
+/// The hole's facts, one string each, slashing any the tees disagree on:
+/// `par` is `4` (or `4/5`), `yards` is `412` (or `400/340`, null when no tee
+/// has a yardage) and `si` is `7` (or `7/3`).
 ///
 /// One entry per distinct TEE, not per golfer — four men off the same tee state
 /// the par once. A golfer with no tee keys off his own id so he still counts,
 /// which is what stops a phantom or an unassigned golfer collapsing into
 /// somebody else's row.
-String holeHeaderLine(ScorecardHole hole, List<Membership> players) {
+({String par, String? yards, String si}) holeFacts(
+    ScorecardHole hole, List<Membership> players) {
   final seenKeys = <int>{};
   final parVals  = <int>[];
   final yardVals = <int?>[];
@@ -51,14 +56,27 @@ String holeHeaderLine(ScorecardHole hole, List<Membership> players) {
     return unique.length == 1 ? fmt(unique.first) : unique.map(fmt).join('/');
   }
 
-  final parStr  = 'Par ${collapse<int>(parVals, (v) => '$v')}';
-  final siStr   = 'SI: ${collapse<int>(siVals,  (v) => '$v')}';
   final anyYards = yardVals.any((y) => y != null);
-  final yardStr = anyYards
-      ? '${collapse<int?>(yardVals, (v) => v == null ? '—' : '$v')} yds.'
-      : null;
+  return (
+    par: collapse<int>(parVals, (v) => '$v'),
+    yards: anyYards
+        ? collapse<int?>(yardVals, (v) => v == null ? '—' : '$v')
+        : null,
+    si: collapse<int>(siVals, (v) => '$v'),
+  );
+}
 
-  return yardStr == null ? '$parStr  |  $siStr' : '$parStr  |  $yardStr  |  $siStr';
+/// `Par 4  |  412 yds.  |  SI: 7`, slashing any fact the tees disagree on.
+///
+/// Kept for the screens and tests that read the single line; the hole card
+/// itself draws [holeFacts] in pieces.
+String holeHeaderLine(ScorecardHole hole, List<Membership> players) {
+  final f = holeFacts(hole, players);
+  final parStr = 'Par ${f.par}';
+  final siStr = 'SI: ${f.si}';
+  return f.yards == null
+      ? '$parStr  |  $siStr'
+      : '$parStr  |  ${f.yards} yds.  |  $siStr';
 }
 
 /// `3 of 9` — where this hole sits in the group's own round.
@@ -141,59 +159,87 @@ class HoleHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // A Stack so `trailing` can sit top-right without pulling the centred
-    // Hole-N and meta line off centre.
-    return Stack(children: [
-      Container(
-        // Infinite width because a Stack does not propagate the parent
-        // Column's stretch, and the grey has to reach both edges of the card.
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 10),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest,
-          borderRadius: standalone
-              ? BorderRadius.circular(8)
-              : const BorderRadius.vertical(top: Radius.circular(8)),
-        ),
-        child: Column(children: [
-          if (courseName.isNotEmpty) ...[
-            Text(courseName,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall),
-            const SizedBox(height: 2),
-          ],
-          Text('Hole $holeNumber',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 2),
-          if (holeData != null)
-            Text(
-              holeHeaderLine(holeData!, players),
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall,
-            ),
-          // **Its own line, not a fourth field on the one above.** That line
-          // states the hole's GEOMETRY and already slashes when the tees
-          // disagree — `Par 4/5  |  400/340 yds.  |  SI: 7/3` is at the width
-          // limit before anything is added. This answers a different question
-          // (how far through the round the group is), and it costs a third line
-          // only on the shotgun rounds that need one.
-          if (holePositionLine(holesInPlay, holeNumber).isNotEmpty)
-            Text(
-              holePositionLine(holesInPlay, holeNumber),
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-        ]),
+    final facts = holeData == null ? null : holeFacts(holeData!, players);
+    final nine = holeNumber <= 9 ? 'front nine' : 'back nine';
+    final position = holePositionLine(holesInPlay, holeNumber);
+
+    // `handoff-score-entry-template`: the hole is its OWN white card — the hole
+    // tile, the yardage, and `SI 5 · front nine` beneath it. Where the game
+    // stands is never here (that is the leaderboard line); [badge] is the one
+    // optional pill, about THIS hole only (`Carry 2`).
+    final sub = [
+      if (facts != null) 'SI ${facts.si}',
+      nine,
+      if (position.isNotEmpty) position,
+    ].join(' · ');
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Halved.cardBorder, width: 1.5),
       ),
-      if (trailing != null)
-        Positioned(top: 2, right: 2, child: trailing!),
-      if (badge != null)
-        Positioned(right: 6, bottom: 6, child: badge!),
-    ]);
+      child: Row(children: [
+        Container(
+          width: 48,
+          height: 48,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Halved.deepPine,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('$holeNumber',
+                style: Halved.sectionHead().copyWith(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    height: 1)),
+            if (facts != null) ...[
+              const SizedBox(height: 3),
+              Text('Par ${facts.par}',
+                  style: Halved.body(
+                          color: const Color(0xFFB9CCC3),
+                          weight: FontWeight.w600)
+                      .copyWith(fontSize: 10, height: 1)),
+            ],
+          ]),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // The course is the app bar's title now; a screen that has not
+                // moved to the new bar still passes it, so it stays as a
+                // quiet caption rather than vanishing from those screens.
+                if (courseName.isNotEmpty)
+                  Text(courseName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Halved.body(color: Halved.muted)
+                          .copyWith(fontSize: 11.5)),
+                Text(
+                    facts?.yards != null ? '${facts!.yards} yds' : 'Hole $holeNumber',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Halved.body(
+                            color: Halved.deepPine, weight: FontWeight.w700)
+                        .copyWith(fontSize: 15)),
+                Text(sub,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Halved.body(color: Halved.muted)
+                        .copyWith(fontSize: 12.5)),
+              ]),
+        ),
+        if (badge != null) ...[const SizedBox(width: 8), badge!],
+        if (trailing != null) ...[const SizedBox(width: 4), trailing!],
+      ]),
+    );
   }
 }
 

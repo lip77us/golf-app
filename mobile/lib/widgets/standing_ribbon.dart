@@ -140,12 +140,17 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
   /// The quiet word in front of a figure. Grey and a shade smaller, so the
   /// eye lands on the number rather than on which bet it belongs to.
   static const _labelStyle = TextStyle(
-      fontSize: 11.5, fontWeight: FontWeight.w600, color: Halved.muted);
+      fontSize: 13.5, fontWeight: FontWeight.w600, color: Halved.muted);
 
-  /// 27px — the pill's 24 plus its breathing room, and the whole cost of the
-  /// feature. Measured in the design; matched here rather than rounded, since
-  /// the case for D2 over the pinned strip is made in exactly these pixels.
-  static const double height = 27;
+  /// 40px: the 30px line plus 10 below it, from `handoff-score-entry-template`
+  /// (`padding: 0 16px 10px`). It was 27 when the pill was 24 and 11.5pt; the
+  /// template spells the pill out at 13.5pt 700 so it cannot be missed, which
+  /// is the whole point of the line — golfers missed the icon and the menu.
+  static const double height = 40;
+
+  /// The trophy's gold. Appears nowhere else in the app, so it cannot be read
+  /// as a state.
+  static const Color trophy = Color(0xFFC9962B);
 
   @override
   Size get preferredSize => const Size.fromHeight(height);
@@ -157,12 +162,14 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
       // Tinted rather than white: at the top of the screen it has to separate
       // itself from the app bar above it, not from a scrolling list below.
       color: Halved.surface,
-      padding: const EdgeInsets.only(left: 14, right: 8),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
       child: Row(
         children: [
-          Text(kind == StandingKind.money ? '💰' : '🏆',
-               style: const TextStyle(fontSize: 12)),
-          const SizedBox(width: 7),
+          // A gold trophy on every game. The 💰 this used to draw for a money
+          // standing is gone: the template has one glyph, and the figure says
+          // what kind of number it is.
+          const Icon(Icons.emoji_events, size: 18, color: trophy),
+          const SizedBox(width: 10),
           // **The standing takes the width it needs; the slack goes in the
           // MIDDLE.** It used to sit before a `Spacer`, so the qualifier and
           // the pill were packed against it and the empty space sat to their
@@ -207,8 +214,8 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
               // only while this row and the rows below are about the same
               // match.
               style: TextStyle(
-                  fontSize: 12.5, fontWeight: FontWeight.w700,
-                  color: standingColor ?? Halved.muted),
+                  fontSize: 14, fontWeight: FontWeight.w700,
+                  color: standingColor ?? Halved.deepPine),
             ),
           ),
           if (figureLabel.isNotEmpty) ...[
@@ -220,14 +227,14 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
               figure,
               maxLines: 1,
               style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 13,
                   // A figure with a side of its own carries the weight to go
                   // with it; a qualifier stays light.
                   fontWeight:
                       figureColor == null ? FontWeight.w500 : FontWeight.w700,
                   color: figureColor ?? Halved.muted),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
           ],
           _LeaderboardPill(onTap: onOpenLeaderboard),
         ],
@@ -258,31 +265,26 @@ class _LeaderboardPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(9),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-        child: Container(
-          height: 24,
-          padding: const EdgeInsets.symmetric(horizontal: 9),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            // The pine wash the app already uses for pills and readbacks.
-            color: const Color(0xFFE4F2EA),
-            borderRadius: BorderRadius.circular(9),
-          ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Leaderboard',
-                  style: TextStyle(
-                      fontSize: 11.5, fontWeight: FontWeight.w700,
-                      color: Halved.pine)),
-              SizedBox(width: 2),
-              Icon(Icons.chevron_right, size: 14, color: Halved.pine),
-            ],
-          ),
+    // Spelled out, 13.5pt 700, pine on `#DCEBE1` — the template's pill. It is
+    // the whole target: the standing is cut off before this is.
+    return Material(
+      color: const Color(0xFFDCEBE1),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text('Leaderboard',
+                style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: Halved.pine,
+                    height: 1)),
+            SizedBox(width: 2),
+            Icon(Icons.chevron_right, size: 16, color: Halved.pine),
+          ]),
         ),
       ),
     );

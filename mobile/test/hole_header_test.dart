@@ -157,11 +157,38 @@ void main() {
     });
   });
 
-  group('the header', () {
+  group('holeFacts', () {
+    test('states each fact once for one tee, in pieces', () {
+      final f = holeFacts(_hole(), [_m(1, tee: _tee(9, 'White'))]);
+      expect(f.par, '4');
+      expect(f.yards, '400');
+      expect(f.si, '7');
+    });
+
+    test('slashes only what the tees disagree on', () {
+      final f = holeFacts(
+          _hole(perPlayer: {
+            1: (par: 4, yards: 400, si: 7),
+            2: (par: 4, yards: 340, si: 7),
+          }),
+          [_m(1, tee: _tee(9, 'White')), _m(2, tee: _tee(10, 'Red'))]);
+      expect(f.par, '4');
+      expect(f.yards, '400/340');
+      expect(f.si, '7');
+    });
+
+    test('no yardage on any tee is null, not a dash', () {
+      expect(holeFacts(_hole(yards: null), [_m(1, tee: _tee(9, 'W'))]).yards,
+          isNull);
+    });
+  });
+
+  group('the hole card', () {
     Future<void> pump(WidgetTester tester,
         {ScorecardHole? hole,
         String courseName = '',
         Widget? trailing,
+        Widget? badge,
         int holeNumber = 7}) async {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
@@ -171,58 +198,81 @@ void main() {
             players: [_m(1, tee: _tee(9, 'White'))],
             courseName: courseName,
             trailing: trailing,
+            badge: badge,
           ),
         ),
       ));
     }
 
-    testWidgets('names the hole by NUMBER and states its facts',
+    testWidgets('the tile names the hole by NUMBER, over its par',
         (tester) async {
       // Seven, not "the first hole played" — a shotgun group starting on the
       // 7th is on the 7th.
       await pump(tester, hole: _hole());
-      expect(find.text('Hole 7'), findsOneWidget);
-      expect(find.text('Par 4  |  400 yds.  |  SI: 7'), findsOneWidget);
+      expect(find.text('7'), findsOneWidget);
+      expect(find.text('Par 4'), findsOneWidget);
     });
 
-    testWidgets('a hole with no data drops the line rather than inventing a par',
+    testWidgets('beside it the yardage, and the index with the nine',
+        (tester) async {
+      await pump(tester, hole: _hole());
+      expect(find.text('400 yds'), findsOneWidget);
+      expect(find.text('SI 7 · front nine'), findsOneWidget);
+    });
+
+    testWidgets('a hole past the ninth is on the back nine', (tester) async {
+      await pump(tester, hole: _hole(), holeNumber: 12);
+      expect(find.text('SI 7 · back nine'), findsOneWidget);
+    });
+
+    testWidgets('a hole with no data draws the tile and no invented par',
         (tester) async {
       await pump(tester);
-      expect(find.text('Hole 7'), findsOneWidget);
+      expect(find.text('7'), findsOneWidget);
       expect(find.textContaining('Par'), findsNothing);
+      expect(find.text('back nine'.replaceAll('back', 'front')), findsOneWidget);
     });
 
-    testWidgets('the course name sits above the hole when there is one',
+    testWidgets('it is its own white card, not the top of another',
+        (tester) async {
+      await pump(tester, hole: _hole());
+      final box = tester.widget<Container>(find
+          .descendant(
+              of: find.byType(HoleHeader), matching: find.byType(Container))
+          .first);
+      final deco = box.decoration as BoxDecoration;
+      expect(deco.color, Colors.white);
+      expect(deco.borderRadius, BorderRadius.circular(16),
+          reason: 'all four corners — it has no card above it to join');
+    });
+
+    testWidgets('the tile is a 48pt deep pine square', (tester) async {
+      await pump(tester, hole: _hole());
+      final tile = find.ancestor(
+          of: find.text('7'), matching: find.byType(Container)).first;
+      expect(tester.getSize(tile), const Size(48, 48));
+    });
+
+    testWidgets('the course is a caption only for a screen that passes it',
         (tester) async {
       await pump(tester, hole: _hole(), courseName: 'Ranch Solano');
-      final course = tester.getCenter(find.text('Ranch Solano'));
-      final hole = tester.getCenter(find.text('Hole 7'));
-      expect(course.dy, lessThan(hole.dy));
-    });
-
-    testWidgets('no trailing widget leaves the hole number centred',
-        (tester) async {
-      // The 44px padding is symmetrical, so a screen with no legend is not
-      // paying for one — and `Hole 7` is centred either way.
+      expect(find.text('Ranch Solano'), findsOneWidget);
       await pump(tester, hole: _hole());
-      final header = tester.getRect(find.byType(HoleHeader));
-      final label = tester.getCenter(find.text('Hole 7'));
-      expect(label.dx, closeTo(header.center.dx, 0.5));
+      expect(find.text('Ranch Solano'), findsNothing);
     });
 
-    testWidgets('a trailing widget sits top-right and does not move the label',
+    testWidgets('the game\'s pill and the legend sit on the right',
         (tester) async {
       await pump(tester,
           hole: _hole(),
+          badge: const Text('Carry 2', key: Key('pill')),
           trailing: const Icon(Icons.help_outline, key: Key('legend')));
-      final header = tester.getRect(find.byType(HoleHeader));
+      final card = tester.getRect(find.byType(HoleHeader));
+      final pill = tester.getRect(find.byKey(const Key('pill')));
       final legend = tester.getRect(find.byKey(const Key('legend')));
-      expect(legend.right, lessThanOrEqualTo(header.right));
-      expect(legend.left, greaterThan(header.center.dx));
-      expect(legend.top, lessThan(header.center.dy));
-      // Still centred — the whole reason it is a Stack.
-      expect(tester.getCenter(find.text('Hole 7')).dx,
-          closeTo(header.center.dx, 0.5));
+      expect(pill.left, greaterThan(card.center.dx));
+      expect(legend.left, greaterThan(pill.left));
+      expect(legend.right, lessThanOrEqualTo(card.right));
     });
   });
 
@@ -265,7 +315,7 @@ void main() {
       expect(holePositionLine(order(10, n: 9), 3), '');
     });
 
-    testWidgets('the header draws it under the facts, on its own line',
+    testWidgets('the card draws it on the sub line, after the nine',
         (tester) async {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
@@ -278,15 +328,11 @@ void main() {
         ),
       ));
       // Off the 13th, hole 14 is the group's second.
-      expect(find.text('2 of 18'), findsOneWidget);
-      // Under the geometry line, not folded into it — that line already slashes
-      // when the tees disagree and is at the width limit before anything else.
-      final facts = tester.getCenter(find.text('Par 4  |  400 yds.  |  SI: 7'));
-      expect(tester.getCenter(find.text('2 of 18')).dy,
-          greaterThan(facts.dy));
+      // Beside the nine, on the card's sub line: `SI 7 · front nine · 2 of 18`.
+      expect(find.text('SI 7 · back nine · 2 of 18'), findsOneWidget);
     });
 
-    testWidgets('a round off the 1st draws no third line at all',
+    testWidgets('a round off the 1st says nothing about position',
         (tester) async {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
