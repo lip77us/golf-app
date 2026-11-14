@@ -13272,3 +13272,73 @@ have` group in `add_players_rules_test.dart` (7) and `a golfer you already have`
 `add_players_screen_test.dart` (9). Client and server enforcement were each
 mutation-checked.
 
+## Score entry template — chrome and rows (14 Nov 2026, 3.0.0 work in progress)
+
+`~/Downloads/handoff-score-entry-template`. **One screen every game is built on**:
+a game supplies only its golfers and sides, a leaderboard line and what goes in
+the dark tray; everything else is the template. This is a 3.0.0 change, in slices.
+**Done so far** (shared by every game that scores on `score_entry_screen.dart`):
+
+- **App bar** (`widgets/score_entry_title.dart`): the **course** is the title,
+  `Game · Thru 6` beneath it, on the sage surface with dark ink. The screen's
+  `_holesThru` counts holes with every real golfer scored (a hole waiting in the
+  sync queue counts as played). **The stake (`$20 a man`) is deliberately not
+  drawn** — it is a skin, a point or a press depending on the game, and a wrong
+  stake in the title is worse than none.
+- **Leaderboard line on EVERY game** (`StandingRibbon`, restyled): gold trophy
+  (`#C9962B`), the label/value pairs, and a spelled-out **Leaderboard ›** pill
+  (13.5pt 700 on `#DCEBE1`). A game with no standing of its own draws the trophy and
+  the pill alone (`_standingRibbon(...) ?? fallback`), and the leaderboard ICON in
+  the bar is gone. The 💰 a money standing used to draw is gone: one glyph. Height
+  27 → 40.
+- **Hole card** (`HoleHeader`, restyled): its OWN white card — a 48pt deep pine
+  tile (hole number over `Par 4`), `376 yds`, and `SI 5 · front nine`; the game's
+  optional pill and the `?` legend sit on the right. It is shared by eleven
+  screens, so all of them got it; the course name is only drawn as a caption on a
+  screen that still passes it (the main screen does not, the app bar says it).
+  `holeFacts()` returns par/yards/SI separately; `holeHeaderLine` still composes
+  the old single line.
+- **Golfer rows** (`_PlayerRow`): 50pt, a 4pt side bar down the left edge, `name`
+  + `CH n`, a **net pill** (`net 4` = gross − strokes), and a **score box**
+  (`widgets/score_box.dart`) drawn as the score it holds and **coded to NET par**
+  with the **stroke dots inside it, top right** (mint on the dark circles). The
+  active row is a mint wash and a 2.5pt ring on its box drawn OUTSIDE it (no
+  layout change); **nothing frames the active row any more** and the other rows
+  are no longer dimmed. Net Style Entry still works: off keeps the dots and codes
+  shapes to bare par (`shapeStrokes`).
+- **Team header** (`widgets/side_header_band.dart`): caps label on a pale band and
+  nothing else; Fourball, Las Vegas and Annandale Friday all draw it.
+- **Keypad progress dots**: one per golfer, pine when entered, a 20pt deep pill for
+  the active one (`FortyBallsKeypad.progress` / `activeIndex`).
+
+**Not done yet — the next slices:**
+1. **The remaining games on the main screen** that still use the old inline picker
+   (Irish Rumble, Better Ball, Hot Seat, cup match play, Pink Ball as a side game)
+   need a generic tray — the Stroke Play `Gross / Net / $` table is the obvious one
+   — so they can use the keypad too.
+2. **The dedicated casual screens** (Wolf, Rabbit, Survivor, Sequoya 3s, Points,
+   Nassau, Quota Nassau, Triple Nassau) still draw their own chrome; they get the
+   kit pieces above (title, line, hole card — already via `HoleHeader` — rows).
+3. **Tray frame audit** against the template's rules: the label line is
+   `HOLE 7 · FOURBALL` with an underlined Edit scores, **money rides on a golfer's
+   row or the standing line, not a block of its own**, and there is no
+   "All N scores in" line. Most existing trays already follow this; each needs
+   checking.
+4. **Chat badge** (red `#B23A1E`, white, 18pt) — `RoundChatButton` is unchanged.
+
+**Left out on purpose:** Foursome Play / team scramble (it scores a team, not a
+golfer) and the paper-card entry (a whole card in one go); cup match screens wait
+until their team colours are looked at.
+
+**A real conflict, not resolved:** the template's sides are pine / clay / slate.
+`docs/color-standard.md` says green is a win and never a team, which is why Sixes,
+Las Vegas and Fourball draw their sides blue and orange (`widgets/side_colour.dart`).
+The rows keep whatever colour each game already passes (`nameColor`); only the
+header band and the row layout changed. Annandale Friday already uses pine/clay/
+slate. Worth a design answer before the colours are unified.
+
+**Not seen on a device.** The score box was rendered to an image (shapes, dots and
+the eagle's rings checked); the screen itself was not. Tests:
+`mobile/test/score_entry_chrome_test.dart`, `score_entry_rows_test.dart`, and the
+rewritten `hole_header_test.dart` / `standing_ribbon_width_test.dart`.
+

@@ -9,6 +9,7 @@
 /// and clay on the board is two teams to the man reading it.
 library;
 
+import 'side_header_band.dart';
 import 'package:flutter/material.dart';
 
 import '../api/models.dart';
@@ -105,24 +106,7 @@ class AnnandaleTeamHeader extends StatelessWidget {
     if (t == null) return const SizedBox.shrink();
     final names = summary.teams[t].map((p) => p.label).join(' & ');
     final colour = annandaleTeamColour(t);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 10, 4, 2),
-      child: Row(children: [
-        Container(
-          width: 9, height: 9,
-          decoration: BoxDecoration(
-              color: colour, borderRadius: BorderRadius.circular(2)),
-        ),
-        const SizedBox(width: 7),
-        Flexible(
-          child: Text(names.toUpperCase(),
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontSize: 11.5, fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5, color: colour)),
-        ),
-      ]),
-    );
+    return SideHeaderBand(label: names, colour: colour);
   }
 }
 

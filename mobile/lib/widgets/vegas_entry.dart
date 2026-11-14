@@ -1,3 +1,4 @@
+import 'side_header_band.dart';
 import 'package:flutter/material.dart';
 
 import '../api/models.dart';
@@ -46,24 +47,7 @@ class VegasSideHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colour = vegasSideColour(side.side);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 10, 4, 2),
-      child: Row(children: [
-        Container(
-          width: 9, height: 9,
-          decoration: BoxDecoration(
-              color: colour, borderRadius: BorderRadius.circular(2)),
-        ),
-        const SizedBox(width: 7),
-        Flexible(
-          child: Text(side.label.toUpperCase(),
-              maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontSize: 11.5, fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5, color: colour)),
-        ),
-      ]),
-    );
+    return SideHeaderBand(label: side.label, colour: colour);
   }
 }
 

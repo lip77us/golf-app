@@ -37,6 +37,7 @@ import '../utils/skins_standing.dart';
 import '../utils/stableford_standing.dart';
 import '../utils/vegas_standing.dart';
 import '../utils/auto_post.dart';
+import '../widgets/score_box.dart';
 import '../widgets/score_entry_title.dart';
 import '../widgets/vegas_entry.dart';
 import '../widgets/fourball_entry.dart';
@@ -4513,6 +4514,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           else if (fbMember != null)
             FortyBallsKeypad(
               playerName: fbMember.player.name,
+              // One dot per golfer on the card — pine once entered, a deep
+              // pill for the one being entered (`handoff-score-entry-template`).
+              progress  : [
+                for (final p in players) scores[p.player.id] != null,
+              ],
+              activeIndex: fbIdx,
               // The keys are coded against par PLUS his strokes when Net
               // Style Entry is on — the setting the inline picker and the
               // score box have always honoured, which the keypad did not.
@@ -6299,6 +6306,9 @@ class _HoleScoreCard extends StatelessWidget {
                 deemphasized:        hotSpotIdx != -1 && !isHot,
                 withdrawn:           withdrawn,
                 pickedUp:            pickedUp,
+                // Under a team header, or first on the card, the band is the
+                // rule and the row adds none.
+                flushTop:            idx == 0 || teamHead.isNotEmpty,
                 p531HolePoints:      p531Hole,
                 p531CumulativePoints: p531Cumulative,
                 // Block taps while extra-match teams are unassigned, and for
@@ -6328,8 +6338,6 @@ class _HoleScoreCard extends StatelessWidget {
             // PINE with a stronger wash so the highlighted row clearly outranks
             // the sage "completed" band — a neutral grey box read too light.
             final boxColor   = teamColor ?? Halved.pine;
-            final washColor  =
-                boxColor.withValues(alpha: teamColor != null ? 0.10 : 0.14);
             // The keypad owns entry for 40 Balls; the row keeps its box and
             // its `isHot` outline, which is the whole of what the design
             // asks the row to show.
@@ -6353,33 +6361,18 @@ class _HoleScoreCard extends StatelessWidget {
               ...teamHead,
               // Keyed on hole and golfer so each new entry reveals its row:
               // the keypad covers the last rows of a big card.
+              //
+              // **No frame round the active golfer any more.** The old
+              // "entry section" box held the row AND the inline picker; the
+              // template marks the active row with a mint wash and a ring on
+              // its box, and the keypad is a sheet at the bottom. A game still
+              // on the inline picker draws it directly under the row.
               RevealOnMount(
                 key: ValueKey('entry-$holeNumber-${m.player.id}'),
-                child: Container(
-                // Flush on the LEFT so the bold accent bar lines up with the
-                // inactive rows' left bars; inset on the RIGHT so the right line
-                // stays visible (not hidden flush against the card edge).
-                margin: const EdgeInsets.fromLTRB(0, 6, 8, 6),
-                decoration: BoxDecoration(
-                  color: washColor,
-                  // Square-cornered team-colour frame: a bold 4px bar on the
-                  // LEFT (matching the inactive rows), a clear line on the other
-                  // three sides — including the RIGHT edge.
-                  border: Border(
-                    top:    BorderSide(color: boxColor, width: 1.5),
-                    bottom: BorderSide(color: boxColor, width: 1.5),
-                    right:  BorderSide(color: boxColor, width: 1.5),
-                    left:   BorderSide(color: boxColor, width: 4.0),
-                  ),
-                ),
-                // No clip here: Clip.antiAlias on this frame was trimming the
-                // score-picker's right border/corner. Children stay within the
-                // frame anyway, so clipping isn't needed.
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [rowWidget, entryControl],
                 ),
-              ),
               ),
             ];
           }).toList(),
@@ -7135,6 +7128,10 @@ class _PlayerRow extends StatelessWidget {
   /// "can't continue" and is the server's.
   final bool          pickedUp;
 
+  /// The first row under a team header (or the first row at all): no rule
+  /// above it, because the band is already the divider.
+  final bool          flushTop;
+
   /// Points 5-3-1: points this player earned on the active hole (null = not yet scored).
   final double?       p531HolePoints;
 
@@ -7166,6 +7163,7 @@ class _PlayerRow extends StatelessWidget {
     this.deemphasized = false,
     this.withdrawn = false,
     this.pickedUp = false,
+    this.flushTop = false,
     this.p531HolePoints,
     this.p531CumulativePoints,
   });
@@ -7178,39 +7176,25 @@ class _PlayerRow extends StatelessWidget {
     // left edge whenever this player has a team colour (Sixes / Nassau / cup /
     // match play), so partners are obvious at a glance. The team tint stays on
     // even for the active row — the highlighted score box marks the input.
+    // `handoff-score-entry-template`: a 50pt row, a 4pt bar in the side's colour
+    // down the left edge (no bar for a golfer on no side), and a mint wash
+    // while this golfer's score is being entered. Nothing frames the active
+    // row any more — the wash and the ring on the box are the whole of it.
     final teamTint = nameColor;
     final body = Container(
+      constraints: const BoxConstraints(minHeight: 50),
       decoration: BoxDecoration(
-        // Active row gets a clear green highlight (over any faint team tint) so
-        // it's obvious whose score is up; the coloured left edge still marks
-        // the team.
-        // Active row sits INSIDE the shared green "entry section" box (see the
-        // wrapper below), so it carries no box of its own — transparent fill
-        // lets the section colour show, with just the team-colour left accent.
-        color: isHot
-            ? Colors.transparent
-            : (teamTint != null
-                ? teamTint.withValues(alpha: 0.07)
-                // No team colour (e.g. Points 5-3-1): once a score is in, give
-                // the completed row a subtle neutral band so it reads as a
-                // finished block instead of the score floating on the white
-                // card. Not-yet-scored rows stay white — three clear states:
-                // active (section box) · done (band) · pending (white).
-                : (gross != null
-                    ? theme.colorScheme.surfaceContainerHigh
-                    : null)),
-        // No border on the active row itself — the surrounding section box
-        // (team-coloured) is the frame; a left accent here would double it.
-        border: isHot
-            ? const Border()
-            : Border(
-                top: BorderSide(color: theme.colorScheme.outlineVariant),
-                left: teamTint != null
-                    ? BorderSide(color: teamTint, width: 4)
-                    : BorderSide.none,
-              ),
+        color: isHot ? const Color(0x1F3BD89A) : null,
+        border: Border(
+          top: flushTop
+              ? BorderSide.none
+              : const BorderSide(color: Color(0xFFEEF3EE)),
+          left: teamTint != null
+              ? BorderSide(color: teamTint, width: 4)
+              : BorderSide.none,
+        ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
       child: Row(children: [
         // Team badge.  Uses [nameColor] (set from the active cup
         // colour map) when available so cup teams display in their
@@ -7258,11 +7242,18 @@ class _PlayerRow extends StatelessWidget {
                     style: theme.textTheme.bodyMedium?.copyWith(
                       // Bolder name on the active row so whose-score-is-up reads
                       // instantly; team colour is kept for identity.
-                      fontWeight: isHot ? FontWeight.w800 : FontWeight.w600,
-                      color: nameColor,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w600,
+                      color: Halved.deepPine,
                     ),
                   ),
                 ),
+                // `CH 12` — the course handicap, muted, right after the name.
+                const SizedBox(width: 6),
+                Text('CH ${member.courseHandicap}',
+                    style: Halved.body(
+                            color: Halved.muted, weight: FontWeight.w600)
+                        .copyWith(fontSize: 11.5)),
                 // The `gets N` chip was here. **Removed 22 Sep 2026.**
                 //
                 // It carried the ROUND's allocation while the dots above the
@@ -7401,13 +7392,40 @@ class _PlayerRow extends StatelessWidget {
           ),
         const SizedBox(width: 8),
 
+        // The net pill: `net 4`, the figure in the display face. A dash until
+        // there is a score to be net of.
+        Container(
+          width: 52,
+          height: 26,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Halved.surface,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text.rich(TextSpan(
+            style: Halved.body(color: Halved.muted, weight: FontWeight.w600)
+                .copyWith(fontSize: 12),
+            children: [
+              const TextSpan(text: 'net '),
+              TextSpan(
+                text: gross == null ? '–' : '${gross! - strokesOnThisHole}',
+                style: Halved.sectionHead().copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Halved.deepPine),
+              ),
+            ],
+          )),
+        ),
+        const SizedBox(width: 10),
+
         // Withdrawn players have no score box on holes they're out for —
         // just a muted "Out" marker.  Earlier holes still render normally
         // (they keep the gross they posted before withdrawing).
         if (withdrawn)
           Container(
             width: 40,
-            height: 36,
+            height: 40,
             alignment: Alignment.center,
             child: Text('Out',
                 style: theme.textTheme.labelSmall?.copyWith(
@@ -7419,7 +7437,7 @@ class _PlayerRow extends StatelessWidget {
             onTap: onTap,
             child: Container(
               width: 40,
-              height: 36,
+              height: 40,
               alignment: Alignment.center,
               child: Text('–',
                   style: theme.textTheme.titleMedium?.copyWith(
@@ -7427,41 +7445,19 @@ class _PlayerRow extends StatelessWidget {
             ),
           )
         else
-        // Score box — shows a NetScoreButton-style result once a score is
-        // entered, or a plain highlighted border while the player is hot.
+        // The score box, drawn as the score it holds and coded to NET par.
         GestureDetector(
           onTap: onTap,
-          // Stroke dots sit in a strip BELOW the box (scoreCellWithDots) so the
-          // bogey/double-bogey square never covers them.
-          child: scoreCellWithDots(
-            gross != null
-                // Score entered: NetScoreButton for color + shape feedback.
-                ? NetScoreButton(
-                    score:    gross!,
-                    par:      par,
-                    strokes:  strokesOnThisHole,
-                    selected: false,
-                    width:    40,
-                    height:   36,
-                  )
-                // No score yet: plain box, highlighted border when hot.
-                : AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 40,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: isHot ? Colors.white : Colors.transparent,
-                      // Team-colour box around the active score box (Blue/Orange,
-                      // pine for a no-team golfer) to match the section frame.
-                      border: isHot
-                          ? Border.all(
-                              color: teamTint ?? Halved.pine, width: 2)
-                          : Border.all(color: theme.colorScheme.outline),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-            strokesOnThisHole,
-            theme.colorScheme.primary,
+          child: ScoreBox(
+            score:        gross,
+            par:          par,
+            strokes:      strokesOnThisHole,
+            // A golfer who has Net Style Entry off keeps his dots and gets
+            // shapes coded against bare par.
+            shapeStrokes: context.watch<SettingsProvider>().netStyleEntry
+                ? strokesOnThisHole
+                : 0,
+            active:       isHot,
           ),
         ),
       ]),
@@ -7480,7 +7476,8 @@ class _PlayerRow extends StatelessWidget {
     // Picked up: dimmed, but NOT ignored — tapping the row is how the mark
     // comes off.
     if (pickedUp) return Opacity(opacity: 0.5, child: body);
-    if (deemphasized) return Opacity(opacity: 0.78, child: body);
+    // The template does not dim the other rows: the wash and the ring on the
+    // box say whose score is up.
     return body;
   }
 }

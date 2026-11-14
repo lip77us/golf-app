@@ -238,6 +238,16 @@ class FortyBallsKeypad extends StatefulWidget {
   /// (`stroke v Paul, Dave`) rather than a count.
   final String? strokeNote;
 
+  /// One dot per golfer on the card, entered or not, under the keys
+  /// (`handoff-score-entry-template`): entered dots are pine and the golfer
+  /// being entered is a 20pt deep pill. It answers "how many are left" without
+  /// the scorer looking up at the rows behind the sheet. Null draws nothing,
+  /// which is every other caller.
+  final List<bool>? progress;
+
+  /// Which dot is the golfer being entered.
+  final int? activeIndex;
+
   const FortyBallsKeypad({
     super.key,
     required this.playerName,
@@ -251,6 +261,8 @@ class FortyBallsKeypad extends StatefulWidget {
     this.floorText,
     this.onNoScore,
     this.strokeNote,
+    this.progress,
+    this.activeIndex,
   });
 
   @override
@@ -284,9 +296,31 @@ class _FortyBallsKeypadState extends State<FortyBallsKeypad> {
         _header(),
         const SizedBox(height: 12),
         if (_typing) _tenPlus() else _grid(),
+        if (!_typing && widget.progress != null && widget.progress!.isNotEmpty)
+          _progressDots(),
       ]),
     );
   }
+
+  /// `● ● ▬ ●` — pine for entered, a deep pill for the active golfer.
+  Widget _progressDots() => Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          for (var i = 0; i < widget.progress!.length; i++)
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: EdgeInsets.only(left: i == 0 ? 0 : 6),
+              width: i == widget.activeIndex ? 20 : 8,
+              height: 8,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                color: i == widget.activeIndex
+                    ? Halved.deepPine
+                    : (widget.progress![i] ? Halved.pine : Halved.cardBorder),
+              ),
+            ),
+        ]),
+      );
 
   Widget _header() => Row(children: [
         Expanded(
