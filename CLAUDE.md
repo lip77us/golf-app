@@ -13158,8 +13158,13 @@ the group size needs, tap a seated golfer to remove them), **Your regulars** (th
 seven golfers you have finished the most rounds with, then an **All golfers** tile),
 an always-open search, and a dark **Add a new golfer** card whose title carries
 what was typed. Next stays disabled reading **Add N more** until every seat is
-filled (five or six plays with five). **Across groups keeps the old roster list**:
-a pool has no seat count.
+filled (five or six plays with five). **Across groups (Multi-Group Skins) is the same
+screen with no seat count** (`AddPlayersBody.seats == null`): the header counts
+golfers (`MULTI-GROUP SKINS · 7 golfers`), there is no Full, one open seat is always
+on offer, and it needs two golfers before Next. The old roster list, its search
+widget (`unified_player_search.dart`) and the sectioning util
+(`roster_sections.dart`) were deleted with it; `RosterFilterChips` survives only in
+the invite-a-watcher sheet. The Groups step that follows is unchanged.
 
 **Rules are pure** (`utils/add_players.dart`): a name matches when any word starts
 with the query (*pa* finds Samir Patel); 3+ digits find a saved mobile; Your golfers
@@ -13218,3 +13223,9 @@ Tests: `api/test_player_regulars.py` (8), `mobile/test/add_players_rules_test.da
 (35) and `mobile/test/add_players_screen_test.dart` (32). Five behaviours were
 mutation-checked.
 
+
+**After a pick, the search query stays selected** so the next name types over it
+(the behaviour every other picker has, now in `AddPlayersBody._reselectSearch`; the
+`picker_reselect_search_test` guard points at it). Found by that existing test
+failing when the casual screen's own list was deleted — worth remembering that a
+source guard naming a file is also a record of behaviour the file owns.

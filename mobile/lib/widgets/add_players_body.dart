@@ -54,10 +54,12 @@ class AddPlayersBody extends StatefulWidget {
   /// Everyone seated, in seat order (you first).
   final List<PlayerProfile> seated;
 
-  /// Seats in this round, you included.
-  final int seats;
+  /// Seats in this round, you included — or null for an OPEN-ENDED round
+  /// (Multi-Group Skins), which has as many golfers as turn up: no empty seats
+  /// are drawn, there is no "Full", and one open seat is always on offer.
+  final int? seats;
 
-  /// Seats that must be filled before Next (5–6 plays at either size).
+  /// Golfers needed before Next (5–6 plays at either size; a pool needs two).
   final int minSeated;
 
   final String gameLabel;
@@ -90,7 +92,7 @@ class AddPlayersBody extends StatefulWidget {
     required this.onHalvedAdded,
     required this.onNewGolfer,
     required this.onAllGolfers,
-  }) : minSeated = minSeated ?? seats;
+  }) : minSeated = minSeated ?? seats ?? 2;
 
   @override
   State<AddPlayersBody> createState() => _AddPlayersBodyState();
@@ -118,6 +120,10 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
   }
 
   Set<int> get _seatedIds => {for (final p in widget.seated) p.id};
+
+  /// Whether another golfer can be seated: always, in an open-ended round.
+  bool get _hasRoom =>
+      widget.seats == null || widget.seated.length < widget.seats!;
   int? get _meId => widget.me?.id;
 
   /// The grid: the seven most played who are NOT seated yet. Choosing one
@@ -227,10 +233,28 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
     }
   }
 
+  /// After ticking a name, leave the query up but SELECTED, so the next
+  /// keystroke replaces it.
+  ///
+  /// Clearing would be wrong: one search often matches two people worth taking,
+  /// and the list has to stay narrowed while both get added. Focus comes back
+  /// only when the keyboard is already up — someone who scrolled to read the
+  /// results is not typing, and the keyboard springing back would be worse than
+  /// the thing this fixes. (Every other picker does this; see
+  /// `test/picker_reselect_search_test.dart`.)
+  void _reselectSearch() {
+    if (_ctrl.text.isEmpty) return;
+    if (MediaQuery.viewInsetsOf(context).bottom > 0 && !_focus.hasFocus) {
+      _focus.requestFocus();
+    }
+    _ctrl.selection =
+        TextSelection(baseOffset: 0, extentOffset: _ctrl.text.length);
+  }
+
   void _toggle(PlayerProfile p) {
     if (_seatedIds.contains(p.id)) {
       if (p.id != _meId) widget.onRemove(p);
-    } else if (widget.seated.length < widget.seats) {
+    } else if (_hasRoom) {
       widget.onAdd(p);
     }
   }
@@ -303,24 +327,30 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
 
   Widget _seats() {
     final seated = widget.seated;
-    final open = (widget.seats - seated.length).clamp(0, widget.seats);
-    final full = seated.length >= widget.seats;
+    final seats = widget.seats;
+    // Open-ended: one open seat, always — the pool is as many as turn up.
+    final open = seats == null ? 1 : (seats - seated.length).clamp(0, seats);
+    final header = seats == null
+        ? openSeatsHeader(widget.gameLabel, seated.length)
+        : seatsHeader(widget.gameLabel, seated.length, seats);
+    final status = seats == null
+        ? openSeatsStatus(seated.length, widget.minSeated)
+        : seatsStatus(seated.length, seats);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         Expanded(
           child: Text(
-            seatsHeader(widget.gameLabel, seated.length, widget.seats),
+            header,
             style: Halved.label(color: Halved.muted, weight: FontWeight.w700)
                 .copyWith(fontSize: 11, letterSpacing: 0.7),
           ),
         ),
-        Text(
-          seatsStatus(seated.length, widget.seats),
-          style: Halved.body(
-                  color: full ? Halved.pine : Halved.pine,
-                  weight: FontWeight.w600)
-              .copyWith(fontSize: 13),
-        ),
+        if (status.isNotEmpty)
+          Text(
+            status,
+            style: Halved.body(color: Halved.pine, weight: FontWeight.w600)
+                .copyWith(fontSize: 13),
+          ),
       ]),
       const SizedBox(height: 10),
       Wrap(spacing: 14, runSpacing: 12, children: [
@@ -518,7 +548,12 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
       name: p.name,
       sub: 'Index ${p.handicapIndex} · ${playedLabel(played)}',
       added: seated,
-      onTap: () => _toggle(p),
+      onTap: () {
+        _toggle(p);
+        // Only on the way IN: unseating by mistake should not disturb the
+        // search that found them.
+        if (!seated) _reselectSearch();
+      },
     );
   }
 
@@ -532,7 +567,7 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
           : 'Index ${h.handicapIndex} · ${h.location}',
       added: false,
       busy: _adding.contains(key),
-      onTap: widget.seated.length < widget.seats ? () => _addHalved(h) : null,
+      onTap: _hasRoom ? () => _addHalved(h) : null,
     );
   }
 

@@ -70,9 +70,11 @@ void main() {
   });
 
   group('the behaviour is the same one the other pickers use', () {
-    test('all four screens share the helper', () {
+    test('all four pickers share the helper', () {
       for (final f in [
-        'lib/screens/casual_round_screen.dart',
+        // The casual setup's own roster list was replaced by the Add players
+        // body, which keeps the behaviour.
+        'lib/widgets/add_players_body.dart',
         'lib/screens/setup_round_players_screen.dart',
         'lib/screens/new_round_wizard.dart',
         'lib/screens/ryder_cup_draft_screen.dart',

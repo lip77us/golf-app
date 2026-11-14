@@ -9,15 +9,11 @@ import '../utils/create_casual_round.dart';
 import '../utils/discard_draft.dart';
 import '../utils/skins_cards.dart';
 import '../widgets/scorecard_groups.dart';
-import '../utils/roster_sections.dart';
 import '../widgets/error_view.dart';
 import '../widgets/game_chip.dart';
 import '../utils/golfer_invite.dart';
-import '../widgets/halved_mark.dart';
 import '../widgets/inline_message.dart';
-import '../widgets/roster_filter.dart';
 import '../widgets/tee_assignment.dart';
-import '../widgets/unified_player_search.dart';
 import '../widgets/course_bar.dart';
 import '../utils/game_suggestions.dart';
 import '../widgets/all_games_sheet.dart';
@@ -27,7 +23,6 @@ import '../widgets/add_players_body.dart';
 import '../widgets/all_golfers_sheet.dart';
 import '../widgets/new_golfer_sheet.dart';
 import '../widgets/dashed_border.dart';
-import 'player_form_screen.dart';
 
 class CasualRoundScreen extends StatefulWidget {
   const CasualRoundScreen({super.key});
@@ -56,21 +51,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   List<PlayerProfile> _players = [];
   /// Wizard step: 0 = course + game, 1 = players + tees.
   int _step = 0;
-  /// Search text for the player picker (keeps it usable with a big roster).
-  /// Owned by UnifiedPlayerSearch's field and mirrored here so the roster list
-  /// below narrows with it — search and filter compose.
-  String _playerSearch = '';
-
-  /// The search field itself, owned HERE rather than inside
-  /// UnifiedPlayerSearch, because the list that gets ticked is this screen's
-  /// and the widget never hears about it.
-  final TextEditingController _searchCtrl  = TextEditingController();
-  final FocusNode             _searchFocus = FocusNode();
-
-  /// Which cut of the roster the list is showing.  Always [RosterFilter.all]
-  /// on entry: a filter does not survive into the next round's setup.
-  RosterFilter _rosterFilter = RosterFilter.all;
-
   CourseInfo? _selectedCourse;
   // Map of Player ID to Tee ID
   final Map<int, int> _playerTees = {};
@@ -242,19 +222,17 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     } catch (_) {}
   }
 
-  /// The Add players screen replaces the roster list for every group size that
-  /// has seats. Across groups has none — a pool is as many golfers as turn up —
-  /// so it keeps the list it has always had.
-  bool get _useAddPlayers => _sizeFilter != 'groups';
-
-  /// Seats in the round, you included. Five or six plays at either size and
-  /// draws six.
-  int get _seatCount =>
-      _sizeFilter == kFiveOrSix ? 6 : (int.tryParse(_sizeFilter) ?? 4);
+  /// Seats in the round, you included — or null across groups, where a
+  /// Multi-Group Skins pool is as many golfers as turn up and the screen draws
+  /// no empty seats. Five or six plays at either size and draws six.
+  int? get _seatCount => _sizeFilter == 'groups'
+      ? null
+      : (_sizeFilter == kFiveOrSix ? 6 : (int.tryParse(_sizeFilter) ?? 4));
 
   /// Golfers needed before Next: the seat count, except five or six, which
-  /// plays with five.
-  int get _seatsNeeded => _sizeFilter == kFiveOrSix ? 5 : _seatCount;
+  /// plays with five, and a pool, which needs two.
+  int get _seatsNeeded =>
+      _sizeFilter == kFiveOrSix ? 5 : (_seatCount ?? 2);
 
   /// Everyone seated, you first, then in the order they were added.
   List<PlayerProfile> get _seatedProfiles {
@@ -328,7 +306,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       onToggle: (p) {
         if (_playerTees.containsKey(p.id)) {
           _onPlayerToggle(p.id, false);
-        } else if (_playerTees.length < _seatCount) {
+        } else if (_seatCount == null || _playerTees.length < _seatCount!) {
           _onPlayerToggle(p.id, true);
         }
       },
@@ -411,29 +389,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
 
   @override
   void dispose() {
-    _searchCtrl.dispose();
-    _searchFocus.dispose();
     super.dispose();
   }
 
-  /// After ticking a name, leave the query up but SELECTED, so the next
-  /// keystroke replaces it.
-  ///
-  /// Clearing would be wrong: one search often matches two people worth
-  /// taking, and the list has to stay narrowed while both get ticked.
-  /// Selecting keeps the filter and still costs nothing to move on.
-  ///
-  /// Focus comes back only when the keyboard is already up — someone who
-  /// scrolled the roster to read it is not typing, and the keyboard springing
-  /// back over the list would be worse than the thing this fixes.
-  void _reselectSearch() {
-    if (_searchCtrl.text.isEmpty) return;
-    if (MediaQuery.viewInsetsOf(context).bottom > 0 && !_searchFocus.hasFocus) {
-      _searchFocus.requestFocus();
-    }
-    _searchCtrl.selection = TextSelection(
-      baseOffset: 0, extentOffset: _searchCtrl.text.length);
-  }
 
 
   Future<void> _loadData() async {
@@ -608,19 +566,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     );
   }
 
-  /// Inline-create a login-less golfer during casual-round setup. Adds them to
-  /// the roster and, if a course is already chosen, auto-selects them with their
-  /// default tee. Reuses PlayerFormScreen (which pops the saved PlayerProfile).
-  Future<void> _addGolfer() async {
-    final created = await Navigator.of(context).push<PlayerProfile>(
-      MaterialPageRoute(builder: (_) => const PlayerFormScreen()),
-    );
-    _addCreatedGolfer(created);
-    if (created != null && mounted) {
-      await maybeOfferRoundSmsInvite(context, created,
-          courseName: _selectedCourse?.name);
-    }
-  }
 
   void _addCreatedGolfer(PlayerProfile? created) {
     if (created == null || !mounted) return;
@@ -633,275 +578,14 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     });
     // With seats there is nowhere to put a golfer once they are all taken; he
     // is still saved to your golfers.
-    final full = _useAddPlayers && _playerTees.length >= _seatCount;
+    final cap = _seatCount;
+    final full = cap != null && _playerTees.length >= cap;
     if (_selectedCourse != null && !full) {
       _onPlayerToggle(created.id, true);
     }
   }
 
-  /// Roster order, as shipped: selected golfers (and You) floated to the top,
-  /// then alphabetical — applied inside each section rather than across them.
-  List<PlayerProfile> _sorted(Iterable<PlayerProfile> players) {
-    final myId = context.read<AuthProvider>().player?.id;
-    return players.toList()
-      ..sort((a, b) {
-        final aSel = _playerTees.containsKey(a.id);
-        final bSel = _playerTees.containsKey(b.id);
-        if (aSel != bSel) return aSel ? -1 : 1;
-        if (a.id == myId) return -1;
-        if (b.id == myId) return 1;
-        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-      });
-  }
 
-  /// The picker's list, cut by the active filter and split into sections.
-  ///
-  /// Filtering never touches the SELECTION — a golfer already added stays added
-  /// and stays checked when he is filtered out of view; the seat chips above
-  /// are the record of who is in.
-  List<RosterSection> _rosterSections() => rosterSections(
-        filter: _rosterFilter,
-        roster: _sorted(_players),
-        query: _playerSearch,
-      );
-
-  /// Section header: the label on the left, whatever belongs on the trailing
-  /// edge on the right — a count, or "A – Z".
-  Widget _sectionHeader(RosterSection section) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 2, 2, 7),
-      child: Row(children: [
-        Text(section.label.toUpperCase(),
-            style: const TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-                color: Halved.muted)),
-        const Spacer(),
-        Text(section.trailing,
-            style: const TextStyle(fontSize: 11, color: Halved.muted)),
-      ]),
-    );
-  }
-
-  /// Filtering to Halved accounts hides the majority of most rosters, so the
-  /// golfers it takes away are accounted for in one line rather than silently
-  /// dropped.  They can still play — they just cannot post their own scores or
-  /// see the money — and Invite still sits on every one of their rows under
-  /// All.
-  Widget _hiddenGolfersNote() {
-    final hidden = _players.where((p) => !p.isOnApp).length;
-    if (hidden == 0) return const SizedBox.shrink();
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: BoxDecoration(
-        color: Halved.card,
-        border: Border.all(color: Halved.cardBorder),
-        borderRadius: BorderRadius.circular(Halved.rChip),
-      ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const HalvedMark(size: 16),
-        const SizedBox(width: 9),
-        Expanded(
-          child: Text.rich(
-            TextSpan(children: [
-              TextSpan(
-                  text: '$hidden golfer${hidden == 1 ? '' : 's'} hidden. ',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, color: Halved.deepPine)),
-              const TextSpan(
-                  text: 'They can still play — they just cannot post their '
-                      'own scores or see the money. Invite sits on every '
-                      'hidden row.'),
-            ]),
-            style: const TextStyle(
-                fontSize: 12, height: 1.5, color: Halved.muted),
-          ),
-        ),
-      ]),
-    );
-  }
-
-  /// Why the list is empty — said in the filter's own terms, since "no golfers
-  /// match your search" is wrong for a filter nobody has typed into.
-  String _emptyRosterMessage(bool searching) {
-    if (searching) return 'No golfers match your search.';
-    switch (_rosterFilter) {
-      case RosterFilter.all:
-        return 'No golfers yet — search above to add one.';
-      case RosterFilter.onHalved:
-        return 'Nobody on your roster is on Halved yet.';
-    }
-  }
-
-  /// The picker's list: section headers and rows, or — when a search has come
-  /// up empty inside a filter — the way back out to the whole roster.
-  List<Widget> _buildRosterSections() {
-    final sections = _rosterSections();
-    final isEmpty = sections.every((s) => s.players.isEmpty);
-
-    if (isEmpty) {
-      final searching = _playerSearch.trim().isNotEmpty;
-      return [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(_emptyRosterMessage(searching)),
-            // A filter that has emptied the list has to offer the way out of
-            // itself.
-            if (_rosterFilter != RosterFilter.all) ...[
-              const SizedBox(height: 4),
-              TextButton(
-                onPressed: () =>
-                    setState(() => _rosterFilter = RosterFilter.all),
-                child: const Text('Search all golfers'),
-              ),
-            ],
-          ]),
-        ),
-      ];
-    }
-
-    return [
-      for (final section in sections) ...[
-        _sectionHeader(section),
-        for (final player in section.players) _playerRow(player),
-        const SizedBox(height: 6),
-      ],
-      // Under On Halved the list ends with the two ways to reach somebody it
-      // does not contain, since the filter itself hides the roster they would
-      // otherwise be found in.
-      if (_rosterFilter == RosterFilter.onHalved)
-        Container(
-          margin: const EdgeInsets.only(top: 4),
-          padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-          decoration: BoxDecoration(
-            color: Halved.card,
-            border: Border.all(
-                color: Halved.cardBorder, style: BorderStyle.solid),
-            borderRadius: BorderRadius.circular(Halved.rCard),
-          ),
-          child: Column(children: [
-            Text('Looking for somebody not here?',
-                textAlign: TextAlign.center,
-                style: Halved.body(weight: FontWeight.w600)
-                    .copyWith(fontSize: 14.5)),
-            const SizedBox(height: 4),
-            const Text(
-              'Search by phone to find a Halved account, or add him as a '
-              'guest and invite him after the round.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 13, height: 1.55, color: Halved.muted),
-            ),
-          ]),
-        ),
-    ];
-  }
-
-  /// One golfer in the picker: the round checkbox at the trailing edge, the
-  /// name / badge / index in the middle.
-  /// One golfer, laid out like the tournament wizard's Select Players step —
-  /// flat row, monogram, name over index, control on the trailing edge.
-  ///
-  /// The two screens do the same job and used to look nothing alike: this one
-  /// drew bordered cards with the checkbox on the left, the wizard drew a plain
-  /// list with it on the right. Everything casual has that the wizard does not
-  /// — the favourites flag, invite, the You lock, the skins block — is kept;
-  /// only the arrangement moved.
-  Widget _playerRow(PlayerProfile player) {
-    final isSelected = _playerTees.containsKey(player.id);
-    // The logged-in player is always locked in as a participant.
-    final authPlayer = context.read<AuthProvider>().player;
-    final isLockedIn = authPlayer != null && player.id == authPlayer.id;
-    // **A login-less golfer CAN join a skins pool.** He was greyed out here
-    // on a Halved-only, each-golfer-self-scores model — which the engine
-    // never required (`valid_participant_ids` admits host-round members
-    // "login-less OK") and which cannot describe the ordinary case: a guest
-    // playing in a foursome that has a scorer. The real rule is that
-    // somebody on his card has to be able to enter his score, and that is a
-    // question about the GROUPS, so it is asked and answered on that step.
-    final scheme = Theme.of(context).colorScheme;
-    final locked = isLockedIn;
-
-    void toggle() {
-      _onPlayerToggle(player.id, !isSelected);
-      // Only on the way IN. Unchecking by mistake should not disturb the
-      // search that found them.
-      if (!isSelected) _reselectSearch();
-    }
-
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-      // The whole row is the target, as it is in the wizard — the flag and the
-      // invite icon are their own buttons and swallow their own taps.
-      onTap: locked ? null : toggle,
-      leading: CircleAvatar(
-        backgroundColor: isSelected
-            ? scheme.primary
-            : scheme.surfaceContainerHighest,
-        child: Text(
-          player.name.isNotEmpty ? player.name[0].toUpperCase() : '?',
-          style: TextStyle(
-              color: isSelected ? Colors.white : null, fontSize: 14),
-        ),
-      ),
-      title: Row(children: [
-        Flexible(
-          child: Text(
-            player.name,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        if (player.isOnApp) ...[
-          const SizedBox(width: 6),
-          const HalvedMark(size: 18),
-        ] else if (!isLockedIn) ...[
-          const SizedBox(width: 6),
-          // Invite a golfer who isn't on the app yet. A plain tappable icon
-          // rather than an IconButton, so its footprint matches the Halved
-          // mark and rows stay the same height.
-          Builder(
-            builder: (btnCtx) => Tooltip(
-              message: 'Invite ${player.name}',
-              child: InkResponse(
-                onTap: () => inviteGolfer(btnCtx, player),
-                child: Icon(Icons.person_add_alt_1_outlined,
-                    size: 18, color: scheme.primary),
-              ),
-            ),
-          ),
-        ],
-        if (isLockedIn) ...[
-          const SizedBox(width: 6),
-          Chip(
-            avatar: Icon(Icons.lock_outline,
-                size: 12, color: scheme.onSecondaryContainer),
-            label: const Text('You', style: TextStyle(fontSize: 11)),
-            padding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            backgroundColor: scheme.secondaryContainer,
-          ),
-        ],
-      ]),
-      subtitle: Text('Index ${player.handicapIndex}'),
-      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        // Per D-06: the logged-in user's checkbox is LOCKED, not disabled —
-        // the active brand green rather than a dead grey, so the row reads
-        // "you're in", with the You chip saying why it cannot come off.
-        Checkbox(
-          value: isSelected,
-          onChanged: locked ? null : (v) => toggle(),
-          fillColor:
-              isLockedIn ? WidgetStateProperty.all(scheme.primary) : null,
-          checkColor: isLockedIn ? Colors.white : null,
-        ),
-      ]),
-    );
-  }
 
   void _onPlayerToggle(int playerId, bool selected) {
     setState(() {
@@ -1050,7 +734,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       if (!mounted) return;
       // The game is texted at Start round, not when a golfer is added: one
       // Messages draft to every guest with a number, sent from his own phone.
-      if (_useAddPlayers) {
+      {
         final me = context.read<AuthProvider>().player?.id;
         await textTheGame(
           context.read<AuthProvider>(),
@@ -1178,17 +862,16 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     );
   }
 
-  /// Enough golfers to go on. With seats, every seat — except five or six,
-  /// which plays with five; across groups it is two, as it always was.
+  /// Enough golfers to go on: every seat — except five or six, which plays
+  /// with five. Across groups, which has no seats, needs two.
   bool get _playersReady {
     if (_isSolo) return _playerTees.length >= 1;
-    if (!_useAddPlayers) return _playerTees.length >= 2;
     return _playerTees.length >= _seatsNeeded;
   }
 
   /// The disabled Next says how many are missing.
   String get _playersNextLabel {
-    if (!_useAddPlayers || _isSolo) return 'Next';
+    if (_isSolo) return 'Next';
     final missing = _seatsNeeded - _playerTees.length;
     return missing > 0 ? 'Add $missing more' : 'Next';
   }
@@ -1560,23 +1243,12 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
 
           // ── Step 2: players ──
           if (_step == 1) ...[
-          // How many golfers the chosen game(s) allow — shown up front, and
-          // it flips to an error if the current selection is off.
-          if (!_useAddPlayers) ...[
-            for (final gameId in _activeGames)
-              _gamePlayerCountHint(gameId),
-            const SizedBox(height: 8),
-            Text('Select Players',
-                style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 16),
-          ],
-
           if (_selectedCourse == null)
             const InlineMessage(
               text: 'Please select a course first to assign tees.',
               kind: InlineMessageKind.info,
             )
-          else if (_useAddPlayers)
+          else
             AddPlayersBody(
               me: context.read<AuthProvider>().player,
               seated: _seatedProfiles,
@@ -1591,42 +1263,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               onHalvedAdded: _onHalvedAdded,
               onNewGolfer: _openNewGolfer,
               onAllGolfers: _openAllGolfers,
-            )
-          else ...[
-            // One field instead of three entry points: your golfers, then
-            // Halved, then a guest.  The query is reported back out so the
-            // roster list below narrows with it.
-            UnifiedPlayerSearch(
-              roster: _players,
-              selectedIds: _playerTees.keys.toSet(),
-              onToggle: _onPlayerToggle,
-              onGolferAdded: _addCreatedGolfer,
-              onCreateGuest: _addGolfer,
-              requiredCount: _requiredPlayerCount,
-              gameLabel: _primaryGame == null
-                  ? ''
-                  : gameDisplayName(_primaryGame!),
-              onQueryChanged: (q) => setState(() => _playerSearch = q),
-              controller: _searchCtrl,
-              focusNode: _searchFocus,
-              // The chips belong under the search box, not below whatever the
-              // ladder happens to be showing — otherwise they slide down the
-              // screen the moment a query returns a result.
-              belowField: RosterFilterChips(
-                value: _rosterFilter,
-                onChanged: (f) => setState(() => _rosterFilter = f),
-                allCount: _players.length,
-                onHalvedCount: _players.where((p) => p.isOnApp).length,
-              ),
-              // The list below narrows to the same query and draws each golfer
-              // with a checkbox, so the ladder's own YOUR GOLFERS
-              // rung would be the same man a second time.
-              showLocalMatches: false,
             ),
-            const SizedBox(height: 12),
-            if (_rosterFilter == RosterFilter.onHalved) _hiddenGolfersNote(),
-            ..._buildRosterSections(),
-          ],
             const SizedBox(height: 80),
           ], // ── end step 2
 
@@ -1723,69 +1360,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     ];
   }
 
-  /// Players-step guidance: how many golfers the chosen game allows, turning
-  /// into an error when the current count is off.
-  /// "2 or 4" / "2, 3 or 4" for a set of supported sizes.
-  String _sizesLabel(Set<int> s) {
-    final l = s.toList()..sort();
-    if (l.length == 1) return '${l.first}';
-    return '${l.sublist(0, l.length - 1).join(', ')} or ${l.last}';
-  }
 
-  /// Seats to draw in the add-players progress row, or null when the round has
-  /// no fixed size.  Only a game with ONE valid count gives an honest target —
-  /// a 2-or-4 game has nothing definite to count towards, so it shows a plain
-  /// tally instead of empty seats implying players are missing.
-  int? get _requiredPlayerCount {
-    final id = _primaryGame;
-    if (id == null) return null;
-    final meta = gameMeta(id);
-    if (meta == null) return null;
-    if (meta.exactPlayers != null) return meta.exactPlayers;
-    final sizes = meta.sizes;
-    if (sizes != null && sizes.length == 1) return sizes.first;
-    return null;
-  }
-
-  Widget _gamePlayerCountHint(String gameId) {
-    final meta = gameMeta(gameId);
-    if (meta == null) return const SizedBox.shrink();
-    final n = _playerTees.length;
-    final String range;
-    if (meta.sizes != null) {
-      range = '${_sizesLabel(meta.sizes!)} players';
-    } else if (meta.exactPlayers != null) {
-      range = '${meta.exactPlayers} players';
-    } else if (meta.minPlayers != null && meta.maxPlayers != null) {
-      range = '${meta.minPlayers}–${meta.maxPlayers} players';
-    } else if (meta.minPlayers != null) {
-      range = '${meta.minPlayers}+ players';
-    } else if (meta.maxPlayers != null) {
-      range = 'up to ${meta.maxPlayers} players';
-    } else {
-      range = 'any number of players';
-    }
-    var text = '${meta.displayName}: $range';
-    var kind = InlineMessageKind.info;
-    if (meta.sizes != null && !meta.sizes!.contains(n)) {
-      text += ' — needs ${_sizesLabel(meta.sizes!)}.';
-      kind = InlineMessageKind.error;
-    } else if (meta.exactPlayers != null && n != meta.exactPlayers) {
-      final diff = meta.exactPlayers! - n;
-      text += diff > 0 ? ' — add $diff more.' : ' — remove ${-diff}.';
-      kind = InlineMessageKind.error;
-    } else if (meta.minPlayers != null && n < meta.minPlayers!) {
-      text += ' — add ${meta.minPlayers! - n} more.';
-      kind = InlineMessageKind.error;
-    } else if (meta.maxPlayers != null && n > meta.maxPlayers!) {
-      text += ' — remove ${n - meta.maxPlayers!}.';
-      kind = InlineMessageKind.error;
-    }
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: InlineMessage(text: text, kind: kind),
-    );
-  }
 }
 
 /// The dashed chip at the end of the primary games: it opens the sheet and is

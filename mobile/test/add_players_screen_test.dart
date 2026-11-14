@@ -92,7 +92,7 @@ final _counts = <int, SharedRounds>{
 
 class _Host extends StatefulWidget {
   final _Stub stub;
-  final int seats;
+  final int? seats;
   final List<PlayerProfile> startSeated;
   final List<String> log;
   const _Host(this.stub, this.log,
@@ -112,7 +112,8 @@ class _HostState extends State<_Host> {
             me: _me,
             seated: seated,
             seats: widget.seats,
-            gameLabel: 'Skins',
+            minSeated: widget.seats == null ? 2 : null,
+            gameLabel: widget.seats == null ? 'Multi-Group Skins' : 'Skins',
             roster: _roster,
             counts: _counts,
             onAdd: (p) => setState(() {
@@ -132,7 +133,7 @@ class _HostState extends State<_Host> {
 }
 
 Future<_Stub> open(WidgetTester t, List<String> log,
-    {int seats = 4,
+    {int? seats = 4,
     List<PlayerProfile> seated = const [],
     _Stub? stub}) async {
   final s = stub ?? _Stub();
@@ -181,6 +182,45 @@ void main() {
       await open(t, [], seats: 3);
       expect(find.text('SKINS · 1 of 3'), findsOneWidget);
       expect(find.text('Open'), findsNWidgets(2));
+    });
+  });
+
+  group('an open-ended round (Multi-Group Skins)', () {
+    testWidgets('counts golfers instead of seats, and says how many it needs',
+        (t) async {
+      await open(t, [], seats: null);
+      expect(find.text('MULTI-GROUP SKINS · 1 golfer'), findsOneWidget);
+      expect(find.text('Add 1 more'), findsOneWidget,
+          reason: 'a pool needs two');
+    });
+
+    testWidgets('there is never a Full, and one open seat is always on offer',
+        (t) async {
+      await open(t, [], seats: null,
+          seated: [_roster[1], _roster[2], _roster[3], _roster[4]]);
+      expect(find.text('MULTI-GROUP SKINS · 5 golfers'), findsOneWidget);
+      expect(find.text('Full'), findsNothing);
+      expect(find.text('Add 1 more'), findsNothing,
+          reason: 'it has the two it needs');
+      expect(find.text('Open'), findsOneWidget);
+    });
+
+    testWidgets('golfers can be added past any count', (t) async {
+      final log = <String>[];
+      await open(t, log, seats: null,
+          seated: [_roster[1], _roster[2], _roster[3]]);
+      await t.enterText(find.byType(TextField), 'gab');
+      await t.pump();
+      await t.tap(find.text('Add'));
+      await t.pump();
+      expect(log, ['add Gabe Ortiz']);
+    });
+
+    testWidgets('it has the same regulars, search and dark card', (t) async {
+      await open(t, [], seats: null);
+      expect(find.text('YOUR REGULARS'), findsOneWidget);
+      expect(find.text('SEARCH'), findsOneWidget);
+      expect(find.text('Add a new golfer'), findsOneWidget);
     });
   });
 
@@ -285,6 +325,20 @@ void main() {
       await t.tap(find.text('Added'));
       await t.pump();
       expect(log, ['add Gabe Ortiz', 'remove Gabe Ortiz']);
+    });
+
+    testWidgets('after a pick the query stays, selected, so the next name replaces it',
+        (t) async {
+      await open(t, []);
+      await t.enterText(find.byType(TextField), 'gab');
+      await t.pump();
+      await t.tap(find.text('Add'));
+      await t.pump();
+      final field = t.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, 'gab', reason: 'not cleared');
+      expect(field.controller!.selection.baseOffset, 0);
+      expect(field.controller!.selection.extentOffset, 3,
+          reason: 'selected, so one keystroke replaces it');
     });
 
     testWidgets('On Halved comes after your golfers, and Add copies them in',
@@ -545,15 +599,19 @@ void main() {
   group('the casual screen uses it', () {
     final src = File('lib/screens/casual_round_screen.dart').readAsStringSync();
 
-    test('the Players step is the Add players body, except across groups', () {
-      expect(src, contains('else if (_useAddPlayers)'));
+    test('the Players step is the Add players body for every group size', () {
       expect(src, contains('AddPlayersBody('));
-      expect(src, contains("bool get _useAddPlayers => _sizeFilter != 'groups'"));
+      // Across groups is the same screen with no seat count, not a second one.
+      expect(src, contains("_sizeFilter == 'groups'\n      ? null"));
+      expect(src, isNot(contains('UnifiedPlayerSearch')));
+      expect(src, isNot(contains('_buildRosterSections')));
     });
 
     test('Next waits for every seat, and says how many are missing', () {
       expect(src, contains('_playersReady'));
       expect(src, contains("return missing > 0 ? 'Add \$missing more' : 'Next';"));
+      // A pool with no seats still needs two golfers before Next.
+      expect(src, contains('(_seatCount ?? 2)'));
     });
 
     test('the game is texted at Start round, not when a golfer is added', () {

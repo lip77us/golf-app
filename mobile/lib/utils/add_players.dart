@@ -288,6 +288,18 @@ String addedToast({
       : '$firstName added as a guest.';
 }
 
+/// The header over the seats of an OPEN-ENDED round — Multi-Group Skins, where
+/// a pool is as many golfers as turn up: `MULTI-GROUP SKINS · 7 golfers`.
+String openSeatsHeader(String gameLabel, int seated) {
+  final prefix = gameLabel.isEmpty ? '' : '${gameLabel.toUpperCase()} · ';
+  return '$prefix$seated ${seated == 1 ? 'golfer' : 'golfers'}';
+}
+
+/// The right-hand side of an open-ended header: how many more the game needs
+/// to start, and nothing once it has them — there is no "Full".
+String openSeatsStatus(int seated, int minimum) =>
+    seated >= minimum ? '' : 'Add ${minimum - seated} more';
+
 /// The header over the seats: `SKINS · 3 of 4`.
 String seatsHeader(String gameLabel, int seated, int seats) {
   final prefix = gameLabel.isEmpty ? '' : '${gameLabel.toUpperCase()} · ';
