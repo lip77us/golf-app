@@ -371,21 +371,26 @@ void main() {
   });
 
   group('the sides are one colour top to bottom', () {
-    test('blue and orange, the app\'s own team colours', () {
-      // `docs/color-standard.md`: green / red / grey mean win, loss and
-      // neutral and are never a team. The packet draws pine and clay; the
-      // golfer rows under these headers have been blue and orange since the
-      // game shipped, and the header must match the rows it heads.
+    test('pine and clay, the same sides as every other game', () {
+      // Paul, 14 Nov 2026: there is nothing special about Sixes, Las Vegas and
+      // Fourball that needs colours of their own. `handoff-score-entry-template`
+      // sides are pine, clay and slate.
       expect(vegasSideColour(1), GameColors.team1);
       expect(vegasSideColour(2), GameColors.team2);
-      expect(vegasSideColour(1, onDark: true), Halved.onDark3);
+      expect(GameColors.team1, Halved.pine);
+      expect(GameColors.team2, Halved.teamClay);
+      expect(vegasSideColour(1, onDark: true), Halved.onDark1);
       expect(vegasSideColour(2, onDark: true), Halved.onDark2);
     });
 
-    test('the tray blue is the readable one', () {
-      // `onDark3` exists because the packets' pale blue-grey is
-      // indistinguishable from the tray's own label grey.
-      expect(Halved.onDark3, const Color(0xFF8FB4FF));
+    test('on the tray they are the template\'s own dark variants', () {
+      // Pine on deep pine cannot be read, so side 1 is bright mint there.
+      expect(Halved.onDark1, const Color(0xFF3BD89A));
+      expect(Halved.onDark2, const Color(0xFFF2A86E));
+    });
+
+    test('a third side is slate, for Annandale Friday', () {
+      expect(GameColors.team3, Halved.teamSlate);
     });
   });
 

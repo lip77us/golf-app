@@ -3500,11 +3500,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
           children: [
             TextSpan(text: _firstNames(prev.team1.players),
-                style: const TextStyle(color: Color(0xFF1976D2))),
+                style: const TextStyle(color: GameColors.team1)),
             const TextSpan(text: ' v. ',
                 style: TextStyle(color: Color(0xFF5C6B62), fontSize: 11)),
             TextSpan(text: _firstNames(prev.team2.players),
-                style: const TextStyle(color: Color(0xFFEF6C00))),
+                style: const TextStyle(color: GameColors.team2)),
           ]))),
         const SizedBox(width: 8),
         Text(prev.statusDisplay, style: const TextStyle(
@@ -7203,9 +7203,7 @@ class _PlayerRow extends StatelessWidget {
         if (teamLabel != null) ...[
           Builder(builder: (_) {
             final badgeFg = nameColor ??
-                (teamLabel == 'T1'
-                    ? Colors.red.shade700
-                    : Colors.blue.shade700);
+                (teamLabel == 'T1' ? GameColors.team1 : GameColors.team2);
             // Pale version of the same colour for the chip background.
             final badgeBg = badgeFg.withValues(alpha: 0.15);
             return Container(

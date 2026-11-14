@@ -40,8 +40,8 @@ class SequoyaThreesSetupScreen extends StatefulWidget {
 }
 
 class _SequoyaThreesSetupScreenState extends State<SequoyaThreesSetupScreen> {
-  static const _blue   = Color(0xFF1976D2);
-  static const _orange = Color(0xFFEF6C00);
+  static const _blue   = Color(0xFF0F6E56);
+  static const _orange = Color(0xFFB45309);
 
   List<Membership> _ordered = [];
   // Strokes-off-low: six 2v2 matches are a MATCH game, and a match is played

@@ -6,46 +6,48 @@ watch CSS vars in `api/templates/watch/base.html`.
 
 ## The rule
 
-**Green / red / grey mean *meaning*. Blue / orange mean *teams*. Never mix.**
+**Sides are pine, clay and slate.** Green / red / grey still mean *meaning*
+(win, loss, neutral); a side is a bar down a row, a header, a name on the tray —
+never a result figure.
 
 | Color | Meaning | Hex (mobile) |
 |---|---|---|
 | 🟩 **Green** | win · you're up · +money | `Colors.green.shade700` |
 | 🟥 **Red** | loss · you're down · −money | `Colors.red.shade700` |
 | ⬜ **Grey** | halved · push · neutral · not started | `Colors.grey.shade600` |
-| 🔵 **Blue** | **Team 1** / Wolf-side | `Colors.blue.shade700` |
-| 🟠 **Orange** | **Team 2** / Opponents | `Colors.orange.shade800` |
+| 🌲 **Pine** | **Side 1** / Wolf-side | `Halved.pine` `#0F6E56` (on the dark tray `#3BD89A`) |
+| 🟤 **Clay** | **Side 2** / Opponents | `Halved.teamClay` `#B45309` (on the dark tray `#F2A86E`) |
+| 🩶 **Slate** | a third side (Annandale Friday) | `Halved.teamSlate` `#475569` (on the dark tray `#8FB4FF`) |
 
-- **Individual games** (Skins, Points 5-3-1, Rabbit, Stableford): no team color
+**Changed 14 Nov 2026** (`handoff-score-entry-template`; Paul): this used to be
+blue and orange, on the argument that green is a win and must never be a team.
+That argument gave Sixes, Las Vegas, Fourball and Nassau colours of their own
+for no reason particular to them, and the template draws every game's sides the
+same. One set of sides across every game is worth more than the collision it
+risked; the two are kept apart by shape (a bar and a header vs. a figure).
+
+- **Individual games** (Skins, Points 5-3-1, Rabbit, Stableford): no side colour
   — just the green/red money semantics.
-- **Two-side casual games** (Nassau 2-v-2, 18-Hole Match, Match Play, Triple
-  Cup): the two sides are blue (1) / orange (2), used consistently for names,
-  badges, and the header banner. Casual Triple Cup names its teams **"Blue" vs
-  "Orange"** to match.
-- **Wolf**: per hole, Wolf + partner = **blue**, Opponents = **orange**; who won
-  the hole / the points uses green/red as usual.
-- (Sixes deviates on purpose — see below.)
-
-## Why blue/orange (not the classic blue/red)
-
-1. **Red is already "loss / −money"** all over the leaderboard. If Team 2 were
-   also red, a red name sitting next to a red dollar figure is ambiguous. Blue +
-   orange never collide with the win/loss semantics.
-2. **Color-blind friendlier** and higher contrast than red/green or red/blue.
-3. Sidesteps the **political read** of red-vs-blue.
+- **Two-side casual games** (Nassau, Singles Match, Match Play, Triple Cup,
+  Sixes, Las Vegas, Fourball): pine (1) / clay (2). Casual Triple Cup's default
+  colour names are now "Pine" and "Clay".
+- **Wolf**: Wolf + partner = **pine**, Opponents = **clay**.
+- **Slate on the dark tray is `#8FB4FF`, not the template's `#AFC0D8`**: that
+  pale blue-grey is indistinguishable from the tray's own label grey.
 
 ## Deliberate deviations (with reason)
 
 - **Cup games keep the TD's configured team colours** (red/blue/green/gold/
   purple/…). Those are real, named teams a tournament director chose — the
-  blue/orange default only applies to *casual* games with anonymous sides.
-- **Sixes** has **no fixed team colours** on purpose: the 2-v-2 partnerships
-  rotate every 6-hole segment, so there's no stable "Team 1." It shows the
-  pairings as name-pairs with the leading side emphasized — not a two-colour
-  scheme.
+  pine/clay default only applies to *casual* games with anonymous sides.
+- **Solo** keeps its own palette (the golfer against par): there is no side.
+- **Sixes** has **no fixed team colours** in its leaderboard card because the
+  2-v-2 partnerships rotate every 6-hole segment; on score entry its sides are
+  pine and clay like every other game.
 
-Everything else (Nassau, 18-Hole Match, Wolf, Match Play, Triple Cup) uses the
-table above.
+Where the server names or colours a team (a cup's configured colours, and the
+casual Triple Cup team names it returns) the app shows what the server sent; the
+pine/clay defaults here apply when it sends none.
 
 ## Migration note
 

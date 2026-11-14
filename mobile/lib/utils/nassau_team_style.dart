@@ -11,22 +11,21 @@ import '../api/models.dart';
 
 // The two team colours. These are compile-time consts (so const widgets like
 // the presses strip can use them as defaults) that mirror GameColors.team1 /
-// team2 (Material blue.shade700 / orange.shade800) — the shared palette every
-// other 2-team game uses. Keep them in sync with GameColors; task #39 (move off
-// orange) changes both.
-const Color kNassauTeam1Color = Color(0xFF1976D2); // = GameColors.team1 (blue 700)
-const Color kNassauTeam2Color = Color(0xFFEF6C00); // = GameColors.team2 (orange 800)
+// team2 — the shared palette every other 2-team game uses (pine and clay, since
+// 14 Nov 2026). Keep them in sync with GameColors.
+const Color kNassauTeam1Color = Color(0xFF0F6E56); // = GameColors.team1 (pine)
+const Color kNassauTeam2Color = Color(0xFFB45309); // = GameColors.team2 (clay)
 
 /// Team colour by 1-based team index (1 or 2).
 Color nassauTeamColor(int team) =>
     team == 1 ? kNassauTeam1Color : kNassauTeam2Color;
 
-/// Full colour name for a team ("Blue" / "Orange").
-String nassauTeamColorName(int team) => team == 1 ? 'Blue' : 'Orange';
+/// Full colour name for a team ("Pine" / "Clay").
+String nassauTeamColorName(int team) => team == 1 ? 'Pine' : 'Clay';
 
-/// Single-letter colour badge ("B" / "O") for very tight spots (e.g. the
+/// Single-letter colour badge ("P" / "C") for very tight spots (e.g. the
 /// presses strip chips).
-String nassauTeamColorShort(int team) => team == 1 ? 'B' : 'O';
+String nassauTeamColorShort(int team) => team == 1 ? 'P' : 'C';
 
 /// Compact winner label for a progress grid — the winning team's initials
 /// (nicer than a bare colour letter). Singles (one name): the first letter of

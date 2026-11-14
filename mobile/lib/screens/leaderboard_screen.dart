@@ -5117,7 +5117,7 @@ class _TpmPhase2Section extends StatelessWidget {
                 children: [
                   TextSpan(
                     text: leader,
-                    style: const TextStyle(color: Colors.blue),
+                    style: const TextStyle(color: GameColors.team1),
                   ),
                   TextSpan(
                     text: ' vs ',
@@ -5127,7 +5127,7 @@ class _TpmPhase2Section extends StatelessWidget {
                   ),
                   TextSpan(
                     text: runnerUp,
-                    style: TextStyle(color: Colors.orange.shade800),
+                    style: const TextStyle(color: GameColors.team2),
                   ),
                 ],
               ),
@@ -5215,7 +5215,7 @@ class _TpmPhase2HoleStrip extends StatelessWidget {
               child: Text(
                 leader,
                 style: theme.textTheme.labelSmall?.copyWith(
-                    color: Colors.blue, fontWeight: FontWeight.w600),
+                    color: GameColors.team1, fontWeight: FontWeight.w600),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -5264,9 +5264,9 @@ class _TpmPhase2HoleStrip extends StatelessWidget {
                 final m   = (hm['margin'] as num?)?.toInt() ?? 0;
                 final lbl = m == 0 ? 'AS' : (m > 0 ? '+$m' : '$m');
                 final col = m > 0
-                    ? Colors.blue.shade700
+                    ? GameColors.team1
                     : m < 0
-                        ? Colors.orange.shade800
+                        ? GameColors.team2
                         : theme.colorScheme.onSurfaceVariant;
                 return SizedBox(
                   width: cellW,

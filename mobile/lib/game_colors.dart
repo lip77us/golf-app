@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 
+import 'theme/halved_brand.dart';
+
 /// Halved game-color standard — one source of truth so casual games stop
 /// drifting. See docs/color-standard.md for the rationale.
 ///
-/// The core rule: **green / red / grey mean *meaning* (win, loss, neutral) and
-/// are never a team.** Teams use **blue / orange** — unambiguous, high-contrast,
-/// colour-blind-friendly, and they never collide with the money/win semantics
-/// (and they sidestep the red/blue political read).
+/// **Sides are pine, clay and slate** (`handoff-score-entry-template`, chosen by
+/// Paul 14 Nov 2026): side 1 pine, side 2 clay, a third side slate. This
+/// REVERSES the old rule that green could never be a team and teams were blue
+/// and orange — there was nothing special about Sixes, Las Vegas and Fourball
+/// that needed colours of their own, and one set of sides across every game is
+/// worth more than the collision it risked. The win/loss semantics below are
+/// unchanged; the screens that show both keep them apart by shade and by
+/// context (a side is a bar, a header and a tray name; a win is a figure).
 class GameColors {
   GameColors._();
 
@@ -15,11 +21,12 @@ class GameColors {
   // Cup) and by Wolf (Wolf-side vs Opponents). Deliberate deviations (see
   // docs/color-standard.md): cup games keep TD-configured team colours; Sixes
   // has no fixed team colours (partners rotate each segment).
-  static final Color team1 = Colors.blue.shade700;     // Team 1 / Wolf-side
-  static final Color team2 = Colors.orange.shade800;   // Team 2 / Opponents
+  static const Color team1 = Halved.pine;       // Side 1 / Wolf-side
+  static const Color team2 = Halved.teamClay;    // Side 2 / Opponents
+  static const Color team3 = Halved.teamSlate;   // a third side (Annandale)
   /// Pale fills for chips / badges / cell backgrounds.
-  static final Color team1Bg = Colors.blue.shade50;
-  static final Color team2Bg = Colors.orange.shade50;
+  static const Color team1Bg = Color(0xFFE4F2EA);
+  static const Color team2Bg = Color(0xFFFBEBDB);
 
   // ── Semantics (meaning — never a team) ────────────────────────────────────
   static final Color win     = Colors.green.shade700;  // win / up / +money

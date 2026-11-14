@@ -23,8 +23,8 @@ import '../widgets/stake_field.dart';
 
 // Player identity is colour, not "P1/P2" — three fixed colours in roster order.
 const List<Color> kTriplePlayerColours = [
-  Color(0xFF1976D2),   // blue
-  Color(0xFFEF6C00),   // orange
+  Color(0xFF0F6E56),   // blue
+  Color(0xFFB45309),   // orange
   Color(0xFF7B3FA0),   // plum
 ];
 

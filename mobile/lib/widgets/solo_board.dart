@@ -22,7 +22,9 @@ import 'package:flutter/material.dart';
 import '../game_catalog.dart';
 import 'hole_grid_scorecard.dart';
 
-/// The golfer. The handoff's `#1976D2`, which is also `GameColors.team1`.
+/// The golfer. The handoff's `#1976D2` — it WAS `GameColors.team1`, and is no
+/// longer: sides are pine and clay now, and solo keeps its own palette (the
+/// golfer against par) rather than borrowing a side's colour.
 const Color soloGolfer = Color(0xFF1976D2);
 
 /// Par. See the note above about why this is red.

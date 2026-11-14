@@ -41,8 +41,8 @@ import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
 import '../widgets/combo_tee_chip.dart';
 
-const Color _kBlue   = Color(0xFF1976D2);   // side 1 of match 1 — "Team A"
-const Color _kOrange = Color(0xFFEF6C00);   // side 2
+const Color _kBlue   = Color(0xFF0F6E56);   // side 1 of match 1 — "Team A"
+const Color _kOrange = Color(0xFFB45309);   // side 2
 
 // `_fmtMoney` and `_dollars` went with `_MoneyCard`, which was their only
 // reader. The standing row formats its own figure, in the same

@@ -40,8 +40,8 @@ class TeamSplitter4 extends StatefulWidget {
     // Blue (team 1) / orange (team 2) — the GameColors team standard, so the
     // setup splitter matches the in-play team colours (and never collides with
     // the green/red/grey win-loss semantics). Team A becomes Django team 1.
-    this.teamAColor = const Color(0xFF1976D2),  // Colors.blue.shade700
-    this.teamBColor = const Color(0xFFEF6C00),  // Colors.orange.shade800
+    this.teamAColor = const Color(0xFF0F6E56),  // Colors.blue.shade700
+    this.teamBColor = const Color(0xFFB45309),  // Colors.orange.shade800
     this.reorderable = true,
   });
 

@@ -5,20 +5,18 @@ import '../theme/halved_brand.dart';
 
 /// The two fixed sides of a 2v2 game, on a light card and on a dark tray.
 ///
-/// **Blue and orange, not the packets' pine and clay.**
-/// `docs/color-standard.md` is explicit: green, red and grey mean win, loss
-/// and neutral and are never a team. The golfer rows on the score-entry
-/// screen have drawn Las Vegas and Fourball that way since they shipped, and
-/// a header or a tray in a different colour from the rows it describes is
-/// worse than one in a different colour from the design.
+/// **Pine and clay** (`handoff-score-entry-template`; Paul, 14 Nov 2026). These
+/// were blue and orange for a while, on the argument that green means a win and
+/// must never be a team — and then Las Vegas, Fourball and Nassau each wore a
+/// colour the template did not, for no reason particular to them. One set of
+/// sides now: pine, clay, and slate for a third.
 ///
-/// `onDark3` is the tray's blue: the pale blue-grey the packets draw is
-/// indistinguishable from the tray's own label grey, which is why that token
-/// exists.
+/// On the dark tray they are the template's own dark variants — bright mint and
+/// `#F2A86E` — because pine on deep pine cannot be read.
 ///
 /// Shared because Las Vegas needed it and Fourball needed the same thing an
 /// hour later — second user is when a rule earns a module.
 Color sideColour(int side, {bool onDark = false}) {
-  if (onDark) return side == 1 ? Halved.onDark3 : Halved.onDark2;
+  if (onDark) return side == 1 ? Halved.onDark1 : Halved.onDark2;
   return side == 1 ? GameColors.team1 : GameColors.team2;
 }

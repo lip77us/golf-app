@@ -38,7 +38,7 @@ import '../widgets/stroke_dots.dart';
 import '../widgets/forty_balls_keypad.dart';
 import '../widgets/triple_nassau_entry.dart';
 
-const List<Color> _kNc = [Color(0xFF1976D2), Color(0xFFEF6C00), Color(0xFF7B3FA0)];
+const List<Color> _kNc = [Color(0xFF0F6E56), Color(0xFFB45309), Color(0xFF7B3FA0)];
 const Color _muted = Color(0xFF5C6B62);
 
 String _fmtMoney(double v) {

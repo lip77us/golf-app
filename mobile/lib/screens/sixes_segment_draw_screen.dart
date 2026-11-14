@@ -88,8 +88,8 @@ class SixesSegmentDrawScreen extends StatefulWidget {
 const _pine = Color(0xFF0F6E56);
 const _brightMint = Color(0xFF3BD89A);
 const _muted = Color(0xFF5C6B62);
-const _blue = Color(0xFF1976D2);
-const _orange = Color(0xFFEF6C00);
+const _blue = Color(0xFF0F6E56);
+const _orange = Color(0xFFB45309);
 const _cardBorder = Color(0xFFD3DED6);
 
 const double _rowH = 92;

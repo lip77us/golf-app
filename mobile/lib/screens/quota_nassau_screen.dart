@@ -980,7 +980,7 @@ class _QNPlayerRow extends StatelessWidget {
     this.spotsSheetOpen = false,
     Color? t1Color,
     Color? t2Color,
-  })  : t1Color = t1Color ?? const Color(0xFF1976D2),
+  })  : t1Color = t1Color ?? const Color(0xFF0F6E56),
         t2Color = t2Color ?? const Color(0xFFD32F2F);
 
   @override

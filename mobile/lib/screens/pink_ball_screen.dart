@@ -12,6 +12,7 @@
 /// Scores are submitted via RoundProvider.submitHole() which persists offline
 /// and syncs automatically (same path as all other entry screens).
 
+import '../game_colors.dart';
 import '../widgets/standing_ribbon.dart';
 import 'dart:async';
 
@@ -1587,7 +1588,7 @@ class _ThreePersonMatchPhase2Card extends StatelessWidget {
                 children: [
                   TextSpan(
                     text: leader,
-                    style: const TextStyle(color: Colors.blue),
+                    style: const TextStyle(color: GameColors.team1),
                   ),
                   TextSpan(
                     text: ' vs ',
@@ -1597,7 +1598,7 @@ class _ThreePersonMatchPhase2Card extends StatelessWidget {
                   ),
                   TextSpan(
                     text: runnerUp,
-                    style: TextStyle(color: Colors.orange.shade800),
+                    style: const TextStyle(color: GameColors.team2),
                   ),
                 ],
               ),
