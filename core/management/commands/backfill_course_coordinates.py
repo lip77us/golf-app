@@ -56,7 +56,10 @@ class Command(BaseCommand):
         ids |= set(CatalogCourse.objects.filter(latitude__isnull=True)
                    .exclude(golf_api_id='')
                    .values_list('golf_api_id', flat=True))
-        ids = sorted(i for i in ids if not str(i).startswith('local-'))
+        # `local-`, `manual-` and `seed-` are ids WE made up (pasted courses,
+        # the demo seed); upstream has never heard of them.
+        ids = sorted(i for i in ids
+                     if not str(i).startswith(('local-', 'manual-', 'seed-')))
         if opts['limit']:
             ids = ids[:opts['limit']]
 

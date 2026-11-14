@@ -58,6 +58,13 @@ class BackfillTests(TestCase):
         _run(lambda i: calls.append(i) or {}, '--apply')
         self.assertEqual(calls, [])
 
+    def test_ids_we_made_up_are_not_looked_up(self):
+        for api in ('manual-poppy', 'seed-1001', 'local-9'):
+            self._course(self.a, api, api)
+        calls = []
+        _run(lambda i: calls.append(i) or {}, '--apply')
+        self.assertEqual(calls, [])
+
     def test_zero_zero_is_a_missing_geocode_not_a_place(self):
         c = self._course(self.a, 'Nowhere', 'z1')
         _run(lambda i: {'latitude': 0, 'longitude': 0}, '--apply')
