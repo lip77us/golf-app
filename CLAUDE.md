@@ -13162,9 +13162,14 @@ filled (five or six plays with five). **Across groups keeps the old roster list*
 a pool has no seat count.
 
 **Rules are pure** (`utils/add_players.dart`): a name matches when any word starts
-with the query (*pa* finds Samir Patel); 3+ digits find a saved mobile; regulars
-are never repeated in results; Your golfers come before On Halved; the strokes
-line, mobile formatting, guest naming and the toasts all live there.
+with the query (*pa* finds Samir Patel); 3+ digits find a saved mobile; Your golfers
+come before On Halved; the strokes line, mobile formatting, guest naming and the
+toasts all live there. **Two departures from the handoff (Paul, 14 Nov):** a regular
+**leaves the grid once seated** and the next most played takes the tile (so there
+are still up to seven to choose from; taking him out of the seat puts him back),
+and **search finds regulars too** — the handoff kept them out of results because the
+grid showed them, but a golfer searched for is wanted now. The grid's mint "seated"
+ring went with it.
 
 **Regulars come from `GET /api/players/regulars/`** (`PlayerRegularsView`): finished
 rounds shared with each golfer in the account (casual and tournament), most first,

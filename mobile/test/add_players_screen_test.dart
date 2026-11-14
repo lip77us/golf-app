@@ -206,6 +206,33 @@ void main() {
       expect(log, ['add Sam Lee']);
     });
 
+    testWidgets('a seated regular leaves the grid', (t) async {
+      await open(t, []);
+      final grid = find.byType(GridView);
+      expect(find.descendant(of: grid, matching: find.text('Sam')),
+          findsOneWidget);
+      await t.tap(find.descendant(of: grid, matching: find.text('Sam')));
+      await t.pump();
+      expect(find.descendant(of: grid, matching: find.text('Sam')),
+          findsNothing,
+          reason: 'he is a seat now, not a choice');
+      // He is in the seats row instead.
+      expect(find.text('Sam'), findsOneWidget);
+    });
+
+    testWidgets('taking him out of the seat puts him back in the grid',
+        (t) async {
+      await open(t, [], seated: [_roster[2]]);
+      final grid = find.byType(GridView);
+      expect(find.descendant(of: grid, matching: find.text('Sam')),
+          findsNothing);
+      await t.tap(find.descendant(
+          of: find.byType(Wrap).first, matching: find.text('Sam')));
+      await t.pump();
+      expect(find.descendant(of: grid, matching: find.text('Sam')),
+          findsOneWidget);
+    });
+
     testWidgets('a tap on Add when full does nothing', (t) async {
       final log = <String>[];
       await open(t, log, seats: 2, seated: [_roster[1]]);
@@ -224,13 +251,13 @@ void main() {
   });
 
   group('search', () {
-    testWidgets('your golfers by name prefix, regulars not repeated',
-        (t) async {
+    testWidgets('your golfers by name prefix, regulars included', (t) async {
       await open(t, []);
       await t.enterText(find.byType(TextField), 'p');
       await t.pump();
-      expect(find.text('YOUR GOLFERS'), findsNothing,
-          reason: 'Pete is a regular, so he is the grid, not a result');
+      expect(find.text('YOUR GOLFERS'), findsOneWidget);
+      expect(find.text('Pete Lane'), findsOneWidget,
+          reason: 'Pete is a regular, and searching for him still finds him');
       await t.enterText(find.byType(TextField), 'gab');
       await t.pump();
       expect(find.text('YOUR GOLFERS'), findsOneWidget);

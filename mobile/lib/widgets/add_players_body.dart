@@ -120,8 +120,11 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
   Set<int> get _seatedIds => {for (final p in widget.seated) p.id};
   int? get _meId => widget.me?.id;
 
-  List<PlayerProfile> get _regulars =>
-      regularsOf(widget.roster, widget.counts, meId: _meId);
+  /// The grid: the seven most played who are NOT seated yet. Choosing one
+  /// takes him off the grid and the next most played takes his tile.
+  List<PlayerProfile> get _regulars => regularsOf(
+      widget.roster, widget.counts,
+      meId: _meId, exclude: _seatedIds);
 
   void _onChanged(String v) {
     setState(() => _query = v);
@@ -235,10 +238,9 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
   @override
   Widget build(BuildContext context) {
     final regulars = _regulars;
-    final regularIds = {for (final p in regulars) p.id};
     final q = _query.trim();
     final yours = searchYourGolfers(widget.roster, q,
-        meId: _meId, regularIds: regularIds, counts: widget.counts);
+        meId: _meId, counts: widget.counts);
     final everyone =
         allGolfersOf(widget.roster, widget.counts, meId: _meId).length;
     final showHalved = _halved.isNotEmpty && _answeredFor == q;
@@ -410,14 +412,13 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
   }
 
   Widget _regularTile(PlayerProfile p) {
-    final seated = _seatedIds.contains(p.id);
+    // Never seated: a seated regular is no longer in the grid at all.
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () => _toggle(p),
       child: Column(mainAxisAlignment: MainAxisAlignment.start, children: [
         const SizedBox(height: 2),
-        GolferAvatar(
-            name: p.name, onHalved: p.isOnApp, size: 44, ringed: seated),
+        GolferAvatar(name: p.name, onHalved: p.isOnApp, size: 44),
         const SizedBox(height: 4),
         Text(p.name.split(' ').first,
             maxLines: 1,

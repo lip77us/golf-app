@@ -23,15 +23,11 @@ class GolferAvatar extends StatelessWidget {
   final bool onHalved;
   final double size;
 
-  /// A mint ring around the avatar: this golfer is already seated.
-  final bool ringed;
-
   const GolferAvatar({
     super.key,
     required this.name,
     required this.onHalved,
     this.size = 42,
-    this.ringed = false,
   });
 
   @override
@@ -86,15 +82,6 @@ class GolferAvatar extends StatelessWidget {
       );
     }
 
-    if (!ringed) return avatar;
-    // 0 0 0 3px surface, 0 0 0 5px mint — a gap, then the ring.
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: Halved.brightMint, width: 2),
-      ),
-      child: avatar,
-    );
+    return avatar;
   }
 }

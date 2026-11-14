@@ -91,6 +91,25 @@ void main() {
       expect(regularsOf(roster, const {}, meId: 1), isEmpty);
     });
 
+    test('a seated regular leaves the grid and the next most played takes his tile',
+        () {
+      final big = [
+        g(1, 'You'),
+        for (var i = 2; i <= 10; i++) g(i, 'Golfer $i'),
+      ];
+      final counts = {for (var i = 2; i <= 10; i++) i: r(100 - i)};
+      final before = regularsOf(big, counts, meId: 1);
+      expect(before.map((p) => p.id), [2, 3, 4, 5, 6, 7, 8]);
+      final after = regularsOf(big, counts, meId: 1, exclude: {2, 3});
+      expect(after.map((p) => p.id), [4, 5, 6, 7, 8, 9, 10],
+          reason: 'still seven to choose from');
+    });
+
+    test('with everyone seated there is nothing left in the grid', () {
+      final counts = {2: r(3), 3: r(1)};
+      expect(regularsOf(roster, counts, meId: 1, exclude: {2, 3}), isEmpty);
+    });
+
     test('a golfer who is not on the roster cannot be offered', () {
       expect(regularsOf(roster, {999: r(50)}, meId: 1), isEmpty);
     });
@@ -115,27 +134,27 @@ void main() {
     ];
 
     test('finds by name prefix', () {
-      final hits = searchYourGolfers(roster, 'p',
-          meId: 1, regularIds: const {});
+      final hits = searchYourGolfers(roster, 'p', meId: 1);
       expect(hits.map((p) => p.name), ['Pete Lane']);
     });
 
     test('finds by phone digits (the handoff: 925555 finds Gabe Ortiz)', () {
       final hits = searchYourGolfers(roster, '925555',
-          meId: 1, regularIds: const {});
+          meId: 1);
       expect(hits.map((p) => p.name), ['Gabe Ortiz']);
     });
 
-    test('regulars are never repeated in the results', () {
-      final hits = searchYourGolfers(roster, 'dave',
-          meId: 1, regularIds: const {2});
-      expect(hits, isEmpty);
+    test('regulars are found by search too', () {
+      // The handoff kept them out because the grid already showed them. A golfer
+      // searched for is wanted now, wherever he is listed.
+      final hits = searchYourGolfers(roster, 'dave', meId: 1);
+      expect(hits.map((p) => p.name), ['Dave Moran']);
     });
 
     test('never you, and an empty query finds nothing', () {
-      expect(searchYourGolfers(roster, 'you', meId: 1, regularIds: const {}),
+      expect(searchYourGolfers(roster, 'you', meId: 1),
           isEmpty);
-      expect(searchYourGolfers(roster, '', meId: 1, regularIds: const {}),
+      expect(searchYourGolfers(roster, '', meId: 1),
           isEmpty);
     });
   });

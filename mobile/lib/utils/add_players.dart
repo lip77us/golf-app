@@ -78,15 +78,24 @@ bool looksLikePhone(String q) {
 /// Only a golfer who is in [roster] can be offered, and never [meId] or a
 /// phantom. A golfer with no finished rounds is not a regular, so a new
 /// account's grid is empty rather than seven strangers.
+///
+/// **[exclude] is who is already seated**, and the grid is built from what is
+/// left: a regular leaves the grid the moment he is chosen, and the next most
+/// played takes his tile, so there are still up to [limit] to choose from.
 List<PlayerProfile> regularsOf(
   List<PlayerProfile> roster,
   RoundCounts counts, {
   required int? meId,
   int limit = kRegularsShown,
+  Set<int> exclude = const {},
 }) {
   final eligible = [
     for (final p in roster)
-      if (!p.isPhantom && p.id != meId && (counts[p.id]?.rounds ?? 0) > 0) p
+      if (!p.isPhantom &&
+          p.id != meId &&
+          !exclude.contains(p.id) &&
+          (counts[p.id]?.rounds ?? 0) > 0)
+        p
   ];
   eligible.sort(_byRounds(counts));
   return eligible.take(limit).toList();
@@ -115,14 +124,16 @@ int Function(PlayerProfile, PlayerProfile) _byRounds(RoundCounts counts) =>
     };
 
 /// What a search for [query] finds among **your golfers**: a name match or a
-/// phone match, never a phantom or [meId], and **never a regular** — they are
-/// already on screen above, and a golfer appears once, in the first place he
-/// belongs.
+/// phone match, never a phantom or [meId].
+///
+/// **Regulars are found too** (Paul, 14 Nov 2026). The handoff kept them out of
+/// the results because they were already in the grid above; but a golfer
+/// searched for is a golfer wanted NOW, wherever he happens to be listed, and a
+/// seated regular has left the grid anyway.
 List<PlayerProfile> searchYourGolfers(
   List<PlayerProfile> roster,
   String query, {
   required int? meId,
-  required Set<int> regularIds,
   RoundCounts counts = const {},
 }) {
   final q = query.trim();
@@ -131,7 +142,6 @@ List<PlayerProfile> searchYourGolfers(
     for (final p in roster)
       if (!p.isPhantom &&
           p.id != meId &&
-          !regularIds.contains(p.id) &&
           (nameMatches(p.name, q) || phoneMatches(p.phone, q)))
         p
   ];
