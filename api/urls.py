@@ -30,6 +30,7 @@ urlpatterns = [
     path('devices/register/',    views.DeviceRegisterView.as_view(),   name='api-device-register'),
     path('devices/unregister/',  views.DeviceUnregisterView.as_view(), name='api-device-unregister'),
     path('notification-prefs/',  views.NotificationPrefsView.as_view(), name='api-notification-prefs'),
+    path('players/regulars/', views.PlayerRegularsView.as_view(), name='api-player-regulars'),
     path('players/<int:pk>/',  views.PlayerDetailView.as_view(), name='api-player-detail'),
     path('players/<int:pk>/favorite/', views.PlayerFavoriteView.as_view(), name='api-player-favorite'),
     path('courses/',           views.CourseListView.as_view(),   name='api-courses'),

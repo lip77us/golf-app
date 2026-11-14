@@ -2138,6 +2138,70 @@ class RecentCoursesView(APIView):
         return Response(CourseSerializer(courses, many=True).data)
 
 
+class PlayerRegularsView(APIView):
+    """
+    GET /api/players/regulars/
+
+    How many FINISHED rounds this golfer has shared with each golfer in the
+    account, for the Add players screen (``handoff-add-players``):
+
+        {"golfers": [{"player_id": 12, "rounds": 9, "last_played": "2026-11-13"}]}
+
+    Most rounds first, ties to the more recent.  The screen takes the top seven
+    as **Your regulars**, orders the All golfers sheet by it, and reads the same
+    counts for the *played once* line under a search result.
+
+    * **Finished only** -- ``status == complete``.  A round somebody set up and
+      abandoned, or is still playing, is not a golfer he plays with (the same
+      rule as the home course and the game guess).
+    * **Both of them in it** -- a membership for him and for the other golfer.
+      Casual and tournament rounds both count: "finished the most rounds with".
+    * **Own account only**, never phantoms, never himself.
+    * A login with no golfer, or a golfer with no finished rounds, gets an
+      empty list rather than an error.
+    """
+
+    def get(self, request):
+        from collections import defaultdict
+        from core.models import RoundStatus
+        from tournament.models import FoursomeMembership
+
+        try:
+            pp = request.user.player_profile
+        except Exception:
+            pp = None
+        if pp is None:
+            return Response({'golfers': []})
+
+        acct = request.user.account
+        mine = set(
+            FoursomeMembership.objects
+            .filter(player=pp, foursome__round__account=acct,
+                    foursome__round__status=RoundStatus.COMPLETE)
+            .values_list('foursome__round_id', flat=True))
+        if not mine:
+            return Response({'golfers': []})
+
+        rounds = defaultdict(set)
+        last = {}
+        for pid, rid, day in (
+                FoursomeMembership.objects
+                .filter(foursome__round_id__in=mine, player__is_phantom=False)
+                .exclude(player=pp)
+                .values_list('player_id', 'foursome__round_id',
+                             'foursome__round__date')):
+            rounds[pid].add(rid)
+            if pid not in last or day > last[pid]:
+                last[pid] = day
+
+        # Most rounds first; among equals the more recent first.
+        order = sorted(rounds, key=lambda pid: (-len(rounds[pid]),
+                                                -last[pid].toordinal()))
+        out = [{'player_id': pid, 'rounds': len(rounds[pid]),
+                'last_played': last[pid].isoformat()} for pid in order]
+        return Response({'golfers': out})
+
+
 class GameHistoryView(APIView):
     """
     GET /api/rounds/game-history/

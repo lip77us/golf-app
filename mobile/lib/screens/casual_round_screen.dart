@@ -23,6 +23,10 @@ import '../widgets/course_bar.dart';
 import '../utils/game_suggestions.dart';
 import '../widgets/all_games_sheet.dart';
 import '../widgets/side_games_sheet.dart';
+import '../utils/add_players.dart';
+import '../widgets/add_players_body.dart';
+import '../widgets/all_golfers_sheet.dart';
+import '../widgets/new_golfer_sheet.dart';
 import '../widgets/dashed_border.dart';
 import 'player_form_screen.dart';
 
@@ -104,6 +108,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   /// [suggestGames] and re-worked whenever the group size, the round length or
   /// the history changes.
   List<String> _chips = const [];
+
+  /// Finished rounds shared with each golfer, for the regulars and the
+  /// *played once* line. Empty until it loads — and for a new account.
+  RoundCounts _regularCounts = const {};
 
   // Advanced: how many holes and which hole to start on (docs/hole-flexibility).
   // Defaults reproduce a normal full round from hole 1.
@@ -218,6 +226,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     _recomputeGames();
     _loadData();
     _loadGameHistory();
+    _loadRegulars();
   }
 
   /// Fetch the golfer's game history for the guess. Failing is fine — the
@@ -233,6 +242,108 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     } catch (_) {
       // No history is the same answer as a new golfer.
     }
+  }
+
+  /// Best effort: without it there are simply no regulars yet.
+  Future<void> _loadRegulars() async {
+    try {
+      final c = await context.read<AuthProvider>().client.getRegulars();
+      if (!mounted) return;
+      setState(() => _regularCounts = c);
+    } catch (_) {}
+  }
+
+  /// The Add players screen replaces the roster list for every group size that
+  /// has seats. Across groups has none — a pool is as many golfers as turn up —
+  /// so it keeps the list it has always had.
+  bool get _useAddPlayers => _sizeFilter != 'groups';
+
+  /// Seats in the round, you included. Five or six plays at either size and
+  /// draws six.
+  int get _seatCount =>
+      _sizeFilter == kFiveOrSix ? 6 : (int.tryParse(_sizeFilter) ?? 4);
+
+  /// Golfers needed before Next: the seat count, except five or six, which
+  /// plays with five.
+  int get _seatsNeeded => _sizeFilter == kFiveOrSix ? 5 : _seatCount;
+
+  /// Everyone seated, you first, then in the order they were added.
+  List<PlayerProfile> get _seatedProfiles {
+    final myId = context.read<AuthProvider>().player?.id;
+    final byId = {for (final p in _players) p.id: p};
+    final ids = [
+      if (myId != null && _playerTees.containsKey(myId)) myId,
+      for (final id in _playerTees.keys)
+        if (id != myId) id,
+    ];
+    return [for (final id in ids) if (byId[id] != null) byId[id]!];
+  }
+
+  /// The slope of the tee YOU would play, for the strokes line. 113 when no
+  /// tee is known, which makes it the plain difference in index.
+  int get _myTeeSlope {
+    final me = context.read<AuthProvider>().player;
+    if (me == null || _selectedCourse == null) return 113;
+    final id = _defaultTeeIdForPlayer(
+        _players.firstWhere((p) => p.id == me.id, orElse: () => me));
+    for (final t in _tees) {
+      if (t.id == id) return t.slope;
+    }
+    return 113;
+  }
+
+  Future<void> _openNewGolfer(String query) async {
+    final me = context.read<AuthProvider>().player;
+    final result = await showNewGolferSheet(
+      context,
+      seed: query,
+      myIndex: me == null ? null : double.tryParse(me.handicapIndex),
+      slope: _myTeeSlope,
+    );
+    if (result == null || !mounted) return;
+    _addCreatedGolfer(result.player);
+    final first = result.player.name.split(' ').first;
+    // Every seat taken: the golfer is saved to your golfers for next time but
+    // there is nowhere to put him in this round.
+    _toast(_playerTees.containsKey(result.player.id)
+        ? addedToast(
+            firstName: first,
+            hasNumber: result.hasNumber,
+            viaAccount: result.viaAccount)
+        : '$first saved to your golfers. Take someone out to seat them.');
+  }
+
+  void _onHalvedAdded(PlayerProfile added) {
+    _addCreatedGolfer(added);
+    _toast(addedToast(
+      firstName: added.name.split(' ').first,
+      hasNumber: true,
+      viaAccount: true,
+    ));
+  }
+
+  void _toast(String text) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+          content: Text(text), duration: const Duration(seconds: 3)));
+  }
+
+  void _openAllGolfers() {
+    final myId = context.read<AuthProvider>().player?.id;
+    showAllGolfersSheet(
+      context,
+      golfers: allGolfersOf(_players, _regularCounts, meId: myId),
+      counts: _regularCounts,
+      seatedIds: () => _playerTees.keys.toSet(),
+      onToggle: (p) {
+        if (_playerTees.containsKey(p.id)) {
+          _onPlayerToggle(p.id, false);
+        } else if (_playerTees.length < _seatCount) {
+          _onPlayerToggle(p.id, true);
+        }
+      },
+    );
   }
 
   /// Whether [id] is offered as a primary for this group and this round.
@@ -536,7 +647,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       if (created.isFavorite) _favoriteIds.add(created.id);
       _addedGolfers = true;
     });
-    if (_selectedCourse != null) {
+    // With seats there is nowhere to put a golfer once they are all taken; he
+    // is still saved to your golfers.
+    final full = _useAddPlayers && _playerTees.length >= _seatCount;
+    if (_selectedCourse != null && !full) {
       _onPlayerToggle(created.id, true);
     }
   }
@@ -1052,6 +1166,22 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       );
 
       if (!mounted) return;
+      // The game is texted at Start round, not when a golfer is added: one
+      // Messages draft to every guest with a number, sent from his own phone.
+      if (_useAddPlayers) {
+        final me = context.read<AuthProvider>().player?.id;
+        await textTheGame(
+          context.read<AuthProvider>(),
+          ScaffoldMessenger.of(context),
+          guests: [
+            for (final p in _seatedProfiles)
+              if (p.id != me) p
+          ],
+          courseName: _selectedCourse?.name ?? '',
+          watchToken: launch.round.watchToken,
+        );
+        if (!mounted) return;
+      }
       // Land on the /round launch page (Enter Scores / Edit Tee Boxes / Edit
       // Configuration).  For a single game that still needs configuring, push
       // its setup screen ON TOP of the hub (returnToHub mode) so saving setup
@@ -1166,6 +1296,21 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     );
   }
 
+  /// Enough golfers to go on. With seats, every seat — except five or six,
+  /// which plays with five; across groups it is two, as it always was.
+  bool get _playersReady {
+    if (_isSolo) return _playerTees.length >= 1;
+    if (!_useAddPlayers) return _playerTees.length >= 2;
+    return _playerTees.length >= _seatsNeeded;
+  }
+
+  /// The disabled Next says how many are missing.
+  String get _playersNextLabel {
+    if (!_useAddPlayers || _isSolo) return 'Next';
+    final missing = _seatsNeeded - _playerTees.length;
+    return missing > 0 ? 'Add $missing more' : 'Next';
+  }
+
   Widget _buildNav() {
     final canNext = _selectedCourse != null && _primaryGame != null;
     return SafeArea(
@@ -1207,13 +1352,13 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               )
             else if (_step == 1)
               HalvedCtaButton(
-                label: 'Next',
+                label: _playersReady ? 'Next' : _playersNextLabel,
                 icon: Icons.arrow_forward,
                 trailingIcon: true,
                 expand: false,
                 // Players chosen → move to the dedicated tee step, filling in
                 // sex-based suggestions for review.
-                onPressed: _playerTees.length >= (_isSolo ? 1 : 2)
+                onPressed: _playersReady
                     ? () => setState(() {
                           if (!_hasGroupsStep) _applyTeeSuggestions();
                           _step = 2;
@@ -1535,18 +1680,35 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           if (_step == 1) ...[
           // How many golfers the chosen game(s) allow — shown up front, and
           // it flips to an error if the current selection is off.
-          for (final gameId in _activeGames)
-            _gamePlayerCountHint(gameId),
-          const SizedBox(height: 8),
-
-          Text('Select Players',
-              style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 16),
+          if (!_useAddPlayers) ...[
+            for (final gameId in _activeGames)
+              _gamePlayerCountHint(gameId),
+            const SizedBox(height: 8),
+            Text('Select Players',
+                style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 16),
+          ],
 
           if (_selectedCourse == null)
             const InlineMessage(
               text: 'Please select a course first to assign tees.',
               kind: InlineMessageKind.info,
+            )
+          else if (_useAddPlayers)
+            AddPlayersBody(
+              me: context.read<AuthProvider>().player,
+              seated: _seatedProfiles,
+              seats: _seatCount,
+              minSeated: _seatsNeeded,
+              gameLabel:
+                  _primaryGame == null ? '' : gameDisplayName(_primaryGame!),
+              roster: _players,
+              counts: _regularCounts,
+              onAdd: (p) => _onPlayerToggle(p.id, true),
+              onRemove: (p) => _onPlayerToggle(p.id, false),
+              onHalvedAdded: _onHalvedAdded,
+              onNewGolfer: _openNewGolfer,
+              onAllGolfers: _openAllGolfers,
             )
           else ...[
             // One field instead of three entry points: your golfers, then

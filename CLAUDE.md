@@ -13145,3 +13145,66 @@ lines for the sheet. Tests: `side_games_sheet_test.dart` (7) and the
 Stroke Play (they come from `sideGamesFor`, unchanged); and Solo and Across
 groups keep the existing size control rather than guessing a group size.
 
+## Add players — one screen for seating golfers (14 Nov 2026)
+
+`~/Downloads/handoff-add-players`. The casual setup's **Players** step is now the
+Add players screen, and **My Golfers**' add is the **New golfer sheet**. Built and
+tested; **not seen on a device.** Scope chosen with Paul: casual setup and My
+Golfers only. **Select players, the cup's "Add players to a side" and the
+tournament wizard's picker still use the old pickers.**
+
+**The screen** (`widgets/add_players_body.dart`): seats (you first, one per golfer
+the group size needs, tap a seated golfer to remove them), **Your regulars** (the
+seven golfers you have finished the most rounds with, then an **All golfers** tile),
+an always-open search, and a dark **Add a new golfer** card whose title carries
+what was typed. Next stays disabled reading **Add N more** until every seat is
+filled (five or six plays with five). **Across groups keeps the old roster list**:
+a pool has no seat count.
+
+**Rules are pure** (`utils/add_players.dart`): a name matches when any word starts
+with the query (*pa* finds Samir Patel); 3+ digits find a saved mobile; regulars
+are never repeated in results; Your golfers come before On Halved; the strokes
+line, mobile formatting, guest naming and the toasts all live there.
+
+**Regulars come from `GET /api/players/regulars/`** (`PlayerRegularsView`): finished
+rounds shared with each golfer in the account (casual and tournament), most first,
+ties to the more recent, never yourself or a phantom, own account only. The same
+counts give the *played once* line and order the All golfers sheet.
+
+**On Halved reuses what existed**: name search and phone lookup
+(`HalvedUserLookupView`) and `add-to-roster` (which carries the phone across so the
+golfer links to the account without the number reaching the client). A phone hit is
+created client-side, as the old search did.
+
+**The New golfer sheet** (`widgets/new_golfer_sheet.dart`) creates the golfer
+itself, so it can answer "that number is already on Halved" before writing
+anything: **Use account** creates the real account's golfer instead of a guest. One
+mint button whose label follows the input (*Enter a name* / *Add Jo* / *Add Jo &
+text the game*); a guest with one name is saved as *{Name} Guest*; no index plays
+off scratch. The strokes line is worked out against **your** index at the tee you
+would play, and is omitted on My Golfers (no round to measure against). The button
+is pinned below the scrolling fields so it stays reachable with the keyboard up.
+Removed in review, not to be added back: the tee choice, an index slider, a message
+preview, and *Add without a number*.
+
+**Texting happens at Start round, and from your own phone.** Paul's call (14 Nov):
+Halved has never sent golfer-facing SMS from the server, so "Text the game" is **one
+Messages draft to every guest with a number, opened when the round is configured**
+(`textTheGame` in `utils/golfer_invite.dart`), body the round's watch link. The old
+per-golfer invite dialog on add is not used by the new screen. Halved accounts are
+not texted.
+
+**Not built, worth knowing:**
+- **The push to Halved accounts at Start round.** The toast says "A push goes out at
+  Start round" for Use account; nothing sends it yet. Check this before relying on
+  that sentence.
+- **Favorites** (the pin flag from the 31 Oct Select Players work) has no place in
+  the new screen; regulars come from rounds played, not from the shortlist. The
+  backend and the flag are untouched and still draw on the Across-groups list.
+- **A new guest's sex defaults to M**, which only affects the suggested tee on the
+  tee step (the handoff removed the tee choice from the sheet).
+
+Tests: `api/test_player_regulars.py` (8), `mobile/test/add_players_rules_test.dart`
+(35) and `mobile/test/add_players_screen_test.dart` (32). Five behaviours were
+mutation-checked.
+

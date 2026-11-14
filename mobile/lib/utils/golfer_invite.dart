@@ -197,3 +197,54 @@ Future<bool> _launchSmsInvite({
   if (!await canSendSms()) return false;
   return sendSms(message: body, recipients: [cleaned]);
 }
+
+
+/// The one text that goes to a round's guests when it starts
+/// (`handoff-add-players`): every guest with a mobile number, in a single
+/// Messages draft the golfer sends from his OWN phone — so it is not golfer-
+/// facing SMS from Halved, which the app has never done (TCPA / App Store).
+///
+/// Halved accounts are not texted: they are on the app already.
+///
+/// The body is the round's watch link, which opens the live game and then the
+/// receipt; with no token it falls back to the personal invite link, which
+/// still downloads the app and connects them by number.
+///
+/// Returns false when nothing was opened (no guest has a number, or the device
+/// cannot send SMS), so the caller can say so instead of staying silent.
+Future<bool> textTheGame(
+  AuthProvider auth,
+  ScaffoldMessengerState messenger, {
+  required List<PlayerProfile> guests,
+  required String courseName,
+  String? watchToken,
+}) async {
+  final numbers = [
+    for (final g in guests)
+      if (g.phone.trim().isNotEmpty && !g.isOnApp)
+        g.phone.replaceAll(RegExp(r'[^0-9+]'), ''),
+  ];
+  if (numbers.isEmpty) return false;
+
+  String url;
+  if (watchToken != null && watchToken.isNotEmpty) {
+    url = 'https://halved.golf/watch/$watchToken/';
+  } else {
+    try {
+      url = (await auth.client.getInvite()).url;
+    } catch (_) {
+      return false;
+    }
+  }
+  final course = courseName.trim();
+  final body = course.isEmpty
+      ? "You're in our round on Halved. Follow the game live: $url"
+      : "You're in our round at $course on Halved. Follow the game live: $url";
+
+  if (!await canSendSms()) {
+    messenger.showSnackBar(
+        SnackBar(content: Text("Couldn't open Messages. Game link: $url")));
+    return false;
+  }
+  return sendSms(message: body, recipients: numbers);
+}

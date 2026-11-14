@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart';
+import '../utils/add_players.dart' show addedToast;
+import '../widgets/new_golfer_sheet.dart';
 import '../providers/auth_provider.dart';
 import '../utils/golfer_invite.dart';
 import '../widgets/error_view.dart';
@@ -107,6 +109,32 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
     // editable form that would fail to save with a 403.
     final isNew    = player == null;
     final readOnly = !context.read<AuthProvider>().isAdmin;
+
+    // A NEW golfer goes through the New golfer sheet, the same one the Add
+    // players screen opens, so the two cannot differ. Editing one still opens
+    // the full form, which has the fields the sheet deliberately leaves out.
+    if (isNew && !readOnly) {
+      final result = await showNewGolferSheet(context);
+      if (result == null || !mounted) return;
+      await _load();
+      if (!mounted) return;
+      final first = result.player.name.split(' ').first;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+            content: Text(addedToast(
+                firstName: first,
+                hasNumber: result.hasNumber,
+                viaAccount: result.viaAccount,
+                // There is no round here, so nothing is texted at Start
+                // round — the golfer is only saved.
+                inRound: false))));
+      final fresh = _all.firstWhere((p) => p.id == result.player.id,
+          orElse: () => result.player);
+      await maybeOfferGolferSmsInvite(context, fresh);
+      return;
+    }
+
     final saved = await Navigator.of(context).push<PlayerProfile>(
       MaterialPageRoute(
         builder: (_) => PlayerFormScreen(player: player, readOnly: readOnly),

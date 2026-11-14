@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../config.dart';
 import 'models.dart';
+import '../utils/add_players.dart' show SharedRounds;
 import '../utils/coarse_position.dart';
 
 class ApiException implements Exception {
@@ -1423,6 +1424,21 @@ class ApiClient {
   /// new account with no rounds.
   /// The course finder's Recents: five at most, newest first, home course
   /// included and flagged, each with its last date and tees.
+  /// Finished rounds shared with each golfer in the account — the Add players
+  /// screen's regulars and its *played once* line. Empty for a new account.
+  Future<Map<int, SharedRounds>> getRegulars() async {
+    final data = await _get('/players/regulars/');
+    final out = <int, SharedRounds>{};
+    for (final g in ((data as Map)['golfers'] as List? ?? const [])) {
+      final m = (g as Map).cast<String, dynamic>();
+      final id = m['player_id'];
+      if (id is! int) continue;
+      out[id] = SharedRounds((m['rounds'] as num?)?.toInt() ?? 0,
+          DateTime.tryParse(m['last_played'] as String? ?? ''));
+    }
+    return out;
+  }
+
   /// The primary game of each finished casual round this golfer played,
   /// newest first. Drives the game guess on New Round.
   Future<List<GameHistoryEntry>> getGameHistory() async {
