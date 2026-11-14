@@ -221,6 +221,11 @@ void main() {
       expect(gameChipLabel('vegas'), 'Vegas');
       expect(gameDisplayName('vegas'), 'Las Vegas');
     });
+
+    test('Mini Singles Bracket is Singles Bracket on the chip only', () {
+      expect(gameChipLabel('match_play'), 'Singles Bracket');
+      expect(gameDisplayName('match_play'), 'Mini Singles Bracket');
+    });
   });
 
   group('the screen uses it', () {

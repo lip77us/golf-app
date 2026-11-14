@@ -62,9 +62,18 @@ String playerRangeLabel(GameMeta m) {
 /// The chip label for [gameId]: the short form where the sheet's name is long.
 ///
 /// One catalogue id per game and a short label for the chip — the sheet says
-/// Las Vegas, the chip says Vegas.
-String gameChipLabel(String gameId) =>
-    gameId == GameIds.vegas ? 'Vegas' : gameDisplayName(gameId);
+/// Las Vegas, the chip says Vegas; the sheet says Mini Singles Bracket, the chip
+/// says Singles Bracket.
+String gameChipLabel(String gameId) {
+  switch (gameId) {
+    case GameIds.vegas:
+      return 'Vegas';
+    case GameIds.matchPlay:
+      return 'Singles Bracket';
+    default:
+      return gameDisplayName(gameId);
+  }
+}
 
 /// The label over the greyed games: "Not for four", "Not for solo"…
 String notForLabel(String sizeKey) {
