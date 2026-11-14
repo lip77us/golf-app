@@ -85,7 +85,7 @@ void main() {
 
     test('the row is the pinned chips, ticked others, then the sheet', () {
       expect(src, contains('splitSideGames(_eligibleSideGames, _primaryGame)'));
-      expect(src, contains("label: 'More side games'"));
+      expect(src, contains("label: 'More games'"));
       // Only when something is behind it — an empty sheet is a dead chip.
       expect(src, contains('if (split.other.isNotEmpty)'));
       expect(src, contains('children: _sideChips()'));

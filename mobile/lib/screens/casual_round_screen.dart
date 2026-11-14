@@ -278,7 +278,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         if (_sideGames.contains(m.id)) _buildSideChip(m),
       if (split.other.isNotEmpty)
         _MoreGamesChip(
-          label: 'More side games',
+          // Short enough to share the row with the two pinned chips; the
+          // heading above already says these are side games.
+          label: 'More games',
           onTap: () => _openMoreSideGames(split.other),
         ),
     ];
