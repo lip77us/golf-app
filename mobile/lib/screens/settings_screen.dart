@@ -14,7 +14,7 @@ import '../api/client.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/settings_provider.dart';
-import '../widgets/course_search_field.dart';
+import '../widgets/course_bar.dart';
 import '../widgets/halved_mark.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -183,7 +183,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     color: t.colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 12),
-              CourseSearchField(
+              CourseBar(
                 selected: null,
                 // Picking the home course itself — a home suggestion here would
                 // be circular, so suppress it (recents + search still show).

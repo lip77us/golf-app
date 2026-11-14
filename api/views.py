@@ -2138,6 +2138,123 @@ class RecentCoursesView(APIView):
         return Response(CourseSerializer(courses, many=True).data)
 
 
+class RecentPlaysView(APIView):
+    """
+    GET /api/courses/recent-plays/
+
+    The course finder's Recents: the last FIVE distinct courses this golfer
+    played, newest first, **the home course included and flagged** (the
+    older `/courses/recent/` hides it because the old picker pinned it
+    separately and returns three).
+
+    Each row carries the date of the last round there and the tees the golfer
+    played from, because picking a recent returns its tees too:
+
+        [{"course": {...CourseSerializer...}, "last_played": "2026-11-13",
+          "tee_name": "White", "is_home": true}, ...]
+
+    A round counts when this golfer has a real score in it (own account) or
+    was a phone-matched player in a friend's round, which is cloned into the
+    account the way `/courses/recent/` does so it is selectable at once.
+    """
+    LIMIT = 5
+
+    def get(self, request):
+        from accounts.phone import normalize
+        from core.models import CatalogCourse
+        from scoring.models import HoleScore
+        from services.catalog import catalog_from_course, clone_catalog_to_account
+        from tournament.models import FoursomeMembership, Round
+
+        acct = request.user.account
+        try:
+            pp = request.user.player_profile
+        except Exception:
+            pp = None
+
+        # identity key -> {'sort', 'own_id', 'cross', 'tee', 'date'}
+        best: dict = {}
+
+        def _bump(key, sort, date, tee, *, own_id=None, cross=None):
+            cur = best.get(key)
+            if cur is None:
+                best[key] = {'sort': sort, 'date': date, 'tee': tee,
+                             'own_id': own_id, 'cross': cross}
+                return
+            if sort > cur['sort']:
+                cur.update(sort=sort, date=date, tee=tee)
+            if own_id is not None and cur['own_id'] is None:
+                cur['own_id'] = own_id
+            if cross is not None and cur['cross'] is None:
+                cur['cross'] = cross
+
+        if pp is not None:
+            scored = set(HoleScore.objects
+                         .filter(player=pp, gross_score__isnull=False,
+                                 foursome__round__account=acct)
+                         .values_list('foursome__round_id', flat=True))
+            tees = {}
+            for m in (FoursomeMembership.objects
+                      .filter(player=pp, foursome__round_id__in=scored)
+                      .select_related('tee')):
+                tees[m.foursome.round_id] = m.tee.tee_name if m.tee_id else ''
+            for r in (Round.objects.filter(id__in=scored)
+                      .select_related('course')
+                      .order_by('-date', '-created_at')):
+                key = r.course.golf_api_id or f'c{r.course_id}'
+                _bump(key, (r.date, r.created_at), r.date,
+                      tees.get(r.id, ''), own_id=r.course_id)
+
+        my_phone = getattr(request.user, 'phone', None)
+        if my_phone:
+            rows = (FoursomeMembership.objects
+                    .exclude(foursome__round__account=acct)
+                    .exclude(player__phone='')
+                    .select_related('foursome__round__course', 'player',
+                                    'foursome__round', 'tee')
+                    .order_by('-foursome__round__date'))
+            seen_round = set()
+            for m in rows:
+                if normalize(m.player.phone) != my_phone:
+                    continue
+                r = m.foursome.round
+                if r.id in seen_round or not r.course.golf_api_id:
+                    continue
+                seen_round.add(r.id)
+                _bump(r.course.golf_api_id, (r.date, r.created_at), r.date,
+                      m.tee.tee_name if m.tee_id else '', cross=r.course)
+
+        home_id = pp.home_course_id if pp is not None else None
+        out = []
+        for info in sorted(best.values(), key=lambda v: v['sort'],
+                           reverse=True)[:self.LIMIT]:
+            course = None
+            if info['own_id'] is not None:
+                course = (Course.objects.filter(id=info['own_id'])
+                          .prefetch_related('tees').first())
+            else:
+                try:
+                    cross = info['cross']
+                    cat = CatalogCourse.objects.filter(
+                        golf_api_id=cross.golf_api_id).first()
+                    if cat is None:
+                        cat, _ = catalog_from_course(cross)
+                    cloned, _ = clone_catalog_to_account(cat, acct)
+                    course = (Course.objects.filter(id=cloned.id)
+                              .prefetch_related('tees').first())
+                except Exception:
+                    course = None
+            if course is None:
+                continue
+            out.append({
+                'course'     : CourseSerializer(course).data,
+                'last_played': info['date'].isoformat() if info['date'] else None,
+                'tee_name'   : info['tee'],
+                'is_home'    : bool(home_id and course.id == home_id),
+            })
+        return Response(out)
+
+
 class CourseDetailView(APIView):
     """GET / DELETE /api/courses/{id}/."""
 
@@ -6884,6 +7001,14 @@ class RoundCompleteView(APIView):
             emit_round_complete(round_obj)
             from services import activity_feed
             activity_feed.round_finished(round_obj)
+            # A course played twice becomes the golfer's home course, if he
+            # has none. A preference must never break finishing a round.
+            try:
+                from services.home_course import promote_home_courses
+                promote_home_courses(round_obj)
+            except Exception:  # pragma: no cover
+                logger.exception('home course promotion, round %s',
+                                 round_obj.id)
 
         # **Settle whenever the round IS complete, not only on the flip.**
         #

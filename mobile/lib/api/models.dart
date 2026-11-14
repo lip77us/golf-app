@@ -325,12 +325,20 @@ class CourseInfo {
   /// inflated from a thinner payload (e.g. round.course).
   final List<CourseTeeSummary> tees;
 
+  /// Where the course is, when the server knows — used to preselect the
+  /// course you are standing at (`utils/default_course.dart`). Never sent
+  /// anywhere: the match happens on the phone.
+  final double? latitude;
+  final double? longitude;
+
   const CourseInfo({
     required this.id,
     required this.name,
     this.city = '',
     this.state = '',
     this.tees = const [],
+    this.latitude,
+    this.longitude,
   });
 
   /// "City, ST" (or '' when unknown) for display/disambiguation.
@@ -345,6 +353,9 @@ class CourseInfo {
         tees: (j['tees'] as List? ?? const [])
             .map((t) => CourseTeeSummary.fromJson(t as Map<String, dynamic>))
             .toList(),
+        // DRF sends a Decimal as a string ("37.891234"), so parse either.
+        latitude: double.tryParse('${j['latitude'] ?? ''}'),
+        longitude: double.tryParse('${j['longitude'] ?? ''}'),
       );
 
   @override
@@ -391,6 +402,31 @@ class CatalogCourse {
 ///   * 'account' → already owned; select [courseId] directly.
 ///   * 'catalog' → clone via addCatalogCourse([catalogId]).
 ///   * 'api'     → import via importApiCourse([golfApiId]).
+/// One row of the course finder's Recents: a course this golfer played, when
+/// he last played it, and the tees he played from.
+///
+/// Picking one returns its tees too, so the form can pre-select them.
+class RecentPlay {
+  final CourseInfo course;
+  final DateTime? lastPlayed;
+  final String teeName;
+  final bool isHome;
+
+  const RecentPlay({
+    required this.course,
+    this.lastPlayed,
+    this.teeName = '',
+    this.isHome = false,
+  });
+
+  factory RecentPlay.fromJson(Map<String, dynamic> j) => RecentPlay(
+        course: CourseInfo.fromJson(j['course'] as Map<String, dynamic>),
+        lastPlayed: DateTime.tryParse(j['last_played'] as String? ?? ''),
+        teeName: j['tee_name'] as String? ?? '',
+        isHome: j['is_home'] as bool? ?? false,
+      );
+}
+
 class CourseHit {
   final String source; // 'account' | 'catalog' | 'api'
   final String name;

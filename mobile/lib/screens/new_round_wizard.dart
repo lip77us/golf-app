@@ -29,7 +29,7 @@ import '../widgets/inline_message.dart';
 import '../widgets/net_double_bogey_card.dart';
 import '../utils/add_halved_golfer.dart';
 import '../utils/golfer_invite.dart';
-import '../widgets/course_search_field.dart';
+import '../widgets/course_bar.dart';
 import '../widgets/payout_config_field.dart';
 import '../widgets/section_card.dart';
 import '../widgets/side_games_picker.dart';
@@ -803,7 +803,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     }
   }
 
-  /// Called by the inline [CourseSearchField] once a course is chosen (an
+  /// Called by the [CourseBar] once a course is chosen (an
   /// existing account course, or a catalog/API one it just cloned in). Refresh
   /// the wizard's course/tee data (a freshly cloned course brings new tees) and
   /// select it.
@@ -3018,9 +3018,10 @@ class _StepEventDetails extends StatelessWidget {
 
           _label(context, 'Course'),
           const SizedBox(height: 6),
-          CourseSearchField(
+          CourseBar(
             selected: courses.where((c) => c.id == selectedCourseId).firstOrNull,
             onSelected: onPickCourse,
+            preselectDefault: true,
           ),
           Padding(
             padding: const EdgeInsets.only(top: 6),
@@ -3052,7 +3053,7 @@ class _StepEventDetails extends StatelessWidget {
               courseLabel: _resolvedCourse(additionalRounds[i].courseId),
               onPickDate: (d) => onPickAdditionalDate(i, d),
               onRemove: () => onRemoveRound(i),
-              courseField: CourseSearchField(
+              courseField: CourseBar(
                 selected: courses
                     .where((c) =>
                         c.id == (additionalRounds[i].courseId ?? selectedCourseId))
@@ -3100,7 +3101,7 @@ class _StepEventDetails extends StatelessWidget {
             const SizedBox(height: 16),
             _label(context, 'Course'),
             const SizedBox(height: 6),
-            CourseSearchField(
+            CourseBar(
               selected:
                   courses.where((c) => c.id == selectedCourseId).firstOrNull,
               onSelected: onPickCourse,

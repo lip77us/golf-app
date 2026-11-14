@@ -122,6 +122,7 @@ final Map<String, Object Function(Map<String, dynamic>)> _models = {
   'QuotaNassauPlayerInfo': (j) => QuotaNassauPlayerInfo.fromJson(j),
   'QuotaNassauSegment': (j) => QuotaNassauSegment.fromJson(j),
   'QuotaNassauSummary': (j) => QuotaNassauSummary.fromJson(j),
+  'RecentPlay': (j) => RecentPlay.fromJson(j),
   'RabbitHole': (j) => RabbitHole.fromJson(j),
   'RabbitHoleCard': (j) => RabbitHoleCard.fromJson(j),
   'TripleNassauPill': (j) => TripleNassauPill.fromJson(j),

@@ -5,7 +5,7 @@
 /// user (no course, no other golfers, unsure which game) can't miss a step:
 ///
 ///   0. Welcome      — what the app does.
-///   1. Add a course — inline catalog search (CourseSearchField).
+///   1. Add a course — the course bar and Find a course screen.
 ///   2. Add golfers  — you're in; add 1–3 more (PlayerFormScreen).  2–4 total.
 ///   3. Pick a game  — Skins featured for beginners (simple, fixed rules) with
 ///                     a "More games" expander; non-Skins games hand off to
@@ -25,7 +25,7 @@ import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../utils/create_casual_round.dart';
 import '../utils/golfer_invite.dart';
-import '../widgets/course_search_field.dart';
+import '../widgets/course_bar.dart';
 import '../widgets/error_view.dart';
 import '../widgets/halved_mark.dart';
 import '../widgets/stake_field.dart';
@@ -393,9 +393,10 @@ class _OnboardingWizardState extends State<OnboardingWizard> {
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 16),
-        CourseSearchField(
+        CourseBar(
           selected: _course,
           onSelected: _onCourseSelected,
+          preselectDefault: true,
         ),
       ],
     );

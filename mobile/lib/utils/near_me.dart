@@ -4,7 +4,10 @@
 /// the near-me handoff:
 ///
 ///  * **Nothing here runs unless the golfer taps.** No prefetch on picker
-///    open, app launch or round start. It is also a quota rule: the upstream
+///    open, app launch or round start. (The ONE exception lives in
+///    `default_course.dart`: with permission already granted it may take a
+///    quiet on-device fix to start a round on the course you are at. It never
+///    prompts, never calls this file, and never sends the position anywhere.) It is also a quota rule: the upstream
 ///    proximity call is a new line against a 10k/day allowance.
 ///  * **One fix, then stop.** `getCurrentPosition`, never a stream, never a
 ///    background update.

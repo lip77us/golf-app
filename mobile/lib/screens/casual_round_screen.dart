@@ -19,7 +19,7 @@ import '../widgets/inline_message.dart';
 import '../widgets/roster_filter.dart';
 import '../widgets/tee_assignment.dart';
 import '../widgets/unified_player_search.dart';
-import '../widgets/course_search_field.dart';
+import '../widgets/course_bar.dart';
 import 'player_form_screen.dart';
 
 class CasualRoundScreen extends StatefulWidget {
@@ -261,10 +261,12 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             _playerGroups[authPlayer.id] = 1;
           }
 
-          // 9a — never pre-select a course. The home course is offered as an
-          // explicit "Play here" suggestion inside CourseSearchField instead, so
-          // nobody tees off somewhere they didn't actually pick. Next stays
-          // disabled until _selectedCourse is set by a real tap.
+          // **The course is no longer left blank** (Paul, 13 Nov 2026,
+          // reversing design 9a's "never pre-select"). `CourseBar` fills in
+          // the home course, or the one the phone says you are standing at,
+          // without ever waiting on the phone — see
+          // `utils/default_course.dart`. With no home course it stays blank
+          // and Next stays disabled until a course is picked.
         }
 
         // What the screen picked by itself, so a back-out from an untouched
@@ -278,7 +280,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     }
   }
 
-  /// Called by the inline [CourseSearchField] once a course is chosen (an
+  /// Called by the [CourseBar] once a course is chosen (an
   /// existing account course, or a catalog/API one it just cloned in). Refresh
   /// courses+tees (a freshly cloned course brings new tees), select it, and
   /// assign default tees to any already-selected players.
@@ -319,8 +321,25 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   /// matches (shouldn't happen on a well-seeded course).
   int _defaultTeeIdForPlayer(PlayerProfile p) {
     final tees = _teesForPlayer(p);
-    return tees.isEmpty ? 0 : tees.first.id;
+    if (tees.isEmpty) return 0;
+    // A recent course comes with the tees it was last played from; take that
+    // set when it is one this golfer can play, else the usual suggestion.
+    final hint = _teeHint?.trim().toLowerCase();
+    if (hint != null && hint.isNotEmpty) {
+      for (final t in tees) {
+        if (t.teeName.trim().toLowerCase() == hint) return t.id;
+      }
+    }
+    return tees.first.id;
   }
+
+  /// The course `CourseBar` chose by itself, so backing out of an untouched
+  /// wizard is silent.
+  int? _defaultedCourseId;
+
+  /// The tees the chosen course was last played from, when it was picked from
+  /// Recents. Null otherwise.
+  String? _teeHint;
 
   /// Side games eligible alongside the current primary + size filter.
   List<GameMeta> get _eligibleSideGames =>
@@ -944,7 +963,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   /// alone is not work — otherwise opening the wizard and immediately
   /// changing your mind would be challenged.
   bool get _hasWork =>
-      _selectedCourse != null ||
+      // A course the form filled in itself (home / nearby) is not work.
+      (_selectedCourse != null &&
+          _selectedCourse!.id != _defaultedCourseId) ||
       _primaryGame != null ||
       !_setEq(_playerTees.keys.toSet(), _seeded);
 
@@ -1224,9 +1245,15 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           const SizedBox(height: 6),
           // Inline combined search: type to see matches from your courses + the
           // shared catalog right here, with a full-database/API fallback.
-          CourseSearchField(
+          CourseBar(
             selected: _selectedCourse,
             onSelected: _onCourseSelected,
+            // The home course, or the course the phone says you are at —
+            // never waiting on the phone (`utils/default_course.dart`).
+            preselectDefault: true,
+            // A recent also returns the tees it was played from.
+            onTeeHint: (t) => setState(() => _teeHint = t),
+            onDefaulted: (c) => _defaultedCourseId = c.id,
           ),
           const SizedBox(height: 10),
 

@@ -1421,6 +1421,15 @@ class ApiClient {
   /// The account's most recently played distinct courses (up to 3, newest
   /// first). Drives the course picker's recents quick-pick. Empty for a brand
   /// new account with no rounds.
+  /// The course finder's Recents: five at most, newest first, home course
+  /// included and flagged, each with its last date and tees.
+  Future<List<RecentPlay>> getRecentPlays() async {
+    final data = await _get('/courses/recent-plays/');
+    return (data as List)
+        .map((c) => RecentPlay.fromJson(c as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<List<CourseInfo>> getRecentCourses() async {
     final data = await _get('/courses/recent/');
     return (data as List)

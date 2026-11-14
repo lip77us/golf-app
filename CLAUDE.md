@@ -13000,3 +13000,60 @@ with the dots, and it inherits what the grid already loads per game
 nobody strokes says so instead of drawing a blank grid. It shows the primary
 game's allowance; a side game with its own handicap can differ. Not seen on a
 device. Tests: `mobile/test/strokes_row_test.dart`.
+
+## Find a course, the home course, and where a round starts (14 Nov 2026)
+
+`~/Downloads/handoff-find-a-course` (option A) plus three rules from Paul.
+
+**The screen.** `screens/course_find_screen.dart` replaces the inline
+`CourseSearchField` (deleted). It opens from **Change** on the new
+`widgets/course_bar.dart` at every course bar: casual setup, the tournament
+wizard (three fields), onboarding and the Profile home-course picker. Search,
+**Courses near me** (tap-only, once, never kept, radius 8 mi, nearest first),
+**Near you**, and **Recents** — five, newest first, with `town · tees` and a
+date pill, the home course as a solid `Home · Sat` pill. It returns a
+`CourseFindResult`; a recent also returns its **tees**, which
+`casual_round_screen._defaultTeeIdForPlayer` prefers. `Add` courses are created
+before they are returned. A denied location says `Location is off` and nothing
+else (the handoff drops the old Settings link and per-failure lines).
+
+**Server.** `GET /api/courses/recent-plays/` (`RecentPlaysView`) is the richer
+Recents: five, home included and flagged, last date and tee name, from rounds
+this golfer has a real score in (plus phone-matched friend rounds, cloned into
+the account). The older `/courses/recent/` is untouched for shipped builds.
+
+**Where a new round starts** (`utils/default_course.dart`, `CourseBar
+.preselectDefault`): the HOME course immediately, then — only if location
+permission was ALREADY granted, never prompting — a quiet two-second fix is
+matched on the phone against the coordinates of the golfer's own courses within
+**0.5 mi**; a hit replaces the home default. **Nothing waits for the phone**:
+any failure leaves the home course (or blank with none). A golfer who has opened
+Change is never overridden. This reverses design 9a ("never pre-select") and is
+the one exception to "location only on a tap"; the position is not sent or
+stored, so App Privacy does not move, but **both privacy-policy copies were
+reworded** and must be deployed (`cd website && ./build-zip.sh && npx wrangler
+deploy`) before the build that ships this.
+
+**Why 0.5 mi and not 0.1.** A course is ONE stored point (it looks like the
+clubhouse: Lincoln Park's is ~0.1 mi off), a golfer on the first tee can be a
+third of a mile from it, and while the app asks iOS for REDUCED accuracy the fix
+itself can be kilometres out — so it only fires when the OS gave a good fix.
+Expect it to be rare until/unless precise location is adopted.
+
+**Coverage is the real limit.** Upstream coordinates are a recent GolfCourseAPI
+addition, so older imports have none (locally 5 of 70 account courses, 4 of 24
+catalog rows — **including the home course, Tilden**). Run
+`python manage.py backfill_course_coordinates` (dry run) then `--apply` on
+production (`railway ssh "/opt/venv/bin/python manage.py …"`); one API call per
+distinct `golf_api_id`, fills only NULLs. **Not yet run anywhere.**
+
+**Automatic home course** (`services/home_course.py`, called from
+`RoundCompleteView` on the flip to complete): after TWO distinct rounds with a
+real score at one course, if the golfer is a linked user with no home course,
+that course becomes it. Never overwrites a chosen one; a guest gets none.
+**No "X is now your home course" note is shown yet** — it happens silently.
+
+Tests: `api/test_auto_home_course.py` (14), `api/test_backfill_course_coordinates.py`
+(7), `mobile/test/course_find_test.dart` (26), `mobile/test/default_course_test.dart`
+(24). `near_me_picker_test.dart` was deleted with the widget it tested. Not seen
+on a device.
