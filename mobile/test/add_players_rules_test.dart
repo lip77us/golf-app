@@ -256,6 +256,58 @@ void main() {
     });
   });
 
+  group('the two-row seats of an open-ended round', () {
+    test('everyone plus the open seat fits: nothing collapses', () {
+      // Five to a row, so ten slots. Nine golfers and the open seat is ten.
+      for (var n = 1; n <= 9; n++) {
+        final l = seatLayout(n, 5);
+        expect(l.hidden, 0, reason: '$n golfers');
+        expect(l.visible, n);
+      }
+    });
+
+    test('past that, a +N tile and the open seat take two slots', () {
+      final l = seatLayout(10, 5);
+      expect(l.visible, 8);
+      expect(l.hidden, 2);
+      expect(l.visible + 1 + 1, 10, reason: 'avatars, +N tile, open seat');
+      expect(seatLayout(11, 5).hidden, 3);
+      expect(seatLayout(60, 5).hidden, 52);
+    });
+
+    test('it never uses more than two rows, whatever the pool size', () {
+      for (final n in [1, 9, 10, 11, 25, 60, 200]) {
+        for (final perRow in [3, 4, 5, 6]) {
+          final l = seatLayout(n, perRow);
+          final slots = l.visible + (l.hidden > 0 ? 1 : 0) + 1;
+          expect(slots, lessThanOrEqualTo(perRow * 2),
+              reason: '$n golfers, $perRow a row');
+        }
+      }
+    });
+
+    test('a narrow screen still gets a sensible row', () {
+      expect(seatLayout(20, 1).visible, 4, reason: 'floors at three a row');
+    });
+
+    test('the shown golfers are you and the most recently added', () {
+      final seated = [
+        g(1, 'You'),
+        for (var i = 2; i <= 12; i++) g(i, 'Golfer $i'),
+      ];
+      final shown = visibleSeated(seated, 8, meId: 1);
+      expect(shown.length, 8);
+      expect(shown.first.id, 1, reason: 'you are always visible');
+      expect(shown.skip(1).map((p) => p.id), [6, 7, 8, 9, 10, 11, 12],
+          reason: 'the newest seven, in seat order');
+    });
+
+    test('with room for all of them nothing is dropped', () {
+      final seated = [g(1, 'You'), g(2, 'Dave')];
+      expect(visibleSeated(seated, 8, meId: 1), seated);
+    });
+  });
+
   group('finding a golfer you already have', () {
     final roster = [
       g(1, 'You'),

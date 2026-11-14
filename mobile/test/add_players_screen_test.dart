@@ -13,6 +13,7 @@ import 'package:golf_mobile/utils/add_players.dart';
 import 'package:golf_mobile/widgets/add_players_body.dart';
 import 'package:golf_mobile/widgets/all_golfers_sheet.dart';
 import 'package:golf_mobile/widgets/new_golfer_sheet.dart';
+import 'package:golf_mobile/widgets/pool_sheet.dart';
 import 'package:provider/provider.dart';
 
 PlayerProfile g(int id, String name,
@@ -221,6 +222,98 @@ void main() {
       expect(find.text('YOUR REGULARS'), findsOneWidget);
       expect(find.text('SEARCH'), findsOneWidget);
       expect(find.text('Add a new golfer'), findsOneWidget);
+    });
+  });
+
+  group('a big pool keeps the seats to two rows', () {
+    final many = [
+      for (var i = 0; i < 12; i++) g(100 + i, 'Pool${String.fromCharCode(65 + i)} Player'),
+    ];
+
+    testWidgets('up to nine golfers show in full, with no +N tile', (t) async {
+      await open(t, [], seats: null, seated: many.take(8).toList());
+      expect(find.text('more'), findsNothing);
+      expect(find.text('MULTI-GROUP SKINS · 9 golfers'), findsOneWidget);
+    });
+
+    testWidgets('eleven golfers collapse to a +N more tile', (t) async {
+      await open(t, [], seats: null, seated: many.take(10).toList());
+      expect(find.text('MULTI-GROUP SKINS · 11 golfers'), findsOneWidget);
+      expect(find.text('+3'), findsOneWidget);
+      expect(find.text('more'), findsOneWidget);
+      expect(find.text('Open'), findsOneWidget,
+          reason: 'the open seat is still on offer');
+    });
+
+    testWidgets('you and the newest golfers stay visible', (t) async {
+      await open(t, [], seats: null, seated: many.take(10).toList());
+      final seats = find.byType(Wrap).first;
+      expect(find.descendant(of: seats, matching: find.text('You')),
+          findsOneWidget);
+      // The last one added is on screen, not buried behind the tile.
+      expect(find.descendant(of: seats, matching: find.text('PoolJ')),
+          findsOneWidget);
+      // The first one added is the one that collapsed.
+      expect(find.descendant(of: seats, matching: find.text('PoolA')),
+          findsNothing);
+    });
+
+    testWidgets('the tile opens Your pool, listing everyone', (t) async {
+      await open(t, [], seats: null, seated: many.take(10).toList());
+      await t.tap(find.text('+3'));
+      await t.pumpAndSettle();
+      expect(find.text('Your pool'), findsOneWidget);
+      expect(find.text('11 golfers. Remove anyone who is not playing.'),
+          findsOneWidget);
+      expect(find.text('Paul Lipkin (you)'), findsOneWidget);
+      expect(find.text('PoolA Player'), findsOneWidget,
+          reason: 'the collapsed ones are in the list');
+    });
+
+    testWidgets('removing from the sheet removes the golfer', (t) async {
+      final log = <String>[];
+      await open(t, log, seats: null, seated: many.take(10).toList());
+      await t.tap(find.text('+3'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('Remove').first);
+      await t.pumpAndSettle();
+      expect(log, ['remove PoolA Player']);
+      expect(find.text('10 golfers. Remove anyone who is not playing.'),
+          findsOneWidget, reason: 'the sheet follows who is seated');
+    });
+
+    testWidgets('you cannot remove yourself from the sheet', (t) async {
+      await open(t, [], seats: null, seated: many.take(10).toList());
+      await t.tap(find.text('+3'));
+      await t.pumpAndSettle();
+      final yourRow = find
+          .ancestor(
+              of: find.text('Paul Lipkin (you)'),
+              matching: find.byType(Container))
+          .first;
+      expect(
+          find.descendant(of: yourRow, matching: find.text('Remove')),
+          findsNothing);
+      expect(find.text('Remove'), findsWidgets,
+          reason: 'everyone else can be removed');
+    });
+
+    testWidgets('review and remove only: no way to add from the sheet',
+        (t) async {
+      await open(t, [], seats: null, seated: many.take(10).toList());
+      await t.tap(find.text('+3'));
+      await t.pumpAndSettle();
+      final sheet = find.byType(PoolSheet);
+      expect(find.descendant(of: sheet, matching: find.text('Add')),
+          findsNothing);
+      expect(find.descendant(of: sheet, matching: find.byType(TextField)),
+          findsNothing);
+    });
+
+    testWidgets('a fixed-size round never collapses', (t) async {
+      await open(t, [], seats: 6,
+          seated: [_roster[1], _roster[2], _roster[3], _roster[4]]);
+      expect(find.text('more'), findsNothing);
     });
   });
 

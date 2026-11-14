@@ -13161,7 +13161,14 @@ what was typed. Next stays disabled reading **Add N more** until every seat is
 filled (five or six plays with five). **Across groups (Multi-Group Skins) is the same
 screen with no seat count** (`AddPlayersBody.seats == null`): the header counts
 golfers (`MULTI-GROUP SKINS · 7 golfers`), there is no Full, one open seat is always
-on offer, and it needs two golfers before Next. The old roster list, its search
+on offer, and it needs two golfers before Next. **The seats are held to two rows**
+(Paul, 14 Nov): up to nine golfers show in full; past that the row shows you and the
+most recently added, one **+N more** tile and the open seat, and the tile opens a
+**Your pool** sheet (`widgets/pool_sheet.dart`) that lists everyone with a Remove
+button — **review and remove only**, so adding stays on the screen behind it
+(`seatLayout` / `visibleSeated`, pure). The newest stay visible because they are the
+ones you have just added; the older ones are one tap away. Fixed-size rounds (at most
+six seats) never collapse. The old roster list, its search
 widget (`unified_player_search.dart`) and the sectioning util
 (`roster_sections.dart`) were deleted with it; `RosterFilterChips` survives only in
 the invite-a-watcher sheet. The Groups step that follows is unchanged.

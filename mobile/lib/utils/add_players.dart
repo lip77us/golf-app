@@ -365,3 +365,36 @@ List<DuplicateGolfer> findDuplicateGolfers(
   }
   return out;
 }
+
+/// How an open-ended round's seats row fits in two lines.
+///
+/// A Multi-Group Skins pool can be forty golfers, and a row of forty avatars
+/// pushes the regulars and the search off the screen. So the seats are held to
+/// **two rows** (Paul, 14 Nov 2026): while everyone plus the open seat fits they
+/// all show; past that the row shows [visible] golfers, one **+N more** tile
+/// ([hidden] of them) that opens a review-and-remove sheet, and the open seat.
+///
+/// [perRow] is how many fit across; the screen measures it.
+({int visible, int hidden}) seatLayout(int seated, int perRow) {
+  final capacity = (perRow < 3 ? 3 : perRow) * 2;
+  // Everyone and the open seat fit: nothing collapses.
+  if (seated + 1 <= capacity) return (visible: seated, hidden: 0);
+  // Otherwise one slot is the +N tile and one is the open seat.
+  final visible = capacity - 2;
+  return (visible: visible, hidden: seated - visible);
+}
+
+/// Which seated golfers the row shows when it has collapsed: **you, then the
+/// most recently added**, in seat order. The newest are the ones you want to
+/// see — you have just added them — and the older ones are one tap away.
+///
+/// [seated] arrives you-first in the order they were added. With nothing
+/// hidden it comes back untouched.
+List<PlayerProfile> visibleSeated(List<PlayerProfile> seated, int visible,
+    {required int? meId}) {
+  if (seated.length <= visible) return seated;
+  final me = [for (final p in seated) if (p.id == meId) p];
+  final rest = [for (final p in seated) if (p.id != meId) p];
+  final room = visible - me.length;
+  return [...me, ...rest.skip(rest.length - room)];
+}

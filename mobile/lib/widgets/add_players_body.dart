@@ -19,6 +19,7 @@ import '../theme/halved_brand.dart';
 import '../utils/add_players.dart';
 import 'golfer_avatar.dart';
 import 'halved_mark.dart';
+import 'pool_sheet.dart';
 
 /// A Halved member found by name or phone who is not in your golfers yet.
 class HalvedHit {
@@ -353,10 +354,23 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
           ),
       ]),
       const SizedBox(height: 10),
-      Wrap(spacing: 14, runSpacing: 12, children: [
-        for (final p in seated) _seat(p),
-        for (var i = 0; i < open; i++) _openSeat(),
-      ]),
+      LayoutBuilder(builder: (context, box) {
+        // Seats are 56 wide with 14 between them.
+        final perRow = ((box.maxWidth + 14) / 70).floor();
+        // An open-ended round holds the seats to two lines; a fixed one has
+        // at most six and never collapses.
+        final lay = seats == null
+            ? seatLayout(seated.length, perRow)
+            : (visible: seated.length, hidden: 0);
+        final shown = lay.hidden == 0
+            ? seated
+            : visibleSeated(seated, lay.visible, meId: _meId);
+        return Wrap(spacing: 14, runSpacing: 12, children: [
+          for (final p in shown) _seat(p),
+          if (lay.hidden > 0) _moreSeat(lay.hidden),
+          for (var i = 0; i < open; i++) _openSeat(),
+        ]);
+      }),
     ]);
   }
 
@@ -380,6 +394,39 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
       ),
     );
   }
+
+  /// The **+N more** tile: the golfers the two-line row had no room for, and
+  /// the way into the sheet that lists and removes them.
+  Widget _moreSeat(int hidden) => InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => showPoolSheet(
+          context,
+          seated: () => widget.seated,
+          meId: _meId,
+          onRemove: widget.onRemove,
+        ),
+        child: SizedBox(
+          width: 56,
+          child: Column(children: [
+            Container(
+              width: 42,
+              height: 42,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                  shape: BoxShape.circle, color: Halved.deepPine),
+              child: Text('+$hidden',
+                  style: Halved.body(
+                          color: Halved.brightMint, weight: FontWeight.w800)
+                      .copyWith(fontSize: 14)),
+            ),
+            const SizedBox(height: 4),
+            Text('more',
+                style: Halved.body(
+                        color: Halved.deepPine, weight: FontWeight.w600)
+                    .copyWith(fontSize: 12)),
+          ]),
+        ),
+      );
 
   Widget _openSeat() => InkWell(
         borderRadius: BorderRadius.circular(12),
