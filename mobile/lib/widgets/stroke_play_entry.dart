@@ -189,21 +189,18 @@ class StrokePlayHoleTray extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           TrayEditHeader(
-            title: '',
-            picking: picking,
-            onEdit: onEdit,
-          ),
-          _labelRow(
-            card.isFinal
+            label: card.isFinal
                 ? 'ROUND OVER'
                 : 'HOLE ${card.hole} · ${card.label.toUpperCase()}',
             // The field when it is bigger than this card, and otherwise the
             // basis — a `GROUP OF 4` beside four rows says nothing.
-            card.field > card.group
+            labelTrailing: card.field > card.group
                 ? 'FIELD OF ${card.field}'
                 : (card.showNet ? 'NET' : 'GROSS'),
+            picking: picking,
+            onEdit: onEdit,
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           if (_stale)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),

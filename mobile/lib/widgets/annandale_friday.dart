@@ -180,14 +180,10 @@ class AnnandaleHoleTray extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           TrayEditHeader(
-            title: '',
+            label: 'HOLE $hole · NASSAU · ${nine.toUpperCase()}',
             picking: picking,
             onEdit: onEdit,
           ),
-          Text('HOLE $hole · NASSAU · ${nine.toUpperCase()}',
-              style: const TextStyle(
-                  color: _dim, fontSize: 11, fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5)),
           const SizedBox(height: 4),
           if (rows.isEmpty)
             Padding(

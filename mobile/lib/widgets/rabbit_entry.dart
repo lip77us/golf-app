@@ -457,18 +457,15 @@ class RabbitHoleTray extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           TrayEditHeader(
-            title: '',
-            picking: picking,
-            onEdit: onEdit,
-          ),
-          _labelRow(
-            card.rabbit.isExtra
+            label: card.rabbit.isExtra
                 ? 'HOLE ${card.hole} · EXTRA RABBIT'
                 : 'HOLE ${card.hole} · RABBIT ${card.rabbit.index} OF '
                     '${card.rabbit.of}',
-            '\$${_money(card.rabbit.stake)} RIDING',
+            labelTrailing: '\$${_money(card.rabbit.stake)} RIDING',
+            picking: picking,
+            onEdit: onEdit,
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           if (r == null)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),

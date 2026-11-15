@@ -448,15 +448,12 @@ class SixesHoleTray extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           TrayEditHeader(
-            title: '',
+            label: 'HOLE ${card.hole} · MATCH ${card.match.number}',
+            labelTrailing: stake == null ? '' : '\$${_money(stake)} A MATCH',
             picking: picking,
             onEdit: onEdit,
           ),
-          _labelRow(
-            'HOLE ${card.hole} · MATCH ${card.match.number}',
-            stake == null ? '' : '\$${_money(stake)} A MATCH',
-          ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           if (r == null)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),

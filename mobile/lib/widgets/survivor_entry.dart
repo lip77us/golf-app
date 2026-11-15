@@ -429,15 +429,12 @@ class SurvivorHoleTray extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           TrayEditHeader(
-            title: '',
+            label: 'HOLE ${card.hole} · SURVIVOR ${sv.index ?? ''}',
+            labelTrailing: '\$${_money(sv.pot)} POT',
             picking: picking,
             onEdit: onEdit,
           ),
-          _labelRow(
-            'HOLE ${card.hole} · SURVIVOR ${sv.index ?? ''}',
-            '\$${_money(sv.pot)} POT',
-          ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           if (r == null)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 10),
