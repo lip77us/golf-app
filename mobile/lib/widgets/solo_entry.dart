@@ -83,9 +83,13 @@ class SoloHoleTray extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TrayEditHeader(
-            title: gettingResult
+            label: card.roundOver
+                ? 'Round over'
+                : 'Hole ${card.hole} · ${card.title}',
+            labelTrailing: 'vs par',
+            status: gettingResult
                 ? 'Getting result…'
-                : notSynced ? 'Saving…' : '',
+                : notSynced ? 'Saving…' : null,
             onEdit: onEdit,
             picking: picking,
             pickingHint: 'Tap your score above to change it',
@@ -99,13 +103,7 @@ class SoloHoleTray extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 10),
-                    TrayLabel(
-                        card.roundOver
-                            ? 'Round over'
-                            : 'Hole ${card.hole} · ${card.title}',
-                        trailing: 'vs par'),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     if (card.variant == 'stroke') _stroke() else ...[
                       if (card.afterLine.isNotEmpty)
                         _box(Text(card.afterLine,

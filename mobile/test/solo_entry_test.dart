@@ -125,7 +125,9 @@ void main() {
     testWidgets('a hole waiting for its result draws no blocks', (t) async {
       await _tray(t, _card('nassau12'), gettingResult: true);
       expect(find.text('Getting result…'), findsOneWidget);
-      expect(find.text('HOLE 12 · NASSAU'), findsNothing);
+      // The label lives in the header now, so it stays while the blocks go.
+      expect(find.text('HOLE 12 · NASSAU'), findsOneWidget);
+      expect(find.textContaining('Front'), findsNothing);
     });
 
     testWidgets('fits a 320pt phone', (t) async {

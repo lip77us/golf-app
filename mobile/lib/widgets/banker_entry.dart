@@ -638,9 +638,14 @@ class BankerHoleTray extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TrayEditHeader(
-            title: gettingResult
-                ? 'Getting result…'
-                : '',
+            label: h == null
+                ? 'Banker'
+                : (roundOver
+                    ? 'Round over'
+                    : 'Hole ${h.hole} · '
+                        '${_firstOf(h.bankerId ?? 0)} banks'),
+            labelTrailing: h == null ? null : bankerScoreLabel(h),
+            status: gettingResult ? 'Getting result…' : null,
             onEdit: onEdit,
             picking: picking,
           ),
@@ -653,15 +658,7 @@ class BankerHoleTray extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 10),
-                    TrayLabel(
-                      roundOver
-                          ? 'Round over'
-                          : 'Hole ${h.hole} · '
-                              '${_firstOf(h.bankerId ?? 0)} banks',
-                      trailing: bankerScoreLabel(h),
-                    ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     _Bets(hole: h),
                     const SizedBox(height: 10),
                     _NextBanker(
