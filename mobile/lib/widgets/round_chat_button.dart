@@ -84,22 +84,27 @@ class _RoundChatButtonState extends State<RoundChatButton> {
       children: [
         icon,
         Positioned(
-          right: 6,
-          top: 6,
+          right: 4,
+          top: 4,
+          // The template's badge: red #B23A1E, white, 18pt, ringed in the
+          // surface colour so it reads against the sage app bar.
           child: Container(
-            padding: const EdgeInsets.all(2),
-            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.error,
-              borderRadius: BorderRadius.circular(8),
+              color: const Color(0xFFB23A1E),
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: const Color(0xFFEEF3EE), width: 2),
             ),
             child: Text(
               _unread > 99 ? '99+' : '$_unread',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onError,
+              style: const TextStyle(
+                color: Colors.white,
                 fontSize: 10,
-                fontWeight: FontWeight.bold,
+                height: 1,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
