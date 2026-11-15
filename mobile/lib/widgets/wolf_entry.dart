@@ -324,11 +324,13 @@ class WolfHoleTray extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TrayEditHeader(
-            // **Not `Round over` here.** The sides label directly below says
-            // exactly that, 20pt away, and one fact stated twice in one
-            // corner is how the two come to disagree (Survivor's tray, which
-            // said its phase three times).
-            title: gettingResult ? 'Getting result…' : '',
+            label: card.needsCall
+                ? 'Hole ${card.hole} · ${card.wolfFirst}’s call'
+                : (over ? 'Round over' : 'Hole ${card.hole} · ${card.callLabel}'),
+            labelTrailing: card.needsCall
+                ? 'who did ${card.wolfFirst} take?'
+                : card.callValue,
+            status: gettingResult ? 'Getting result…' : null,
             onEdit: onEdit,
             // `Edit scores` is also what unlocks the call above.
             pickingHint: 'Tap a score or the call above to change it',
@@ -394,9 +396,6 @@ class _CallPrompt extends StatelessWidget {
       ),
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      TrayLabel('Hole ${card.hole} · ${card.wolfFirst}’s call',
-          trailing: 'who did ${card.wolfFirst} take?'),
-      const SizedBox(height: 6),
       GridView.count(
         crossAxisCount: 3,
         shrinkWrap: true,
@@ -464,11 +463,6 @@ class _Sides extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      TrayLabel(
-        over ? 'Round over' : 'Hole ${card.hole} · ${card.callLabel}',
-        trailing: card.callValue,
-      ),
-      const SizedBox(height: 6),
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
         decoration: BoxDecoration(

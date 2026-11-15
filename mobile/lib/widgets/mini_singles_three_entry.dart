@@ -114,9 +114,11 @@ class MiniSinglesThreeTray extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TrayEditHeader(
-            title: gettingResult
+            label: label,
+            labelTrailing: card.pot > 0 ? '\$${_amt(card.pot)} pot' : null,
+            status: gettingResult
                 ? 'Getting result…'
-                : notSynced ? 'Saving…' : '',
+                : notSynced ? 'Saving…' : null,
             onEdit: onEdit,
             picking: picking,
           ),
@@ -129,11 +131,7 @@ class MiniSinglesThreeTray extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 10),
-                    TrayLabel(label,
-                        trailing:
-                            card.pot > 0 ? '\$${_amt(card.pot)} pot' : null),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     if (card.isFinals && card.finals != null) ...[
                       _FinalsLine(card: card, f: card.finals!),
                       const SizedBox(height: 6),

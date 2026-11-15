@@ -233,7 +233,13 @@ class TripleCupHoleTray extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TrayEditHeader(
-            title: gettingResult ? 'Getting result…' : _title(),
+            label: card.roundOver
+                ? 'Round over'
+                : 'Hole ${card.hole} · ${card.kind}',
+            labelTrailing: card.span.isEmpty
+                ? card.segmentLabel
+                : '${card.segmentLabel} · ${card.span}',
+            status: gettingResult ? 'Getting result…' : null,
             onEdit: onEdit,
             picking: picking,
           ),
@@ -268,15 +274,7 @@ class TripleCupHoleTray extends StatelessWidget {
   }
 
   List<Widget> _content() {
-    final label = card.roundOver
-        ? 'Round over'
-        : 'Hole ${card.hole} · ${card.kind}';
-    final trailing = card.span.isEmpty
-        ? card.segmentLabel
-        : '${card.segmentLabel} · ${card.span}';
     return [
-      TrayLabel(label, trailing: trailing),
-      const SizedBox(height: 6),
       for (final l in card.lines) ...[
         _holeLine(l),
         const SizedBox(height: 4),

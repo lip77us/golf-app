@@ -71,9 +71,9 @@ class PointsHoleTray extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TrayEditHeader(
-            title: gettingResult
-                ? 'Getting result…'
-                : (over ? 'Round over' : ''),
+            label: over ? 'Round over' : 'Hole ${card.hole} · net to points',
+            labelTrailing: over ? null : _stake(card.stake),
+            status: gettingResult ? 'Getting result…' : null,
             onEdit: onEdit,
             picking: picking,
           ),
@@ -120,9 +120,6 @@ class _Awards extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _TrayLabel('Hole ${card.hole} · net to points',
-            trailing: _stake(card.stake)),
-        const SizedBox(height: 6),
         for (final r in card.pointsRows)
           Container(
             margin: const EdgeInsets.only(bottom: 4),

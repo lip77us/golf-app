@@ -123,7 +123,7 @@ void main() {
       // has the identical shape.
       await _pump(t, _card(roundOver: true));
       expect(find.text('Finish round ›'), findsOneWidget);
-      expect(find.text('Round over'), findsOneWidget);
+      expect(find.text('ROUND OVER'), findsOneWidget);
       expect(find.text('FINAL, EACH'), findsOneWidget);
       expect(find.textContaining('Paul wins with 62 pts'), findsOneWidget);
       expect(find.textContaining('Target 54'), findsOneWidget);

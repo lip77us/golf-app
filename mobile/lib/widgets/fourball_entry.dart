@@ -90,7 +90,13 @@ class FourballHoleTray extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TrayEditHeader(
-            title: gettingResult ? 'Getting result…' : _title(),
+            label: card.countsForCard
+                ? 'Hole ${card.hole} · for the card'
+                : 'Hole ${card.hole} · ${card.kind}',
+            labelTrailing: card.countsForCard
+                ? 'match over'
+                : (card.staked ? _stake(card.stake) : 'no stakes'),
+            status: gettingResult ? 'Getting result…' : _title(),
             onEdit: onEdit,
             picking: picking,
           ),
@@ -156,9 +162,6 @@ class _BestBall extends StatelessWidget {
         if (s.sub.isNotEmpty) s,
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      TrayLabel('Hole ${card.hole} · ${card.kind}',
-          trailing: card.staked ? _stake(card.stake) : 'no stakes'),
-      const SizedBox(height: 6),
       Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -210,9 +213,6 @@ class _ForTheCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      TrayLabel('Hole ${card.hole} · for the card',
-          trailing: 'match over'),
-      const SizedBox(height: 6),
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
