@@ -72,7 +72,7 @@ class MiniSinglesHoleTray extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TrayEditHeader(
-            title: gettingResult ? 'Getting result…' : 'All $n scores in',
+            title: gettingResult ? 'Getting result…' : '',
             onEdit: onEdit,
             picking: picking,
           ),

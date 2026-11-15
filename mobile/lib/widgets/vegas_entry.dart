@@ -106,7 +106,7 @@ class VegasHoleTray extends StatelessWidget {
           // that, 20pt away, and one fact stated twice in one corner is how
           // the two come to disagree.
           TrayEditHeader(
-            title: gettingResult ? 'Getting result…' : 'All 4 scores in',
+            title: gettingResult ? 'Getting result…' : '',
             onEdit: onEdit,
             picking: picking,
           ),

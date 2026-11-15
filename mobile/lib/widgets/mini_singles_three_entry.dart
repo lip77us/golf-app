@@ -116,7 +116,7 @@ class MiniSinglesThreeTray extends StatelessWidget {
           TrayEditHeader(
             title: gettingResult
                 ? 'Getting result…'
-                : notSynced ? 'Saving…' : 'All 3 scores in',
+                : notSynced ? 'Saving…' : '',
             onEdit: onEdit,
             picking: picking,
           ),

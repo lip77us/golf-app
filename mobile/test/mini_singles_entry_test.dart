@@ -51,7 +51,7 @@ void main() {
     testWidgets('the semis: a block a match, and nothing about the back nine',
         (t) async {
       await _pump(t, _card('hole4_semis'), nextHole: 5);
-      expect(find.text('All 4 scores in'), findsOneWidget);
+      expect(find.text('All 4 scores in'), findsNothing);
       expect(find.text('HOLE 4 · SEMIS'), findsOneWidget);
       expect(find.text('\$40 POT'), findsOneWidget);
       expect(find.text('SEMI 1'), findsOneWidget);

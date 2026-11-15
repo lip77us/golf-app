@@ -160,8 +160,7 @@ class SkinsHoleTray extends StatelessWidget {
     if (card.scored < n) return '${card.scored} of $n scored';
     // A pool golfer on a card of his own is the commonest pool card there
     // is, and `All 1 scores in` is not a sentence.
-    if (n == 1) return 'Score in';
-    return n == 2 ? 'Both scores in' : 'All $n scores in';
+    return '';
   }
 
   String _riding() {

@@ -438,7 +438,7 @@ void main() {
       // The label says it; the header above keeps saying what it always
       // says, so the corner does not carry the same fact twice.
       expect(find.text('ROUND OVER'), findsOneWidget);
-      expect(find.text('All 4 scores in'), findsOneWidget);
+      expect(find.text('All 4 scores in'), findsNothing);
       expect(find.text('FINAL, EACH'), findsOneWidget);
       expect(find.text('Paul wins with +9 pts'), findsOneWidget);
       expect(find.textContaining('every hole sums to zero'), findsOneWidget);

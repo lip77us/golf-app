@@ -73,7 +73,7 @@ class PointsHoleTray extends StatelessWidget {
           TrayEditHeader(
             title: gettingResult
                 ? 'Getting result…'
-                : (over ? 'Round over' : 'All 3 scores in'),
+                : (over ? 'Round over' : ''),
             onEdit: onEdit,
             picking: picking,
           ),

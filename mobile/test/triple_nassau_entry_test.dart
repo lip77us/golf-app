@@ -101,7 +101,7 @@ void main() {
     testWidgets('is one block per match, in the engine\'s order', (t) async {
       final c = _card('hole3');
       await _tray(t, c);
-      expect(find.text('All 3 scores in'), findsOneWidget);
+      expect(find.text('All 3 scores in'), findsNothing);
       expect(find.text('HOLE 3 · TRIPLE NASSAU'), findsOneWidget);
       expect(find.text('Front '), findsNothing); // spans, not plain text
       expect(c.matches.map((m) => m.names.join(' v ')),

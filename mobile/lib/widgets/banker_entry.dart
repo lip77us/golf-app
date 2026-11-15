@@ -640,7 +640,7 @@ class BankerHoleTray extends StatelessWidget {
           TrayEditHeader(
             title: gettingResult
                 ? 'Getting result…'
-                : 'All ${roster.length} scores in',
+                : '',
             onEdit: onEdit,
             picking: picking,
           ),

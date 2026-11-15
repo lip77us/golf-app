@@ -114,7 +114,7 @@ void main() {
     testWidgets('two golfers read Both scores in', (t) async {
       // `All 2 scores in` is not a sentence.
       await _pump(t, _card());
-      expect(find.text('Both scores in'), findsOneWidget);
+      expect(find.text('Both scores in'), findsNothing);
       expect(find.textContaining('All 2'), findsNothing);
     });
 

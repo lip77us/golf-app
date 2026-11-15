@@ -99,7 +99,7 @@ void main() {
     testWidgets('the fourball ends: the hole, the match, the cup, what next',
         (t) async {
       await _pump(t, _card('triple_cup_hole6_fourball_ends'));
-      expect(find.text('All 4 scores in'), findsOneWidget);
+      expect(find.text('All 4 scores in'), findsNothing);
       expect(find.text('HOLE 6 · BEST BALL'), findsOneWidget);
       expect(find.text('FOURBALL · HOLES 1–6'), findsOneWidget);
       expect(find.byType(TrayResultRow), findsOneWidget);
@@ -124,7 +124,7 @@ void main() {
 
     testWidgets('one ball a side is two balls, not four scores', (t) async {
       await _pump(t, _card('triple_cup_hole8_foursomes'), nextHole: 9);
-      expect(find.text('Both balls in'), findsOneWidget);
+      expect(find.text('Both balls in'), findsNothing);
       expect(find.text('HOLE 8 · ONE BALL A SIDE'), findsOneWidget);
       expect(find.text('All square'), findsOneWidget);
       expect(find.text('AS'), findsOneWidget);

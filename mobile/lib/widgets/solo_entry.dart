@@ -85,7 +85,7 @@ class SoloHoleTray extends StatelessWidget {
           TrayEditHeader(
             title: gettingResult
                 ? 'Getting result…'
-                : notSynced ? 'Saving…' : 'Score in',
+                : notSynced ? 'Saving…' : '',
             onEdit: onEdit,
             picking: picking,
             pickingHint: 'Tap your score above to change it',

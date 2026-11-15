@@ -74,7 +74,7 @@ void main() {
   group('the tray', () {
     testWidgets('reports the hole and the standing', (t) async {
       await _pump(t, _card());
-      expect(find.text('All 3 scores in'), findsOneWidget);
+      expect(find.text('All 3 scores in'), findsNothing);
       expect(find.text('HOLE 7 · NET TO POINTS'), findsOneWidget);
       expect(find.text('EACH · NOW'), findsOneWidget);
       expect(find.text('net 4'), findsOneWidget);

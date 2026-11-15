@@ -135,7 +135,7 @@ class NassauHoleTray extends StatelessWidget {
   String _title() {
     final n = card.players.length;
     if (card.scored < n) return '${card.scored} of $n scored';
-    return n == 2 ? 'Both scores in' : 'All $n scores in';
+    return '';
   }
 }
 

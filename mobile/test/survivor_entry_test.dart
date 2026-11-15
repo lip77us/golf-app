@@ -98,7 +98,7 @@ void main() {
       await _pump(t, SurvivorHoleTray(
           card: _card('survivor_hole11_won'), nextHole: 12, onEdit: () {}));
       final text = _allText(t);
-      expect(text, contains('All 3 scores in'));
+      expect(text, isNot(contains('All 3 scores in')));
       expect(text, contains('PL takes it'));
       expect(text, contains('net 4 v 5'));
       expect(text, contains('Paul Lipkin wins Survivor 5'));

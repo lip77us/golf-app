@@ -296,7 +296,7 @@ void main() {
       ));
       expect(find.text('Finish round ›'), findsOneWidget);
       expect(find.text('ROUND OVER'), findsOneWidget);
-      expect(find.text('All 4 scores in'), findsOneWidget,
+      expect(find.text('All 4 scores in'), findsNothing,
           reason: 'the header does not say it a second time');
       expect(find.text('FINAL, EACH'), findsOneWidget);
       expect(find.text('Paul + Dave win by 98 pts'), findsOneWidget);

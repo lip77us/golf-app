@@ -164,7 +164,7 @@ void main() {
 
     testWidgets('and the title still counts his score', (t) async {
       await _pump(t, _card('pool_hole1_mixed_card'));
-      expect(find.text('All 4 scores in'), findsOneWidget);
+      expect(find.text('All 4 scores in'), findsNothing);
     });
   });
 
@@ -176,7 +176,7 @@ void main() {
       final one = [(j['players'] as List).first];
       await _pump(t, SkinsHoleCard.fromJson(
           {...j, 'players': one, 'scored': 1}));
-      expect(find.text('Score in'), findsOneWidget);
+      expect(find.text('Score in'), findsNothing);
       expect(find.textContaining('All 1'), findsNothing);
     });
   });

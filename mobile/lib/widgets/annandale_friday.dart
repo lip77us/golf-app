@@ -180,7 +180,7 @@ class AnnandaleHoleTray extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           TrayEditHeader(
-            title: 'All $playerCount scores in',
+            title: '',
             picking: picking,
             onEdit: onEdit,
           ),

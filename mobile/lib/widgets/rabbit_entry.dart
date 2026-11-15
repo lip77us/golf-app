@@ -457,7 +457,7 @@ class RabbitHoleTray extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           TrayEditHeader(
-            title: 'All ${card.players.length} scores in',
+            title: '',
             picking: picking,
             onEdit: onEdit,
           ),

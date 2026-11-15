@@ -94,7 +94,7 @@ void main() {
         (t) async {
       await _pump(t, _card('hole7_auto_press_starts'));
       final all = _all(t);
-      expect(find.text('All 4 scores in'), findsOneWidget);
+      expect(find.text('All 4 scores in'), findsNothing);
       expect(all, contains('HOLE 7 · MATCH 3'));
       expect(all, contains('\$5 A BET'));
       expect(find.text('Paul + Mike'), findsOneWidget);

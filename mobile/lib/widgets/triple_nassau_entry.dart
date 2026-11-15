@@ -244,7 +244,7 @@ class TripleNassauHoleTray extends StatelessWidget {
           TrayEditHeader(
             title: gettingResult
                 ? 'Getting result…'
-                : 'All ${card.players.length} scores in',
+                : '',
             onEdit: onEdit,
             picking: picking,
           ),

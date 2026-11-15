@@ -106,7 +106,7 @@ void main() {
   group('the tray', () {
     testWidgets('it names the hole, what rides and the stake', (t) async {
       await _pump(t, _card('skins_hole7_outright'));
-      expect(find.text('All 4 scores in'), findsOneWidget);
+      expect(find.text('All 4 scores in'), findsNothing);
       expect(find.text('HOLE 7 · SKINS'), findsOneWidget);
       expect(find.text('2 RIDING · \$5 A SKIN'), findsOneWidget);
     });

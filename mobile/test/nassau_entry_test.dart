@@ -116,7 +116,7 @@ void main() {
     testWidgets('it names both sides and why the hole went that way',
         (t) async {
       await _pump(t, _card('nassau_hole2_press'));
-      expect(find.text('All 4 scores in'), findsOneWidget);
+      expect(find.text('All 4 scores in'), findsNothing);
       expect(find.text('HOLE 2 · NASSAU'), findsOneWidget);
       // No `FRONT NINE` beside it: the chips say which bet the hole is in,
       // and the label sat over the hole's result as if it described it.
@@ -244,7 +244,7 @@ void main() {
         'players': _fixture('nassau_hole2_press')['players'].sublist(0, 2),
       });
       await _pump(t, c);
-      expect(find.text('Both scores in'), findsOneWidget);
+      expect(find.text('Both scores in'), findsNothing);
       expect(find.text('All 2 scores in'), findsNothing);
     });
 

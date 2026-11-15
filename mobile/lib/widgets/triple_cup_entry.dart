@@ -262,9 +262,9 @@ class TripleCupHoleTray extends StatelessWidget {
 
   /// One ball a side is two scores, and `All 2 scores in` is not a sentence.
   String _title() {
-    if (card.segment == 'foursomes') return 'Both balls in';
+    if (card.segment == 'foursomes') return '';
     final n = card.players.length;
-    return n == 2 ? 'Both scores in' : 'All $n scores in';
+    return '';
   }
 
   List<Widget> _content() {

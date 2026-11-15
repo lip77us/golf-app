@@ -328,7 +328,7 @@ class WolfHoleTray extends StatelessWidget {
             // exactly that, 20pt away, and one fact stated twice in one
             // corner is how the two come to disagree (Survivor's tray, which
             // said its phase three times).
-            title: gettingResult ? 'Getting result…' : 'All 4 scores in',
+            title: gettingResult ? 'Getting result…' : '',
             onEdit: onEdit,
             // `Edit scores` is also what unlocks the call above.
             pickingHint: 'Tap a score or the call above to change it',
