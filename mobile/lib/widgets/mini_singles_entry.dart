@@ -72,7 +72,9 @@ class MiniSinglesHoleTray extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TrayEditHeader(
-            title: gettingResult ? 'Getting result…' : '',
+            label: card.label,
+            labelTrailing: card.trailing,
+            status: gettingResult ? 'Getting result…' : null,
             onEdit: onEdit,
             picking: picking,
           ),
@@ -100,8 +102,6 @@ class MiniSinglesHoleTray extends StatelessWidget {
   }
 
   List<Widget> _content() => [
-        TrayLabel(card.label, trailing: card.trailing),
-        const SizedBox(height: 6),
         for (final b in card.blocks) ...[
           if (b.overLine.isNotEmpty) _over(b) else _block(b),
           const SizedBox(height: 8),

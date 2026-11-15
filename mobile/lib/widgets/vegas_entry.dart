@@ -106,7 +106,10 @@ class VegasHoleTray extends StatelessWidget {
           // that, 20pt away, and one fact stated twice in one corner is how
           // the two come to disagree.
           TrayEditHeader(
-            title: gettingResult ? 'Getting result…' : '',
+            label: over ? 'Round over' : 'Hole ${card.hole} · the numbers',
+            labelTrailing:
+                card.note.isNotEmpty ? card.note : _stake(card.stake),
+            status: gettingResult ? 'Getting result…' : null,
             onEdit: onEdit,
             picking: picking,
           ),
@@ -137,11 +140,6 @@ class _Numbers extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      TrayLabel(over ? 'Round over' : 'Hole ${card.hole} · the numbers',
-          // The note replaces the stake, because `×2 carried` is the thing a
-          // reader needs on the one hole it is true of.
-          trailing: card.note.isNotEmpty ? card.note : _stake(card.stake)),
-      const SizedBox(height: 6),
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         decoration: BoxDecoration(

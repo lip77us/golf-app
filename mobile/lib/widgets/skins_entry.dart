@@ -113,7 +113,11 @@ class SkinsHoleTray extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TrayEditHeader(
-            title: gettingResult ? 'Getting result…' : _title(),
+            label: card.roundOver
+                ? 'Round over'
+                : 'Hole ${card.hole} · Skins',
+            labelTrailing: _riding(),
+            status: gettingResult ? 'Getting result…' : _title(),
             onEdit: onEdit,
             picking: picking,
           ),
@@ -132,14 +136,7 @@ class SkinsHoleTray extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 10),
-                    TrayLabel(
-                      card.roundOver
-                          ? 'Round over'
-                          : 'Hole ${card.hole} · Skins',
-                      trailing: _riding(),
-                    ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     _Nets(card: card),
                     if (card.line.isNotEmpty) _Result(card: card),
                     const SizedBox(height: 10),

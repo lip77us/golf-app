@@ -78,7 +78,10 @@ class NassauHoleTray extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TrayEditHeader(
-            title: gettingResult ? 'Getting result…' : _title(),
+            label: card.roundOver
+                ? 'Round over'
+                : 'Hole ${card.hole} · ${card.title}',
+            status: gettingResult ? 'Getting result…' : _title(),
             onEdit: onEdit,
             picking: picking,
           ),
@@ -101,18 +104,7 @@ class NassauHoleTray extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 10),
-                    TrayLabel(
-                      card.roundOver
-                          ? 'Round over'
-                          : 'Hole ${card.hole} · ${card.title}',
-                      // **No trailing label.** It read `FRONT NINE` /
-                      // `BACK NINE`, or `HOLES 1–18` on a Nassau Nine — wrong
-                      // for a nine that wraps the turn, and sitting right
-                      // over the hole's result as if it described it. The
-                      // chips below say which bet the hole is in.
-                    ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     _MatchCard(
                         card: card, onPress: onPress, pressing: pressing),
                     if (card.money.isNotEmpty) ...[
