@@ -290,3 +290,15 @@ class _LeaderboardPill extends StatelessWidget {
     );
   }
 }
+
+/// The leaderboard line for a game with no standing of its own: the trophy and
+/// the spelled-out pill alone. The template puts the link on EVERY game,
+/// because golfers missed the leaderboard icon.
+StandingRibbon leaderboardOnlyRibbon(BuildContext context, int roundId) =>
+    StandingRibbon(
+      kind: StandingKind.result,
+      standing: '',
+      figure: '',
+      onOpenLeaderboard: () =>
+          Navigator.of(context).pushNamed('/leaderboard', arguments: roundId),
+    );

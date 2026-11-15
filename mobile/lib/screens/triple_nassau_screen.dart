@@ -26,6 +26,7 @@ import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/hole_header.dart';
 import '../widgets/golf_app_bar.dart';
+import '../utils/holes_thru.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
 import '../utils/triple_nassau_standing.dart';
@@ -453,10 +454,15 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
     final modeStr = rp.tripleNassauSummary == null
         ? '' : ' — ${_modeLabel(rp.tripleNassauSummary!)}';
 
-    final ribbon = _standingRibbon(rp);
+    final StandingRibbon? ribbon = _standingRibbon(rp) ??
+        (rp.round == null
+            ? null
+            : leaderboardOnlyRibbon(context, rp.round!.id));
 
     return Scaffold(
       appBar: GolfAppBar(
+        course: rp.round?.course.name ?? '',
+        thru: holesThruOf(rp),
         title: 'Triple Nassau$modeStr',
         // D2: the standing becomes the bar's second line, and the pill in it
         // replaces the leaderboard ICON below.

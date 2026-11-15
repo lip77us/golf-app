@@ -23,6 +23,7 @@ import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
+import '../utils/holes_thru.dart';
 import '../utils/play_order.dart';
 import '../widgets/hole_header.dart';
 import '../widgets/inline_score_picker.dart';
@@ -483,10 +484,15 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
     }
     _prevHadPending = nowHasPending;
 
-    final ribbon = _standingRibbon(rp, nas);
+    final StandingRibbon? ribbon = _standingRibbon(rp, nas) ??
+        (rp.round == null
+            ? null
+            : leaderboardOnlyRibbon(context, rp.round!.id));
 
     return Scaffold(
       appBar: GolfAppBar(
+        course: rp.round?.course.name ?? '',
+        thru: holesThruOf(rp),
         // D2: the standing becomes the bar's second line, and the pill in it
         // replaces the leaderboard ICON below.
         bottom: ribbon,

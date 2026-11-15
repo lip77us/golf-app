@@ -27,6 +27,7 @@ import '../sync/sync_service.dart';
 import '../theme/halved_brand.dart';
 import '../widgets/hole_header.dart';
 import '../widgets/golf_app_bar.dart';
+import '../utils/holes_thru.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
@@ -511,10 +512,15 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
         (rp.round?.foursomes.length ?? 1) == 1;
     final showExit = isCasualSingle && _hasAnyScore;
 
-    final ribbon = _standingRibbon(rp);
+    final StandingRibbon? ribbon = _standingRibbon(rp) ??
+        (rp.round == null
+            ? null
+            : leaderboardOnlyRibbon(context, rp.round!.id));
 
     return Scaffold(
       appBar: GolfAppBar(
+        course: rp.round?.course.name ?? '',
+        thru: holesThruOf(rp),
         title: 'Survivor',
         // D2: the standing becomes the bar's second line, and the pill in it
         // replaces the leaderboard ICON below.

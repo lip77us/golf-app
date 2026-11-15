@@ -27,6 +27,7 @@ import '../widgets/forty_balls_keypad.dart';
 import '../widgets/sequoya_entry.dart';
 import '../widgets/hole_header.dart';
 import '../widgets/golf_app_bar.dart';
+import '../utils/holes_thru.dart';
 import '../widgets/hole_grid_scorecard.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
@@ -533,10 +534,15 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
         (rp.round?.foursomes.length ?? 1) == 1;
     final showExit = isCasualSingle && _hasAnyScore;
 
-    final ribbon = _standingRibbon(rp);
+    final StandingRibbon? ribbon = _standingRibbon(rp) ??
+        (rp.round == null
+            ? null
+            : leaderboardOnlyRibbon(context, rp.round!.id));
 
     return Scaffold(
       appBar: GolfAppBar(
+        course: rp.round?.course.name ?? '',
+        thru: holesThruOf(rp),
         title: 'Sequoya 3s',
         // D2: the standing becomes the bar's second line, and the pill in it
         // replaces the leaderboard ICON below.

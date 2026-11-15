@@ -13,6 +13,9 @@
 
 import 'package:flutter/material.dart';
 
+import '../theme/halved_brand.dart';
+import 'score_entry_title.dart';
+
 class GolfAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// The title text.  Always a String — for richer titles (e.g. badges next
   /// to the name) drop down to a raw [AppBar] for that screen.
@@ -46,6 +49,12 @@ class GolfAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// a drawer).  Mirrors [AppBar.automaticallyImplyLeading].
   final bool automaticallyImplyLeading;
 
+  /// The score entry template's bar (`handoff-score-entry-template`): when a
+  /// course is given it becomes the TITLE, on the sage surface in dark ink,
+  /// with `[title] · Thru [thru]` under it. [title] is then the game's name.
+  final String? course;
+  final int thru;
+
   const GolfAppBar({
     super.key,
     required this.title,
@@ -55,6 +64,8 @@ class GolfAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.titleStyle,
     this.leading,
     this.automaticallyImplyLeading = true,
+    this.course,
+    this.thru = 0,
   });
 
   @override
@@ -64,6 +75,25 @@ class GolfAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (course != null) {
+      return AppBar(
+        backgroundColor: Halved.surface,
+        foregroundColor: Halved.deepPine,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: ScoreEntryTitle(
+          course: course!,
+          subtitle: ScoreEntryTitle.subtitleFor(title, thru),
+        ),
+        centerTitle: true,
+        titleSpacing: 8,
+        actions: actions,
+        bottom: bottom,
+        leading: leading,
+        automaticallyImplyLeading: automaticallyImplyLeading,
+      );
+    }
     return AppBar(
       // Shrink the title to fit rather than ellipsize when actions crowd it
       // (e.g. the Leaderboard's watcher / share / help / refresh icons on a

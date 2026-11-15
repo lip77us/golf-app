@@ -16,6 +16,9 @@ import '../game_colors.dart';
 import '../utils/play_order.dart';
 import '../widgets/hole_header.dart';
 import '../widgets/standing_ribbon.dart';
+import '../widgets/score_entry_title.dart';
+import '../utils/holes_thru.dart';
+import '../theme/halved_brand.dart';
 import '../utils/match_notation.dart';
 import '../utils/quota_nassau_standing.dart';
 import 'package:flutter/material.dart';
@@ -451,10 +454,18 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen>
     }
     _prevHadPending = nowHasPending;
 
-    final ribbon = _standingRibbon(rp, summary);
+    final StandingRibbon? ribbon = _standingRibbon(rp, summary) ??
+        (rp.round == null
+            ? null
+            : leaderboardOnlyRibbon(context, rp.round!.id));
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Halved.surface,
+        foregroundColor: Halved.deepPine,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         // D2: the standing becomes the bar's second line, and the pill in it
         // replaces the leaderboard ICON below.
         bottom: ribbon,
@@ -465,10 +476,11 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen>
           tooltip: 'Close',
           onPressed: () => Navigator.of(context).maybePop(),
         ),
-        title: Text('Four Ball Quota',
-            style: ribbon == null
-                ? null
-                : const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+        title: ScoreEntryTitle(
+          course: rp.round?.course.name ?? '',
+          subtitle: ScoreEntryTitle.subtitleFor(
+              'Four Ball Quota', holesThruOf(rp)),
+        ),
         centerTitle: true,
         actions: [
           if (sync.hasPending)
