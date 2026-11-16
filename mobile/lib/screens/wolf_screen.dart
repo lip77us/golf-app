@@ -40,6 +40,8 @@ import '../widgets/round_chat_button.dart';
 import '../widgets/standing_ribbon.dart';
 import '../widgets/spots_capture.dart';
 import '../widgets/stroke_dots.dart';
+import '../widgets/score_box.dart';
+import '../theme/halved_brand.dart';
 import '../widgets/combo_tee_chip.dart';
 import '../widgets/forty_balls_keypad.dart';
 import '../widgets/wolf_entry.dart';
@@ -1479,6 +1481,7 @@ class _HoleScoreCard extends StatelessWidget {
                 comboTee: m.comboTeeOnHole(holeData?.holeNumber ?? 0),
                 member:    m,
                 gross:     gross,
+                par:       par,
                 isHot:     isHot,
                 strokes:   strokes,
                 role:      role,
@@ -1550,6 +1553,7 @@ class _PlayerRow extends StatelessWidget {
   /// This golfer's tee for the hole being entered — combo sets only.
   final String?    comboTee;
   final int?       gross;
+  final int        par;
   final bool       isHot;
   final int        strokes;
   final String?    role;   // wolf | partner | opponent
@@ -1564,6 +1568,7 @@ class _PlayerRow extends StatelessWidget {
     required this.member,
     this.comboTee,
     required this.gross,
+    required this.par,
     required this.isHot,
     required this.strokes,
     required this.role,
@@ -1575,39 +1580,36 @@ class _PlayerRow extends StatelessWidget {
     this.spotsSheetOpen = false,
   });
 
+  /// The score-entry template's row (`handoff-score-entry-template`): a 4pt
+  /// bar down the left edge in the side's colour, name and `CH n`, a net pill
+  /// and the score box with the stroke dots inside it. The active row is a
+  /// mint wash and a ring on its box — nothing frames it and nothing else is
+  /// dimmed. The Wolf keeps what is its own: the paw, the partner chip, the
+  /// combo-tee chip and the Spots button.
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final teamColor = _wolfTeamColor(role);
     final active = isHot || isEditing;
-    // Active score box: white fill + a team-colour ring (not the old green).
-    final boxBg = active ? Colors.white : Colors.transparent;
-    final boxBorder = active
-        ? Border.all(color: teamColor ?? theme.colorScheme.primary, width: 2)
-        : Border.all(color: teamColor ?? theme.colorScheme.outline,
-            width: teamColor != null ? 1.5 : 1);
+    final netStyle = context.watch<SettingsProvider>().netStyleEntry;
 
     final inner = Container(
+      constraints: const BoxConstraints(minHeight: 50),
       decoration: BoxDecoration(
-        // Inside the active bounding box the row is transparent so the box's
-        // white fill shows through; inactive rows keep their team tint + the
-        // left accent bar (warm = Wolf side, cool = opponents).
-        color: active ? Colors.transparent : teamColor?.withOpacity(0.07),
-        border: active
-            ? const Border()
-            : Border(
-                top: BorderSide(color: theme.colorScheme.outlineVariant),
-                left: teamColor != null
-                    ? BorderSide(color: teamColor, width: 4)
-                    : BorderSide.none,
-              ),
+        color: active ? const Color(0x1F3BD89A) : null,
+        border: Border(
+          top: const BorderSide(color: Color(0xFFEEF3EE)),
+          left: teamColor != null
+              ? BorderSide(color: teamColor, width: 4)
+              : BorderSide.none,
+        ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
       child: Row(children: [
         if (role == 'wolf')
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: Icon(Icons.pets, size: 16, color: theme.colorScheme.primary),
+          const Padding(
+            padding: EdgeInsets.only(right: 4),
+            child: Icon(Icons.pets, size: 16, color: Halved.pine),
           ),
         Expanded(
           child: Column(
@@ -1615,30 +1617,35 @@ class _PlayerRow extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Row(children: [
-            Flexible(
-              child: Text(member.player.name,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.w600)),
-            ),
-            if (role == 'partner') ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(8),
+                Flexible(
+                  child: Text(member.player.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w600,
+                          color: Halved.deepPine)),
                 ),
-                child: Text('partner',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSecondaryContainer)),
-              ),
-            ],
-            ComboTeeChip(tee: comboTee),
-            // `gets N` was here — the ROUND's total allocation, in a chip, and
-            // only ever drawn on a strokes-off round. It is replaced by the
-            // dots on the score box, which say the thing the Wolf actually
-            // needs off the tee: who is getting a shot on THIS hole.
+                const SizedBox(width: 6),
+                Text('CH ${member.courseHandicap}',
+                    style: Halved.body(
+                            color: Halved.muted, weight: FontWeight.w600)
+                        .copyWith(fontSize: 11.5)),
+                if (role == 'partner') ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color:
+                          theme.colorScheme.secondaryContainer.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text('partner',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSecondaryContainer)),
+                  ),
+                ],
+                ComboTeeChip(tee: comboTee),
               ]),
               if (spotsActive)
                 Padding(
@@ -1652,39 +1659,38 @@ class _PlayerRow extends StatelessWidget {
             ],
           ),
         ),
-        // Tapping a scored row opens its inline editor (no pencil affordance —
-        // consistent with the other score screens, where tapping the score is
-        // the edit gesture).
         const SizedBox(width: 8),
-        // **The stroke dots, which Wolf was the last score screen without.**
-        // They matter more here than anywhere else: the Wolf picks his partner
-        // off the tee, and a man getting a shot on this hole is a different
-        // proposition from the same man on the next one. The row showed
-        // nothing at all on a NET round, which is most of them.
-        //
-        // Same 40x36 box and same horizontal run as every other score box —
-        // three dots cost 15px of 40 here and clear the digit, which is why
-        // this axis is the box's and the column is the grid's.
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 40, height: 36,
-              decoration: BoxDecoration(
-                color: boxBg, border: boxBorder,
-                borderRadius: BorderRadius.circular(6),
+        // The net pill: a dash until there is a score to be net of.
+        Container(
+          width: 52,
+          height: 26,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Halved.surface,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text.rich(TextSpan(
+            style: Halved.body(color: Halved.muted, weight: FontWeight.w600)
+                .copyWith(fontSize: 12),
+            children: [
+              const TextSpan(text: 'net '),
+              TextSpan(
+                text: gross == null ? '–' : '${gross! - strokes}',
+                style: Halved.sectionHead().copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Halved.deepPine),
               ),
-              child: Center(
-                child: gross != null
-                    ? Text('$gross',
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.bold))
-                    : const SizedBox.shrink(),
-              ),
-            ),
-            StrokeDotRow(
-                strokes: strokes, color: theme.colorScheme.primary),
-          ],
+            ],
+          )),
+        ),
+        const SizedBox(width: 10),
+        ScoreBox(
+          score: gross,
+          par: par,
+          strokes: strokes,
+          shapeStrokes: netStyle ? strokes : 0,
+          active: active,
         ),
       ]),
     );
