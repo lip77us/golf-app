@@ -199,29 +199,49 @@ class FortyBallsPicker extends StatelessWidget {
     ));
   }
 
-  /// `All 4 scores in` + `Edit scores`.
+  /// The template's header line: `HOLE 7 · 40 BALLS` in caps, and an
+  /// underlined `Edit scores` when the screen owns the way back.
   ///
-  /// The tray only rises once every score is in, so the header states the
-  /// thing that let it rise — and offers the way back, because the commonest
-  /// reason to look at a finished hole is that one of the numbers is wrong.
-  Widget _header() => Row(children: [
-        Expanded(
-          child: Text(
-            state.scoresIn
-                ? 'All ${state.activeHere} scores in'
-                : 'Scores still coming in',
-            style: const TextStyle(
-                color: Halved.cream, fontWeight: FontWeight.w700),
+  /// The `All 4 scores in` sentence is gone, as on every other tray: it said
+  /// only what the tray's presence already says. What survives is the one
+  /// state worth naming — scores still outstanding — on the right.
+  Widget _header() {
+    const secondary = Color(0xFFB9CCC3);
+    final label = Halved.label(color: secondary, weight: FontWeight.w700)
+        .copyWith(fontSize: 11.5, letterSpacing: 0.4);
+    return Row(children: [
+      Expanded(
+        child: Text('HOLE ${state.hole} · 40 BALLS',
+            maxLines: 1, overflow: TextOverflow.ellipsis, style: label),
+      ),
+      if (!state.scoresIn) ...[
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text('SCORES STILL COMING IN',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: label.copyWith(fontSize: 11)),
+        ),
+      ],
+      if (onEditScores != null) ...[
+        const SizedBox(width: 10),
+        GestureDetector(
+          onTap: onEditScores,
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            child: Text('Edit scores',
+                style: Halved.body(color: Colors.white, weight: FontWeight.w700)
+                    .copyWith(
+                        fontSize: 12.5,
+                        decoration: TextDecoration.underline,
+                        decorationColor: Colors.white)),
           ),
         ),
-        if (onEditScores != null)
-          GestureDetector(
-            onTap: onEditScores,
-            child: const Text('Edit scores',
-                style: TextStyle(
-                    color: Halved.brightMint, fontWeight: FontWeight.w700)),
-          ),
-      ]);
+      ],
+    ]);
+  }
 
   /// One dot per ball in the budget, filled as they are counted.
   ///

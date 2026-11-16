@@ -244,9 +244,9 @@ void main() {
   });
 
   group('the tray header and actions', () {
-    testWidgets('the header states what let the tray rise', (tester) async {
+    testWidgets('the header is one line, label then Edit scores', (tester) async {
       await pumpPicker(tester, picker());
-      expect(find.text('All 4 scores in'), findsOneWidget);
+      expect(find.text('HOLE 11 · 40 BALLS'), findsOneWidget);
     });
 
     testWidgets('Edit scores appears only when there is a way back',
