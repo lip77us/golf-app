@@ -323,6 +323,10 @@ class CourseInfo {
   final double? latitude;
   final double? longitude;
 
+  /// Set on the 18-hole course derived from a nine-hole one so it can be
+  /// played twice — the id of that nine. Null for every real course.
+  final int? doubledOf;
+
   const CourseInfo({
     required this.id,
     required this.name,
@@ -331,6 +335,7 @@ class CourseInfo {
     this.tees = const [],
     this.latitude,
     this.longitude,
+    this.doubledOf,
   });
 
   /// "City, ST" (or '' when unknown) for display/disambiguation.
@@ -348,6 +353,7 @@ class CourseInfo {
         // DRF sends a Decimal as a string ("37.891234"), so parse either.
         latitude: double.tryParse('${j['latitude'] ?? ''}'),
         longitude: double.tryParse('${j['longitude'] ?? ''}'),
+        doubledOf: j['doubled_of'] as int?,
       );
 
   @override

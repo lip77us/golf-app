@@ -990,6 +990,29 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           style: Theme.of(context).textTheme.bodySmall,
         ),
         children: [
+          // A nine-hole course can be played twice and look like an 18-hole
+          // one (the server hands back a derived 18-hole course, so every game
+          // that needs eighteen holes works). The same row takes you back.
+          if (_isNineHoleCourse || _selectedCourse?.doubledOf != null) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(spacing: 8, children: [
+                ChoiceChip(
+                  key: const ValueKey('play-nine-once'),
+                  label: const Text('Play the nine once'),
+                  selected: _selectedCourse?.doubledOf == null,
+                  onSelected: (_) => _playNine(twice: false),
+                ),
+                ChoiceChip(
+                  key: const ValueKey('play-nine-twice'),
+                  label: const Text('Play it twice (18 holes)'),
+                  selected: _selectedCourse?.doubledOf != null,
+                  onSelected: (_) => _playNine(twice: true),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (size >= 18) ...[
             Align(
               alignment: Alignment.centerLeft,
@@ -1025,6 +1048,40 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       selected: selected,
       onSelected: (_) => _setHoles(holes, start: start),
     );
+  }
+
+  /// True for a real nine-hole course (not the doubled copy of one).
+  bool get _isNineHoleCourse =>
+      _selectedCourse != null &&
+      _selectedCourse!.doubledOf == null &&
+      _courseHoleCount <= 9;
+
+  /// Switch between the nine played once and played twice. Twice swaps the
+  /// selected course for the derived 18-hole one; once swaps back.
+  Future<void> _playNine({required bool twice}) async {
+    final course = _selectedCourse;
+    if (course == null) return;
+    if (twice == (course.doubledOf != null)) return;
+    final client = context.read<AuthProvider>().client;
+    try {
+      final target = twice
+          ? await client.doubleCourse(course.id)
+          : _courses.firstWhere((c) => c.id == course.doubledOf,
+              orElse: () => course);
+      if (target.id == course.id) return;
+      await _onCourseSelected(target);
+      if (!mounted) return;
+      setState(() {
+        _numHoles = twice ? 18 : 9;
+        _startingHole = 1;
+        // The segment games (Nassau, Sixes, …) come and go with the hole count.
+        _recomputeGames();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+    }
   }
 
   /// Set the hole count (and optionally the starting hole), pruning a segment

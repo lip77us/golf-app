@@ -359,8 +359,9 @@ def _unrounded_ch(m) -> float:
     idx = float(m.player.effective_handicap_index() or 0)
     if t is None:
         return idx
-    return (idx * float(t.slope) / 113.0
-            + float(t.course_rating) - float(t.par))
+    from core.handicap_math import course_handicap_exact, tee_hole_count
+    return course_handicap_exact(
+        idx, t.slope, t.course_rating, t.par, tee_hole_count(t))
 
 
 def _sort_by_handicap(player_ids: list[int], members_by_pid: dict) -> list[int]:

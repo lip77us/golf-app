@@ -413,7 +413,10 @@ class Player(models.Model):
         Returns an integer per WHS rules, using this golfer's locally-stored
         index (kept current for connected golfers via index propagation).
         """
-        ch = float(self.effective_handicap_index()) * (float(tee.slope) / 113.0) + (float(tee.course_rating) - float(tee.par))
+        from core.handicap_math import course_handicap_exact, tee_hole_count
+        ch = course_handicap_exact(
+            self.effective_handicap_index(), tee.slope, tee.course_rating,
+            tee.par, tee_hole_count(tee))
         return round_half_up(ch)
 
     @staticmethod
@@ -545,6 +548,17 @@ class Course(models.Model):
                                           null=True, blank=True)
     longitude       = models.DecimalField(max_digits=9, decimal_places=6,
                                           null=True, blank=True)
+    #: Set on the 18-hole course derived from a NINE-hole one so it can be
+    #: played twice (services/doubled_course.py). Null for every real course.
+    #: It is a separate Course rather than extra tees on the nine because the
+    #: hole universe is read off a course's tees (`course_hole_count`), so an
+    #: 18-hole tee beside the nine-hole ones would turn every ordinary nine-hole
+    #: round there into a partial round of an 18-hole course.
+    doubled_of      = models.ForeignKey(
+                        'self', null=True, blank=True,
+                        on_delete=models.SET_NULL, related_name='doubled',
+                        help_text='The nine-hole course this one plays twice.',
+                    )
     created_at      = models.DateTimeField(auto_now_add=True)
 
     objects         = AccountScopedManager()

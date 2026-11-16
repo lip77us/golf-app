@@ -1408,6 +1408,14 @@ class ApiClient {
         .toList();
   }
 
+  /// The 18-hole course that plays this NINE-hole one twice — created on the
+  /// first ask and reused after. The server refuses a course that is not a
+  /// nine-hole one.
+  Future<CourseInfo> doubleCourse(int courseId) async {
+    final data = await _post('/courses/$courseId/doubled/', {});
+    return CourseInfo.fromJson(data as Map<String, dynamic>);
+  }
+
   /// The account's most recently played distinct courses (up to 3, newest
   /// first). Drives the course picker's recents quick-pick. Empty for a brand
   /// new account with no rounds.

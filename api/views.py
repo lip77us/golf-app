@@ -2075,6 +2075,26 @@ class CourseListView(APIView):
         return Response(CourseSerializer(courses, many=True).data)
 
 
+class CourseDoubledView(APIView):
+    """
+    POST /api/courses/{id}/doubled/ — the 18-hole course that plays this
+    NINE-hole one twice (services/doubled_course.py). Created on first ask and
+    reused after; 400 for a course that is not a nine-hole one.
+    """
+
+    def post(self, request, pk):
+        from services.doubled_course import (
+            NotANineHoleCourse, get_or_create_doubled_course)
+        course = account_get_or_404(Course, request.user.account, pk=pk)
+        try:
+            doubled = get_or_create_doubled_course(course)
+        except NotANineHoleCourse as e:
+            return Response({'detail': str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return Response(CourseSerializer(doubled).data,
+                        status=status.HTTP_201_CREATED)
+
+
 class RecentCoursesView(APIView):
     """
     GET /api/courses/recent/
@@ -12779,7 +12799,8 @@ class CourseFindView(APIView):
 
         # 1. The account's own courses — already owned, so instant select.
         own = (CourseModel.objects.for_account(account)
-               .filter(latitude__range=(lo_lat, hi_lat),
+               .filter(doubled_of__isnull=True,   # a played-twice copy is not a venue
+                       latitude__range=(lo_lat, hi_lat),
                        longitude__range=(lo_lng, hi_lng))
                .prefetch_related('tees'))
         for c in own:
@@ -12901,6 +12922,7 @@ class CourseFindView(APIView):
         # 1. The caller's own courses — instant select.
         own = (CourseModel.objects
                .for_account(account)
+               .filter(doubled_of__isnull=True)   # a played-twice copy is not a venue
                .filter(Q(name__icontains=q_local) | Q(city__icontains=q_local))
                .prefetch_related('tees')
                .order_by('name')[:25])

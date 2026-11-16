@@ -13388,3 +13388,32 @@ the eagle's rings checked); the screen itself was not. Tests:
 `mobile/test/score_entry_chrome_test.dart`, `score_entry_rows_test.dart`, and the
 rewritten `hole_header_test.dart` / `standing_ribbon_width_test.dart`.
 
+
+## Nine-hole courses — the handicap, and playing a nine twice (16 Nov 2026)
+
+**A nine-hole tee's rating and par describe nine holes, so its course handicap
+halves the index first** (WHS: `index/2 × slope/113 + (CR9 − par9)`). The app used
+the whole index, so a 10.0 on The Ridge 9's White tees (31.2 / 105, par 34) got **6**
+strokes instead of **2** — roughly three times too many in any net game. Found when
+Paul sent the scorecard for Poppy Ridge's Ridge 9.
+
+`core/handicap_math.course_handicap_exact(index, slope, rating, par, holes)` is now
+the one writer, used by `Player.course_handicap`, `services/road_trip.course_handicap`
+and `services/triple_cup._unrounded_ch`; the Dart copy
+(`utils/course_handicap.dart`, `isNineHoleTee`) mirrors it, judging a list payload
+with no hole data by par (< 45). **Partial rounds of an 18-hole course are unchanged**
+— that path scales strokes in `scoring/handicap.make_strokes_fn`.
+
+**Play it twice** (Advanced tab, casual setup): `POST /api/courses/{id}/doubled/`
+(`services/doubled_course.py`) returns an account-private 18-hole course
+(`Course.doubled_of`, `core/0018`) built from the nine so every game that needs
+eighteen holes works with no scoring change: holes 10–18 repeat 1–9; stroke index
+`2·si−1` then `2·si`; par and rating double, slope unchanged. It is a separate
+Course, not extra tees, because the hole universe is read off a course's tees
+(`course_hole_count`). Created once and reused; hidden from course search so it is
+not a second venue; named `<course> (played twice)`. The same chip row switches back.
+**It does not follow a later re-rate of the nine** — delete the doubled course on
+the TD console to rebuild it.
+
+Tests: `api/test_nine_hole_handicap.py`, `api/test_doubled_course.py`,
+`mobile/test/nine_hole_test.dart`. Not seen on a device.

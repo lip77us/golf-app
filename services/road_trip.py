@@ -187,10 +187,10 @@ def course_handicap(index, tee) -> int:
     The same arithmetic `Player.course_handicap` does, taken apart so a trip
     can hand it an index from its own log rather than the golfer's current one.
     """
-    from core.handicap_math import round_half_up
-    ch = (float(index) * (float(tee.slope) / 113.0)
-          + (float(tee.course_rating) - float(tee.par)))
-    return round_half_up(ch)
+    from core.handicap_math import (
+        course_handicap_exact, round_half_up, tee_hole_count)
+    return round_half_up(course_handicap_exact(
+        index, tee.slope, tee.course_rating, tee.par, tee_hole_count(tee)))
 
 
 # ---------------------------------------------------------------------------

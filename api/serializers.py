@@ -331,8 +331,8 @@ class CourseSerializer(serializers.ModelSerializer):
         model  = Course
         fields = ['id', 'name', 'golf_api_id',
                   'city', 'state', 'country', 'latitude', 'longitude',
-                  'created_at', 'tees']
-        read_only_fields = ['id', 'golf_api_id', 'created_at']
+                  'created_at', 'tees', 'doubled_of']
+        read_only_fields = ['id', 'golf_api_id', 'created_at', 'doubled_of']
 
     def get_tees(self, obj):
         # Current revisions only — retired (superseded) tees are historical and
