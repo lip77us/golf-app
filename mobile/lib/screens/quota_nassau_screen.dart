@@ -29,7 +29,7 @@ import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/inline_score_picker.dart';
-import '../widgets/net_score_button.dart';
+import '../widgets/score_box.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
 import '../utils/round_complete.dart';
@@ -1003,21 +1003,21 @@ class _QNPlayerRow extends StatelessWidget {
         ? null
         : (teamLabel == 'T1' ? t1Color : t2Color);
 
+    // The template row: the team's 4pt bar, name and `CH n`, the quota line
+    // and points badge (this game's own), and the score box. Quota Nassau is
+    // GROSS, so there is no net pill. The active row is a mint wash.
     return Container(
+      constraints: const BoxConstraints(minHeight: 50),
       decoration: BoxDecoration(
-        // Non-active team players get a light team-colour wash + a 4px team
-        // left bar, matching the casual score-entry screen.
-        color: isHot
-            ? theme.colorScheme.primaryContainer.withOpacity(0.08)
-            : (teamColor != null ? teamColor.withOpacity(0.07) : null),
+        color: isHot ? const Color(0x1F3BD89A) : null,
         border: Border(
-          top: BorderSide(color: theme.colorScheme.outlineVariant),
-          left: (!isHot && teamColor != null)
+          top: const BorderSide(color: Color(0xFFEEF3EE)),
+          left: teamColor != null
               ? BorderSide(color: teamColor, width: 4)
               : BorderSide.none,
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
       child: Row(children: [
         // Team badge
         if (teamLabel != null) ...[
@@ -1052,12 +1052,17 @@ class _QNPlayerRow extends StatelessWidget {
                     member.player.name,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodyMedium?.copyWith(
+                      fontSize: 14.5,
                       fontWeight: FontWeight.w600,
-                      // Don't repaint the name green on the hot row — the
-                      // green score-box and row tint already mark it.
+                      color: Halved.deepPine,
                     ),
                   ),
                 ),
+                const SizedBox(width: 6),
+                Text('CH ${member.courseHandicap}',
+                    style: Halved.body(
+                            color: Halved.muted, weight: FontWeight.w600)
+                        .copyWith(fontSize: 11.5)),
                 ComboTeeChip(tee: comboTee),
               ]),
               if (quota != null)
@@ -1088,39 +1093,16 @@ class _QNPlayerRow extends StatelessWidget {
         ] else
           const SizedBox(width: 60),
 
-        // Score box
+        // Score box — gross only, so the dots and net shapes are off.
         GestureDetector(
           onTap: onTap,
-          child: gross != null
-              ? NetScoreButton(
-                  score:    gross!,
-                  par:      par,
-                  strokes:  0, // gross only — par = white
-                  selected: isHot,
-                  width:    42,
-                  height:   38,
-                )
-              : Container(
-                  width: 42, height: 38,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: isHot
-                        ? theme.colorScheme.primaryContainer.withOpacity(0.4)
-                        : theme.colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(6),
-                    border: isHot
-                        ? Border.all(
-                            color: theme.colorScheme.primary, width: 2)
-                        : Border.all(color: theme.colorScheme.outline),
-                  ),
-                  child: isHot
-                      ? Icon(Icons.arrow_drop_down,
-                          size: 20, color: theme.colorScheme.primary)
-                      : Text('—',
-                          style: TextStyle(
-                              color: theme.colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.bold)),
-                ),
+          child: ScoreBox(
+            score: gross,
+            par: par,
+            strokes: 0,
+            shapeStrokes: 0,
+            active: isHot,
+          ),
         ),
       ]),
     );
