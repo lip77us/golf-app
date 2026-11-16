@@ -2470,6 +2470,13 @@ silently turned `<tr class="src">` in the custom-tee grid into a flex column —
 the DOM was correct and the table simply rendered as a vertical stack. Renamed
 to `.fromtee` and the radio rule scoped to `.panel .src`.
 
+**Update, 16 Nov 2026:** the drawer's *Manage Courses* entry is removed (App
+Review has started opening more menus, and course management belongs to the TD
+console). The screens (`manage_courses_screen.dart`, `manage_course_tees_screen.dart`,
+the paste screens) and the `/manage-courses` route are left in as unreachable dead
+code for now; the paste-a-scorecard flow is not wanted and can go with them.
+The note below predates this.
+
 **Deliberately NOT done:** retiring the app's course screens
 (`manage_courses_screen.dart`, `manage_course_tees_screen.dart`, the paste
 screens). The handoff says they come out when this ships, but that needs a
