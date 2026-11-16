@@ -13347,11 +13347,13 @@ the dark tray; everything else is the template. This is a 3.0.0 change, in slice
   (wash, bar, 50pt height): it plays two matches per golfer, so it keeps its two
   stroke-dot columns and "gets N" pills beside the box.
 
+- **Generic tray side swatches**: a cup singles match shows each golfer's side
+  (mint / clay on the dark tray) from `rp.matchPlayData`. Other games that reach the
+  generic tray have no sides, so their swatch stays grey.
+
 **Not done yet:**
-1. **Side swatches in the generic tray** (a cup match's two colours) — the rows are
-   neutral grey, because the side colour is decided inside `_HoleScoreCard`.
-2. Triple Cup / cup match screens and the 40 Balls picker header are not restyled.
-3. Money still rides in blocks on some trays; check each against the template's rule
+1. Triple Cup / cup match screens and the 40 Balls picker header are not restyled.
+2. Money still rides in blocks on some trays; check each against the template's rule
    that **money rides on a golfer's row or the standing line**.
 
 **Left out on purpose:** Foursome Play / team scramble (it scores a team, not a

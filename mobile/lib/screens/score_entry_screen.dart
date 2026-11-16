@@ -4543,6 +4543,22 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 scorecard: sc,
                 hole: _selectedHole,
                 scores: scores,
+                // A cup singles match: each golfer's swatch is his side, in
+                // the dark-tray colours (mint / clay). The row bars above use
+                // the cup's own configured colours, which are too dark to read
+                // on the tray, so the two agree on WHICH side, not the shade.
+                sideOf: (m) {
+                  final mp = rp.matchPlayData;
+                  if (mp == null || mp['bracket_type'] != 'cup_singles') {
+                    return null;
+                  }
+                  for (final raw in (mp['matches'] as List? ?? [])) {
+                    final mm = Map<String, dynamic>.from(raw as Map);
+                    if (mm['player1_id'] == m.player.id) return Halved.onDark1;
+                    if (mm['player2_id'] == m.player.id) return Halved.onDark2;
+                  }
+                  return null;
+                },
               ),
               picking: _trayEditing,
               onEdit: () => setState(() {
