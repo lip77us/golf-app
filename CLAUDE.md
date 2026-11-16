@@ -13364,8 +13364,14 @@ the dark tray; everything else is the template. This is a 3.0.0 change, in slice
   complete), caps label badge on sage, rounded-square pine/clay swatches, deep-pine
   text. Layout and content unchanged.
 
+- **Ryder Cup scoreboard** (`ryder_cup_scoreboard_screen.dart`): sage page, white
+  hairline cards, caps section label, deep-pine round badges, and each team shown in
+  **its own configured colour** (swatch, progress bar, and the fill of a won F9/B9/18
+  chip) — cup games keep the TD's colours per `docs/color-standard.md`. Level and
+  unplayed chips are neutral. Content and layout unchanged.
+
 **Not done yet:**
-1. The Ryder Cup scoreboard / draft / round-setup screens and the 40 Balls picker
+1. The Ryder Cup draft / round-setup screens and the 40 Balls picker
    header are not restyled; Triple Cup's own screen is unreachable.
 2. Money still rides in blocks on some trays; check each against the template's rule
    that **money rides on a golfer's row or the standing line**.
