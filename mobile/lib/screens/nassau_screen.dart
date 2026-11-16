@@ -27,7 +27,8 @@ import '../utils/holes_thru.dart';
 import '../utils/play_order.dart';
 import '../widgets/hole_header.dart';
 import '../widgets/inline_score_picker.dart';
-import '../widgets/net_score_button.dart';
+import '../widgets/score_box.dart';
+import '../theme/halved_brand.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
 import '../utils/match_handicap.dart';
@@ -1007,6 +1008,7 @@ class _NassauHoleScoreCard extends StatelessWidget {
                 : Theme.of(context).colorScheme.primary;
             final row = _NassauPlayerRow(
                 member:              m,
+                par:                 par,
                 gross:               gross,
                 isHot:               isHot,
                 comboTee:            m.comboTeeOnHole(holeNumber),
@@ -1019,20 +1021,10 @@ class _NassauHoleScoreCard extends StatelessWidget {
                 spotsSheetOpen: spotsActive && spotsSheetOpen(m.player.id),
               );
             if (isHot) {
-              // Active player + picker share ONE team-coloured bounding box.
-              // Flush-left bold bar, right inset so the right line shows.
+              // The template draws no frame round the active row; the picker
+              // (the fallback while a hole's card is in flight) sits beneath.
               return [
                 Container(
-                  margin: const EdgeInsets.fromLTRB(0, 6, 8, 6),
-                  decoration: BoxDecoration(
-                    color: boxColor.withOpacity(0.10),
-                    border: Border(
-                      top:    BorderSide(color: boxColor, width: 1.5),
-                      bottom: BorderSide(color: boxColor, width: 1.5),
-                      right:  BorderSide(color: boxColor, width: 1.5),
-                      left:   BorderSide(color: boxColor, width: 4.0),
-                    ),
-                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -1239,6 +1231,7 @@ class _PhantomDonorRow extends StatelessWidget {
 
 class _NassauPlayerRow extends StatelessWidget {
   final Membership    member;
+  final int           par;
   final int?          gross;
   final bool          isHot;
   /// This golfer's tee for the hole being entered — combo sets only.
@@ -1253,6 +1246,7 @@ class _NassauPlayerRow extends StatelessWidget {
 
   const _NassauPlayerRow({
     required this.member,
+    required this.par,
     required this.gross,
     required this.isHot,
     this.comboTee,
@@ -1265,63 +1259,50 @@ class _NassauPlayerRow extends StatelessWidget {
     this.spotsSheetOpen = false,
   });
 
+  /// The template row: the team's 4pt bar, name and `CH n`, a net pill and
+  /// the score box. The active row is a mint wash; nothing frames it.
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    final Color activeColor =
-        team != null ? nassauTeamColor(team!) : theme.colorScheme.primary;
-    final Color boxBg = isHot ? Colors.white : Colors.transparent;
-    final boxBorder = isHot
-        ? Border.all(color: activeColor, width: 2)
-        : Border.all(color: theme.colorScheme.outline);
+    final netStyle = context.watch<SettingsProvider>().netStyleEntry;
+    final teamColour = team != null ? nassauTeamColor(team!) : null;
 
     return Container(
+      constraints: const BoxConstraints(minHeight: 50),
       decoration: BoxDecoration(
-        // Transparent when active so the surrounding bounding box's team wash
-        // shows through. Inactive team players get a light team-colour wash +
-        // a 4px team left bar (matches the casual score-entry screen).
-        color: isHot
-            ? Colors.transparent
-            : (team != null ? activeColor.withOpacity(0.07) : null),
-        border: isHot
-            ? const Border()
-            : Border(
-                top: BorderSide(color: theme.colorScheme.outlineVariant),
-                left: team != null
-                    ? BorderSide(color: activeColor, width: 4)
-                    : BorderSide.none,
-              ),
+        color: isHot ? const Color(0x1F3BD89A) : null,
+        border: Border(
+          top: const BorderSide(color: Color(0xFFEEF3EE)),
+          left: teamColour != null
+              ? BorderSide(color: teamColour, width: 4)
+              : BorderSide.none,
+        ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
       child: Row(children: [
-        // Name + handicap chip. Team identity is conveyed by the name colour
-        // (blue = team 1, orange = team 2) — no separate dot needed.
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
               Row(children: [
-            Flexible(
-              child: Text(
-                member.player.name,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  // Tint the name with the player's team colour — the
-                  // green score-box outline + row tint already mark the
-                  // hot-spot player.
-                  color: team != null ? nassauTeamColor(team!) : null,
+                Flexible(
+                  child: Text(
+                    member.player.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: Halved.deepPine),
+                  ),
                 ),
-              ),
-            ),
-            // The `gets N` pill was here. **Removed 22 Sep 2026.** It carried
-            // the ROUND's allocation while the dots on the score box carry
-            // THIS hole's, and a golfer reading both has been handed the
-            // arithmetic for subtracting a stroke he has already been given.
-            ComboTeeChip(tee: comboTee),
-          ]),
+                const SizedBox(width: 6),
+                Text('CH ${member.courseHandicap}',
+                    style: Halved.body(
+                            color: Halved.muted, weight: FontWeight.w600)
+                        .copyWith(fontSize: 11.5)),
+                ComboTeeChip(tee: comboTee),
+              ]),
               if (spotsActive)
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
@@ -1334,38 +1315,41 @@ class _NassauPlayerRow extends StatelessWidget {
             ],
           ),
         ),
-
         const SizedBox(width: 8),
-
-        // Score box with optional stroke dots
+        // The net pill: a dash until there is a score to be net of.
+        Container(
+          width: 52,
+          height: 26,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Halved.surface,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text.rich(TextSpan(
+            style: Halved.body(color: Halved.muted, weight: FontWeight.w600)
+                .copyWith(fontSize: 12),
+            children: [
+              const TextSpan(text: 'net '),
+              TextSpan(
+                text: gross == null ? '–' : '${gross! - strokesOnThisHole}',
+                style: Halved.sectionHead().copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Halved.deepPine),
+              ),
+            ],
+          )),
+        ),
+        const SizedBox(width: 10),
         GestureDetector(
           onTap: onTap,
-          child: scoreCellWithDots(
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 40,
-              height: 36,
-              decoration: BoxDecoration(
-                color: boxBg,
-                border: boxBorder,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Center(
-                child: gross != null
-                    ? Text('$gross',
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.bold))
-                    : isHot
-                        ? Icon(Icons.arrow_drop_down,
-                            size: 20,
-                            color: theme.colorScheme.primary)
-                        : const SizedBox.shrink(),
-              ),
-            ),
-            strokesOnThisHole,
-            theme.colorScheme.primary,
-          ),
-        ),
+          child: ScoreBox(
+          score: gross,
+          par: par,
+          strokes: strokesOnThisHole,
+          shapeStrokes: netStyle ? strokesOnThisHole : 0,
+          active: isHot,
+        )),
       ]),
     );
   }
