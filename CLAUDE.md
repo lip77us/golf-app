@@ -13334,16 +13334,25 @@ the dark tray; everything else is the template. This is a 3.0.0 change, in slice
   casual Triple Cup team names) the app shows what it sent** — so a casual Triple
   Cup the server still calls "Blue" and "Orange" will say so until that is changed.
 
-**Not done yet — the next slices:**
-1. **Move the nine existing trays onto `TrayFrame`** and drop their "All N scores
-   in" line (`TrayEditHeader`), checking each against the template's rule that
-   **money rides on a golfer's row or the standing line, not a block of its own**.
-2. **The dedicated casual screens** (Wolf, Rabbit, Survivor, Sequoya 3s, Points,
-   Nassau, Quota Nassau, Triple Nassau) still draw their own app bar and rows; they
-   share the hole card already (via `HoleHeader`).
-3. **Chat badge** (red `#B23A1E`, white, 18pt) — `RoundChatButton` is unchanged.
-4. **Side swatches in the generic tray** (a cup match's two colours) — the rows are
-   neutral grey for now, because the side colour is decided inside `_HoleScoreCard`.
+**Done since (15–16 Nov 2026):**
+- **Tray headers**: every tray carries its label in `TrayEditHeader` (no "All N
+  scores in" line). Chat unread badge is the template's red.
+- **Dedicated casual screens**: course title, `Game · Thru N` and the leaderboard line
+  on every game, and **golfer rows on the template row** — Wolf, Rabbit, Survivor,
+  Sequoya 3s, Points 5-3-1, Nassau, Quota Nassau — each with a 4pt side bar, name +
+  `CH n`, net pill, `ScoreBox`, mint wash and no frame round the active row, keeping
+  its own extras (Wolf's paw/partner chip, Rabbit's holder mark, Survivor's
+  OUT/ZOMBIE, Points' pills, Quota's quota line, combo-tee chip, Spots button).
+  **Quota Nassau has no net pill** (gross only). **Triple Nassau got only the frame**
+  (wash, bar, 50pt height): it plays two matches per golfer, so it keeps its two
+  stroke-dot columns and "gets N" pills beside the box.
+
+**Not done yet:**
+1. **Side swatches in the generic tray** (a cup match's two colours) — the rows are
+   neutral grey, because the side colour is decided inside `_HoleScoreCard`.
+2. Triple Cup / cup match screens and the 40 Balls picker header are not restyled.
+3. Money still rides in blocks on some trays; check each against the template's rule
+   that **money rides on a golfer's row or the standing line**.
 
 **Left out on purpose:** Foursome Play / team scramble (it scores a team, not a
 golfer) and the paper-card entry (a whole card in one go); cup match screens wait
