@@ -28,6 +28,8 @@ import '../game_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_app_bar.dart';
+import '../theme/halved_brand.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../utils/nine_totals.dart';
@@ -35,8 +37,8 @@ import '../utils/nine_totals.dart';
 // Colours used for Player-1 and Player-2 holes across all match cards.
 // Matches the score-entry name colours (GameColors.team1 / team2) so a player
 // reads in the same colour on the leaderboard as in score entry.
-final _kP1Color = GameColors.team1; // blue
-final _kP2Color = GameColors.team2; // orange
+final _kP1Color = GameColors.team1; // pine
+final _kP2Color = GameColors.team2; // clay
 
 class MatchPlayScreen extends StatefulWidget {
   final int foursomeId;
@@ -112,9 +114,11 @@ class _MatchPlayScreenState extends State<MatchPlayScreen> {
         (rp.round?.foursomes.length ?? 1) == 1;
     final showExit = isCasualSingle && _hasAnyScore;
     return Scaffold(
-      appBar: AppBar(
-        // One name on every surface — setup, board, payout row and chat.
-        title: const Text('Mini Singles Bracket'),
+      appBar: GolfAppBar(
+        // One name on every surface — setup, board, payout row and chat. The
+        // course is the title, the template's way, and the game sits under it.
+        course: rp.round?.course.name ?? '',
+        title: 'Mini Singles Bracket',
         automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -419,12 +423,14 @@ class _MatchCard extends StatelessWidget {
     return Opacity(
       opacity: dimmed ? 0.55 : 1.0,
       child: Card(
-        elevation: 1,
+        elevation: 0,
+        color: Colors.white,
+        margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: status == 'complete'
-              ? BorderSide(color: theme.colorScheme.primary.withOpacity(0.4))
-              : BorderSide.none,
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+              color: status == 'complete' ? Halved.pine : Halved.cardBorder,
+              width: status == 'complete' ? 1.5 : 1),
         ),
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -456,8 +462,8 @@ class _MatchCard extends StatelessWidget {
 
               // ── Score summary ───────────────────────────────────────────
               Text(_summary,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.w600)),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600, color: Halved.deepPine)),
 
               if (pendingNote != null) ...[
                 const SizedBox(height: 4),
@@ -889,9 +895,11 @@ class _MoneyCard extends StatelessWidget {
 
     return Card(
       elevation: 0,
+      color: Colors.white,
+      margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: theme.colorScheme.outline),
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Halved.cardBorder),
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -970,13 +978,14 @@ class _LabelBadge extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: theme.colorScheme.primaryContainer,
-          borderRadius: BorderRadius.circular(4),
+          color: Halved.surface,
+          borderRadius: BorderRadius.circular(6),
         ),
-        child: Text(label,
+        child: Text(label.toUpperCase(),
             style: theme.textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onPrimaryContainer)),
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+                color: Halved.pine)),
       );
 }
 
@@ -1032,12 +1041,13 @@ class _PlayerSwatch extends StatelessWidget {
           Container(
             width: 10, height: 10,
             decoration: BoxDecoration(
-              color: color, shape: BoxShape.circle),
+              color: color, borderRadius: BorderRadius.circular(3)),
           ),
           const SizedBox(width: 5),
           Text(name,
               style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: bold ? FontWeight.bold : FontWeight.normal)),
+                  color: Halved.deepPine,
+                  fontWeight: bold ? FontWeight.w700 : FontWeight.w600)),
         ],
       );
 }

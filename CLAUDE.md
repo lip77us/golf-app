@@ -13351,8 +13351,15 @@ the dark tray; everything else is the template. This is a 3.0.0 change, in slice
   (mint / clay on the dark tray) from `rp.matchPlayData`. Other games that reach the
   generic tray have no sides, so their swatch stays grey.
 
+- **Match view** (`match_play_screen.dart`, the Mini Singles bracket's read-only
+  screen and the shared `MatchPlayDetailView` the leaderboard card also draws):
+  course-title app bar, white cards with the hairline border (pine when a match is
+  complete), caps label badge on sage, rounded-square pine/clay swatches, deep-pine
+  text. Layout and content unchanged.
+
 **Not done yet:**
-1. Triple Cup / cup match screens and the 40 Balls picker header are not restyled.
+1. The Ryder Cup scoreboard / draft / round-setup screens and the 40 Balls picker
+   header are not restyled; Triple Cup's own screen is unreachable.
 2. Money still rides in blocks on some trays; check each against the template's rule
    that **money rides on a golfer's row or the standing line**.
 
