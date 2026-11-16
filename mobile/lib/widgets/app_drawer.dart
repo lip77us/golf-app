@@ -208,17 +208,8 @@ class AppDrawer extends StatelessWidget {
             title: const Text('Profile'),
             onTap: onSettingsTap,
           ),
-          // Course management is an admin utility (add/rename/remove courses,
-          // tee priority) — kept out of the Profile page.
-          if (context.watch<AuthProvider>().isAdmin)
-            ListTile(
-              leading: const Icon(Icons.golf_course),
-              title: const Text('Manage Courses'),
-              onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).pushNamed('/manage-courses');
-              },
-            ),
+          // Course management lives on the TD web console (`/td/courses/`),
+          // not in the app (removed 16 Nov 2026).
           ListTile(
             leading: const Icon(Icons.lightbulb_outline),
             title: const Text('Suggest a Game'),
