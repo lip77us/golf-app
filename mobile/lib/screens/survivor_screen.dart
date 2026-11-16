@@ -34,7 +34,6 @@ import '../widgets/inline_score_picker.dart';
 import '../widgets/standing_ribbon.dart';
 import '../widgets/survivor_entry.dart';
 import '../widgets/forty_balls_keypad.dart';
-import '../widgets/net_score_button.dart' show scoreCellWithDots;
 import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
 import '../utils/match_handicap.dart';
@@ -42,6 +41,7 @@ import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
 import '../utils/survivor_standing.dart';
 import '../widgets/combo_tee_chip.dart';
+import '../widgets/score_box.dart';
 
 /// Handicap strokes a player receives on a hole, read straight from the
 /// Survivor summary.  The engine emits its own allocation for EVERY hole,
@@ -1087,6 +1087,7 @@ class _HoleScoreCard extends StatelessWidget {
           final strokes = _strokesForHole(m, holeData);
           final row = _PlayerRow(
               comboTee: m.comboTeeOnHole(holeData?.holeNumber ?? 0),
+              par:      par,
               member:   m,
               gross:    gross,
               isHot:    isHot,
@@ -1106,33 +1107,20 @@ class _HoleScoreCard extends StatelessWidget {
                 spotsSheetOpen: spotsActive && spotsSheetOpen(m.player.id),
             );
           if (isHot || isEditing) {
-            // Active player + picker share ONE bounding box (no teams in
-            // Rabbit → brand pine). Flush-left bold bar, right inset so the
-            // right line shows, faint wash fill.
+            // The template draws no frame round the active row; the picker
+            // (the fallback while a hole's card is in flight) sits beneath it.
             final boxColor = Theme.of(context).colorScheme.primary;
             return [
-              Container(
-                margin: const EdgeInsets.fromLTRB(0, 6, 8, 6),
-                decoration: BoxDecoration(
-                  color: boxColor.withOpacity(0.10),
-                  border: Border(
-                    top:    BorderSide(color: boxColor, width: 1.5),
-                    bottom: BorderSide(color: boxColor, width: 1.5),
-                    right:  BorderSide(color: boxColor, width: 1.5),
-                    left:   BorderSide(color: boxColor, width: 4.0),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    row,
-                    InlineScorePicker(
-                      par: par, strokes: strokes, currentScore: gross,
-                      boxBorderColor: boxColor,
-                      boxFillColor:   Colors.white,
-                      onScoreSelected: (s) => onScoreSelected(m, s)),
-                  ],
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  row,
+                  InlineScorePicker(
+                    par: par, strokes: strokes, currentScore: gross,
+                    boxBorderColor: boxColor,
+                    boxFillColor:   Colors.white,
+                    onScoreSelected: (s) => onScoreSelected(m, s)),
+                ],
               ),
             ];
           }
@@ -1148,6 +1136,7 @@ class _PlayerRow extends StatelessWidget {
   /// This golfer's tee for the hole being entered — combo sets only.
   final String?    comboTee;
   final int?       gross;
+  final int        par;
   final bool       isHot;
   final int        strokes;
   final bool       showHcap;
@@ -1171,6 +1160,7 @@ class _PlayerRow extends StatelessWidget {
     required this.member,
     this.comboTee,
     required this.gross,
+    required this.par,
     required this.isHot,
     required this.strokes,
     required this.showHcap,
@@ -1189,30 +1179,28 @@ class _PlayerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final active = isHot || isEditing;
-    final boxBg = active ? Colors.white : Colors.transparent;
-    final boxBorder = active
-        ? Border.all(color: theme.colorScheme.primary, width: 2)
-        : Border.all(color: theme.colorScheme.outline);
+    final netStyle = context.watch<SettingsProvider>().netStyleEntry;
 
+    // The template row: a 4pt side bar (plum for the Zombie — neither win nor
+    // loss), name and `CH n`, a net pill and the score box. The active row is
+    // a mint wash; an eliminated row keeps its grey wash so it reads as out.
     final row = Container(
+      constraints: const BoxConstraints(minHeight: 50),
       decoration: BoxDecoration(
-        // Active row is transparent so the bounding box's wash/frame shows;
-        // an eliminated row keeps a grey wash so it reads as out of play.
         color: active
-            ? Colors.transparent
+            ? const Color(0x1F3BD89A)
             : isZombie
-                // Plum wash, not the grey out-of-play one — he is still in it.
                 ? Halved.zombie.withOpacity(0.10)
                 : (isOut ? theme.colorScheme.surfaceContainerHighest
                               .withOpacity(0.45) : null),
-        border: active
-            ? const Border()
-            : Border(
-                top: BorderSide(color: theme.colorScheme.outlineVariant),
-                left: BorderSide.none,
-              ),
+        border: Border(
+          top: const BorderSide(color: Color(0xFFEEF3EE)),
+          left: isZombie
+              ? const BorderSide(color: Halved.zombie, width: 4)
+              : BorderSide.none,
+        ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
       child: Row(children: [
         if (isZombie)
           Padding(
@@ -1254,9 +1242,15 @@ class _PlayerRow extends StatelessWidget {
               child: Text(member.player.name,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
+                      fontSize: 14.5,
                       fontWeight: FontWeight.w600,
-                      color: isZombie ? Halved.zombie : null)),
+                      color: isZombie ? Halved.zombie : Halved.deepPine)),
             ),
+            const SizedBox(width: 6),
+            Text('CH ${member.courseHandicap}',
+                style: Halved.body(
+                        color: Halved.muted, weight: FontWeight.w600)
+                    .copyWith(fontSize: 11.5)),
             // `stroking` — a LOCKED rule from the packet: the chip appears only
             // on the holes where this golfer actually gets a stroke, never as a
             // running allocation total. This row used to read `gets 3`, which
@@ -1297,28 +1291,38 @@ class _PlayerRow extends StatelessWidget {
             ],
           ),
         ),
-        // Tapping a scored row opens its inline editor (no pencil affordance —
-        // consistent with the other score screens). Handicap stroke dots sit
-        // in a strip above the box (shared scoreCellWithDots) so a net / SO
-        // player can see where their strokes fall — matching the other screens.
         const SizedBox(width: 8),
-        scoreCellWithDots(
-          Container(
-            width: 40, height: 36,
-            decoration: BoxDecoration(
-              color: boxBg, border: boxBorder,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Center(
-              child: gross != null
-                  ? Text('$gross',
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.bold))
-                  : const SizedBox.shrink(),
-            ),
+        // The net pill: a dash until there is a score to be net of.
+        Container(
+          width: 52,
+          height: 26,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Halved.surface,
+            borderRadius: BorderRadius.circular(8),
           ),
-          strokes,
-          theme.colorScheme.primary,
+          child: Text.rich(TextSpan(
+            style: Halved.body(color: Halved.muted, weight: FontWeight.w600)
+                .copyWith(fontSize: 12),
+            children: [
+              const TextSpan(text: 'net '),
+              TextSpan(
+                text: gross == null ? '–' : '${gross! - strokes}',
+                style: Halved.sectionHead().copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Halved.deepPine),
+              ),
+            ],
+          )),
+        ),
+        const SizedBox(width: 10),
+        ScoreBox(
+          score: gross,
+          par: par,
+          strokes: strokes,
+          shapeStrokes: netStyle ? strokes : 0,
+          active: active,
         ),
       ]),
     );
