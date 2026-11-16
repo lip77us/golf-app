@@ -31,7 +31,8 @@ import '../utils/holes_thru.dart';
 import '../widgets/hole_grid_scorecard.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
-import '../widgets/net_score_button.dart' show scoreCellWithDots;
+import '../widgets/score_box.dart';
+import '../theme/halved_brand.dart';
 import '../utils/sequoya_standing.dart';
 import '../widgets/reveal_on_mount.dart';
 import '../widgets/round_chat_button.dart';
@@ -1350,8 +1351,10 @@ class _HoleScoreCard extends StatelessWidget {
     final row = _ScoreRow(
       member:   m,
       gross:    gross,
+      par:      par,
       strokes:  strokes,
       isHot:    isHot,
+      isEditing: editing,
       colour:   colour,
       // With the keypad up any row can be tapped to score it next; with
       // the inline picker only a scored row opens for a correction.
@@ -1371,16 +1374,6 @@ class _HoleScoreCard extends StatelessWidget {
       RevealOnMount(
         key: ValueKey('entry-${holeData?.holeNumber}-$pid'),
         child: Container(
-        margin: const EdgeInsets.fromLTRB(0, 4, 8, 4),
-        decoration: BoxDecoration(
-          color: colour.withOpacity(0.08),
-          border: Border(
-            top:    BorderSide(color: colour, width: 1.5),
-            bottom: BorderSide(color: colour, width: 1.5),
-            right:  BorderSide(color: colour, width: 1.5),
-            left:   BorderSide(color: colour, width: 5.0),
-          ),
-        ),
         child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           row,
@@ -1400,8 +1393,10 @@ class _HoleScoreCard extends StatelessWidget {
 class _ScoreRow extends StatelessWidget {
   final Membership member;
   final int?       gross;
+  final int        par;
   final int        strokes;
   final bool       isHot;
+  final bool       isEditing;
   final Color      colour;
   final VoidCallback? onTap;
   final bool          spotsActive;
@@ -1412,46 +1407,51 @@ class _ScoreRow extends StatelessWidget {
   final String?       comboTee;
 
   const _ScoreRow({
-    required this.member, required this.gross, required this.strokes,
-    required this.isHot,
+    required this.member, required this.gross, required this.par,
+    required this.strokes, required this.isHot, this.isEditing = false,
     required this.colour, this.onTap,
     this.spotsActive = false, this.spotsTypes = const [],
     this.onSpotsTap, this.spotsSheetOpen = false, this.comboTee,
   });
 
+  /// The template row: the side's 4pt bar down the edge, name and `CH n`, a
+  /// net pill and the score box. The active row is a mint wash; nothing
+  /// frames it.
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(0, 9, 12, 9),
-        child: Row(children: [
-          // The side bar. Not a label — a label would have to be read, and
-          // this only has to be matched against the row above or below.
-          // Suppressed inside the active row's box, which is already ruled in
-          // the same colour on all four sides.
-          Container(
-            width: 5, height: 34,
-            margin: const EdgeInsets.only(right: 10),
-            decoration: BoxDecoration(
-              color: isHot ? Colors.transparent : colour,
-              borderRadius: BorderRadius.circular(3),
-            ),
-          ),
-          Expanded(
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start, children: [
+    final active = isHot || isEditing;
+    final netStyle = context.watch<SettingsProvider>().netStyleEntry;
+    final inner = Container(
+      constraints: const BoxConstraints(minHeight: 50),
+      decoration: BoxDecoration(
+        color: active ? const Color(0x1F3BD89A) : null,
+        border: Border(
+          top: const BorderSide(color: Color(0xFFEEF3EE)),
+          left: BorderSide(color: colour, width: 4),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      child: Row(children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
               Row(children: [
                 Flexible(
                   child: Text(member.player.name,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w600,
+                          color: Halved.deepPine)),
                 ),
-                // No handicap figure beside the name (Paul, 9 Nov 2026):
-                // most games carry none, the stroke dots on the box say
-                // where he strokes on THIS hole, and the board's strokes
-                // table lays out the round.
+                const SizedBox(width: 6),
+                Text('CH ${member.courseHandicap}',
+                    style: Halved.body(
+                            color: Halved.muted, weight: FontWeight.w600)
+                        .copyWith(fontSize: 11.5)),
                 // Which tee he plays on THIS hole, combo sets only.
                 ComboTeeChip(tee: comboTee),
               ]),
@@ -1464,35 +1464,46 @@ class _ScoreRow extends StatelessWidget {
                     focused: spotsSheetOpen,
                   ),
                 ),
-            ]),
+            ],
           ),
-          const SizedBox(width: 8),
-          // Stroke dots sit above the box, as on every other score screen, so
-          // a net or strokes-off golfer can see where the strokes fall.
-          scoreCellWithDots(
-            Container(
-              width: 40, height: 36,
-              decoration: BoxDecoration(
-                color: isHot ? colour.withOpacity(0.10) : null,
-                border: Border.all(
-                    color: isHot ? colour : theme.colorScheme.outline,
-                    width: isHot ? 2 : 1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Center(
-                child: gross != null
-                    ? Text('$gross',
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.bold))
-                    : const SizedBox.shrink(),
-              ),
-            ),
-            strokes,
-            colour,
+        ),
+        const SizedBox(width: 8),
+        // The net pill: a dash until there is a score to be net of.
+        Container(
+          width: 52,
+          height: 26,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Halved.surface,
+            borderRadius: BorderRadius.circular(8),
           ),
-        ]),
-      ),
+          child: Text.rich(TextSpan(
+            style: Halved.body(color: Halved.muted, weight: FontWeight.w600)
+                .copyWith(fontSize: 12),
+            children: [
+              const TextSpan(text: 'net '),
+              TextSpan(
+                text: gross == null ? '–' : '${gross! - strokes}',
+                style: Halved.sectionHead().copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Halved.deepPine),
+              ),
+            ],
+          )),
+        ),
+        const SizedBox(width: 10),
+        ScoreBox(
+          score: gross,
+          par: par,
+          strokes: strokes,
+          shapeStrokes: netStyle ? strokes : 0,
+          active: active,
+        ),
+      ]),
     );
+    if (onTap == null) return inner;
+    return InkWell(onTap: onTap, child: inner);
   }
 }
 
