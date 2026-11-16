@@ -14,6 +14,13 @@ import '../api/models.dart';
 import '../api/client.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import '../theme/halved_brand.dart';
+
+/// A cup team's own colour — the TD chose it, so it is kept (docs/color-standard.md).
+Color _teamColour(String colour) =>
+    resolveTripleCupTeamColor(colour, Halved.pine);
+
+const _kCardBorder = BorderSide(color: Halved.cardBorder);
 
 class RyderCupScoreboardScreen extends StatefulWidget {
   final int    tournamentId;
@@ -62,8 +69,18 @@ class _RyderCupScoreboardScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Halved.surface,
       appBar: AppBar(
-        title: Text(_summary?.cupName ?? 'Cup Scoreboard'),
+        backgroundColor: Halved.surface,
+        foregroundColor: Halved.deepPine,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: Text(_summary?.cupName ?? 'Cup Scoreboard',
+            style: Halved.sectionHead().copyWith(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: Halved.deepPine)),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
@@ -117,18 +134,22 @@ class _StandingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final sorted = [...teams]..sort((a, b) => b.totalPoints.compareTo(a.totalPoints));
     final maxPts = sorted.isNotEmpty ? sorted.first.totalPoints : 1.0;
 
     return Card(
+      elevation: 0,
+      color: Colors.white,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12), side: _kCardBorder),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Overall Standings',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
-          const Divider(height: 20),
+          Text('OVERALL STANDINGS',
+              style: Halved.label(color: Halved.muted, weight: FontWeight.w700)
+                  .copyWith(fontSize: 11, letterSpacing: 0.5)),
+          const SizedBox(height: 12),
           ...sorted.asMap().entries.map((entry) {
             final pos  = entry.key;
             final team = entry.value;
@@ -143,23 +164,38 @@ class _StandingsCard extends StatelessWidget {
                   SizedBox(
                     width: 28,
                     child: Text('${pos + 1}.',
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Halved.deepPine)),
+                  ),
+                  Container(
+                    width: 10, height: 10,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: _teamColour(team.colour),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
                   ),
                   Expanded(
                     child: Text(team.name,
-                        style: const TextStyle(fontWeight: FontWeight.w500)),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Halved.deepPine)),
                   ),
                   Text(
                     _fmtPts(team.totalPoints),
-                    style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary),
+                    style: Halved.sectionHead().copyWith(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Halved.deepPine),
                   ),
                 ]),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 LinearProgressIndicator(
                   value: frac.clamp(0, 1).toDouble(),
                   minHeight: 6,
+                  color: _teamColour(team.colour),
+                  backgroundColor: Halved.surface,
                   borderRadius: BorderRadius.circular(3),
                 ),
               ]),
@@ -199,7 +235,11 @@ class _RoundCardState extends State<_RoundCard> {
       ..sort((a, b) => (b['points'] as num).compareTo(a['points'] as num));
 
     return Card(
+      elevation: 0,
+      color: Colors.white,
       margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12), side: _kCardBorder),
       child: Column(children: [
         InkWell(
           borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
@@ -208,36 +248,50 @@ class _RoundCardState extends State<_RoundCard> {
             padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
             child: Row(children: [
               // Round badge
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: theme.colorScheme.primaryContainer,
+              Container(
+                width: 36, height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Halved.deepPine,
+                  borderRadius: BorderRadius.circular(10),
+                ),
                 child: Text('R${r.roundNumber}',
-                    style: TextStyle(
-                        color: theme.colorScheme.onPrimaryContainer,
+                    style: const TextStyle(
+                        color: Colors.white,
                         fontSize: 12,
-                        fontWeight: FontWeight.bold)),
+                        fontWeight: FontWeight.w700)),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                   Text(r.course,
-                      style: const TextStyle(fontWeight: FontWeight.w500)),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Halved.deepPine)),
                   Text(r.date,
-                      style: theme.textTheme.bodySmall),
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: Halved.muted)),
                 ]),
               ),
               // Points summary chips
               ...sorted.map((tp) => Padding(
                 padding: const EdgeInsets.only(left: 4),
-                child: Chip(
-                  label: Text(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Halved.surface,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
                     '${_teamShort(tp['team_name'] as String)} '
                     '${_fmtPts(tp['points'] as double)}',
-                    style: const TextStyle(fontSize: 11),
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Halved.deepPine),
                   ),
-                  padding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
                 ),
               )),
               Icon(_expanded ? Icons.expand_less : Icons.expand_more,
@@ -248,7 +302,7 @@ class _RoundCardState extends State<_RoundCard> {
         ),
 
         if (_expanded) ...[
-          const Divider(height: 1),
+          const Divider(height: 1, color: Color(0xFFEEF3EE)),
           Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
@@ -283,7 +337,6 @@ class _MatchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(children: [
@@ -292,12 +345,13 @@ class _MatchRow extends StatelessWidget {
           width: 52,
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(4),
+            color: Halved.surface,
+            borderRadius: BorderRadius.circular(6),
           ),
           child: Text(
             _gameLabel(match.gameType),
-            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+                fontSize: 10, fontWeight: FontWeight.w700, color: Halved.pine),
             textAlign: TextAlign.center,
           ),
         ),
@@ -306,14 +360,14 @@ class _MatchRow extends StatelessWidget {
         Expanded(
           child: Text(
             match.displayLabel,
-            style: const TextStyle(fontSize: 13),
+            style: const TextStyle(fontSize: 13, color: Halved.deepPine),
             overflow: TextOverflow.ellipsis,
           ),
         ),
         // Segment result chips
         ...match.segments.map((seg) => Padding(
           padding: const EdgeInsets.only(left: 4),
-          child: _SegmentChip(segment: seg, match: match),
+          child: _SegmentChip(segment: seg, match: match, teams: teams),
         )),
       ]),
     );
@@ -334,35 +388,55 @@ class _SegmentChip extends StatelessWidget {
   final CupSegmentResult segment;
   final CupMatch         match;
 
-  const _SegmentChip({required this.segment, required this.match});
+  final List<CupTeam> teams;
+
+  const _SegmentChip(
+      {required this.segment, required this.match, required this.teams});
 
   @override
   Widget build(BuildContext context) {
     final result = segment.result;
     Color? bg;
+    Color fg = Halved.deepPine;
     String label = segment.segmentLabel;
 
+    // A won segment is filled in the winning team's own colour (the TD's
+    // choice); level and not-yet-played stay neutral.
+    Color teamFill(String name, int number) {
+      for (final t in teams) {
+        if (t.name == name || t.shortCode == name) return _teamColour(t.colour);
+      }
+      // The label did not match a team: fall back on the team's NUMBER so the
+      // two sides can never both come out the same colour.
+      for (final t in teams) {
+        if (t.teamNumber == number) return _teamColour(t.colour);
+      }
+      return number == 1 ? Halved.pine : Halved.teamClay;
+    }
+
     if (result == null) {
-      bg = Colors.grey.shade200;
+      bg = Halved.surface;
+      fg = Halved.muted;
       label = '${segment.segmentLabel} –';
     } else if (result == 'halved') {
-      bg = Colors.amber.shade100;
+      bg = const Color(0xFFE6ECE7);
       label = '${segment.segmentLabel} ½';
-    } else if (result == 'team1') {
-      bg = Colors.green.shade100;
-      label = '${segment.segmentLabel} ${match.team1}';
     } else {
-      bg = Colors.blue.shade100;
-      label = '${segment.segmentLabel} ${match.team2}';
+      final name = result == 'team1' ? match.team1 : match.team2;
+      bg = teamFill(name, result == 'team1' ? 1 : 2);
+      fg = Colors.white;
+      label = '${segment.segmentLabel} $name';
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(label, style: const TextStyle(fontSize: 10)),
+      child: Text(label,
+          style: TextStyle(
+              fontSize: 10, fontWeight: FontWeight.w700, color: fg)),
     );
   }
 }
