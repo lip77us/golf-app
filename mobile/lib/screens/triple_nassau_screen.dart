@@ -774,8 +774,10 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
           Row(children: [
             Flexible(
               child: Text(m.player.name, overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700, color: colour)),
+                  style: const TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF0B1F1A))),
             ),
             ComboTeeChip(tee: m.comboTeeOnHole(holeData?.holeNumber ?? 0)),
           ]),
@@ -818,16 +820,13 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
           rowPad = InkWell(
               onTap: () => setState(() => _editingPlayerId = null), child: rowPad);
         }
+        // The template draws no frame round the active row: a mint wash and
+        // the golfer's 4pt bar. The picker (the fallback while the hole's
+        // card is in flight) sits beneath it.
         rows.add(Container(
-          margin: const EdgeInsets.fromLTRB(0, 6, 8, 6),
           decoration: BoxDecoration(
-            color: colour.withValues(alpha: 0.10),
-            border: Border(
-              top:    BorderSide(color: colour, width: 1.5),
-              bottom: BorderSide(color: colour, width: 1.5),
-              right:  BorderSide(color: colour, width: 1.5),
-              left:   BorderSide(color: colour, width: 4),
-            ),
+            color: const Color(0x1F3BD89A),
+            border: Border(left: BorderSide(color: colour, width: 4)),
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             rowPad,
@@ -846,11 +845,14 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
           onTap: gross != null
               ? () => setState(() => _editingPlayerId = pid) : null,
           child: Container(
+            constraints: const BoxConstraints(minHeight: 50),
             decoration: BoxDecoration(
-              color: colour.withValues(alpha: 0.06),
-              border: Border(left: BorderSide(color: colour, width: 4)),
+              border: Border(
+                top: const BorderSide(color: Color(0xFFEEF3EE)),
+                left: BorderSide(color: colour, width: 4),
+              ),
             ),
-            padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+            padding: const EdgeInsets.fromLTRB(14, 4, 12, 4),
             child: rowContent,
           ),
         ));
