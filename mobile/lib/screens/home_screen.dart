@@ -143,6 +143,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (mounted) _refresh();
   }
 
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -160,6 +162,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final heroIsStart = home != null && home['hero'] == null;
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: Halved.surface,
       drawer: AppDrawer(
         playerName: auth.player?.name,
@@ -229,7 +232,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         context: updated == null
             ? h['context'] as String
             : 'Updated ${_hm(updated)}',
-        onMenu: () => Scaffold.of(context).openDrawer(),
+        onMenu: () => _scaffoldKey.currentState?.openDrawer(),
       ),
       const SizedBox(height: 14),
       AnimatedSwitcher(
