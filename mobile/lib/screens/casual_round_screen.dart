@@ -25,7 +25,14 @@ import '../widgets/new_golfer_sheet.dart';
 import '../widgets/dashed_border.dart';
 
 class CasualRoundScreen extends StatefulWidget {
-  const CasualRoundScreen({super.key});
+  /// "Play it again" from the home: the golfers of a recent round and the game
+  /// they played. Both are preselected; nothing else is, and the golfer can
+  /// still change either.
+  final List<int> playAgainPlayerIds;
+  final String? playAgainGame;
+
+  const CasualRoundScreen(
+      {super.key, this.playAgainPlayerIds = const [], this.playAgainGame});
 
   @override
   State<CasualRoundScreen> createState() => _CasualRoundScreenState();
@@ -440,6 +447,24 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           // without ever waiting on the phone — see
           // `utils/default_course.dart`. With no home course it stays blank
           // and Next stays disabled until a course is picked.
+        }
+
+        // Play it again: seat the golfers of that round and take its game as
+        // the golfer's own pick (it survives a size change while it fits).
+        final again = widget.playAgainPlayerIds
+            .where((id) => _players.any((p) => p.id == id))
+            .toList();
+        if (again.isNotEmpty) {
+          for (final id in again) {
+            _playerTees.putIfAbsent(id, () => 0);
+            _playerGroups.putIfAbsent(id, () => 1);
+          }
+          final n = _playerTees.length;
+          _sizeFilter = n <= 1
+              ? 'solo'
+              : (n >= 5 ? kFiveOrSix : '${n.clamp(2, 4)}');
+          if (widget.playAgainGame != null) _tapped = widget.playAgainGame;
+          _recomputeGames();
         }
 
         // What the screen picked by itself, so a back-out from an untouched

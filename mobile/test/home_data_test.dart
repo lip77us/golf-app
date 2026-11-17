@@ -23,7 +23,38 @@ Map<String, dynamic> _home({
       stats: const {'enough': false, 'rounds': []},
     );
 
+CasualRoundSummary _g(int id, String date, List<int> ids,
+        {String game = 'nassau'}) =>
+    CasualRoundSummary(
+      id: id, date: date, courseName: 'Tilden', status: 'complete',
+      activeGames: [game], primaryGame: game, betUnit: 5, currentHole: 18,
+      players: [
+        for (final i in ids)
+          CasualRoundPlayer(id: i, name: 'G$i', shortName: 'G$i')
+      ],
+      myPlayerId: 1,
+    );
+
 void main() {
+  test('play it again: two most recent distinct groups, newest first', () {
+    final a = playAgain([
+      _g(5, '2026-11-10', [1, 2, 3, 4]),
+      _g(4, '2026-11-09', [1, 4, 3, 2]), // same group and game: skipped
+      _g(3, '2026-11-08', [1, 2], game: 'skins'),
+      _g(2, '2026-11-07', [1, 7, 8]),
+    ], 'Paul');
+    expect(a.length, 2);
+    expect(a[0]['ids'], [1, 2, 3, 4]);
+    expect(a[0]['label'], 'G2, G3, G4');
+    expect(a[1]['game'], 'skins');
+  });
+
+  test('play it again skips solo rounds and pools', () {
+    expect(playAgain([_g(1, '2026-11-01', [1])], null), isEmpty);
+    expect(playAgain([_g(1, '2026-11-01', [1, 2], game: 'multi_skins')], null),
+        isEmpty);
+  });
+
   test('a round in progress and started takes the hero', () {
     final h = _home(active: [_r(1, '2026-11-17', hole: 12)]);
     expect(h['hero']['rule'], 1);

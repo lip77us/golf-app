@@ -266,6 +266,7 @@ Map<String, dynamic> buildHome({
       .toList();
 
   return {
+    'again': playAgain(recent, playerName),
     'greeting': greeting(now, playerName),
     'context': ctx,
     'hero': hero,
@@ -277,6 +278,34 @@ Map<String, dynamic> buildHome({
     'firstLaunch': hero == null && recent.isEmpty && stats['enough'] != true,
     'savedAt': now.millisecondsSinceEpoch,
   };
+}
+
+/// "Play it again": up to two of the golfer's most recent DISTINCT groups,
+/// each with the game they played. Newest first; solo rounds and
+/// across-group pools have no group to repeat. [recent] is newest first.
+List<Map<String, dynamic>> playAgain(
+    List<CasualRoundSummary> recent, String? myName) {
+  final seen = <String>{};
+  final out = <Map<String, dynamic>>[];
+  for (final r in recent) {
+    if (out.length >= 2) break;
+    if (r.players.length < 2 || r.players.length > 6) continue;
+    if (r.activeGames.contains('multi_skins')) continue;
+    final game = r.primaryGame ??
+        (r.activeGames.isEmpty ? null : r.activeGames.first);
+    if (game == null) continue;
+    final ids = r.players.map((p) => p.id).toList()..sort();
+    if (!seen.add('${ids.join(',')}|$game')) continue;
+    final others = r.players.where((p) => p.id != r.myPlayerId).toList();
+    out.add({
+      'ids': ids,
+      'game': game,
+      'label': others.take(3).map((p) => p.shortName).join(', ') +
+          (others.length > 3 ? ' +${others.length - 3}' : ''),
+      'sub': gamesLine([game], primary: game, match18: r.isEighteenHoleMatch),
+    });
+  }
+  return out;
 }
 
 Future<void> saveHome(Map<String, dynamic> home) async {

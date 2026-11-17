@@ -130,9 +130,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (mounted) _refresh();
   }
 
-  Future<void> _newRound() async {
-    await Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const CasualRoundScreen()));
+  Future<void> _newRound({List<int> ids = const [], String? game}) async {
+    await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) =>
+            CasualRoundScreen(playAgainPlayerIds: ids, playAgainGame: game)));
     if (mounted) _refresh();
   }
 
@@ -240,6 +241,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           child: hero == null
               ? _StartCard(
                   first: first,
+                  again: (h['again'] as List? ?? const []).cast<Map>(),
+                  onAgain: (a) => _newRound(
+                      ids: (a['ids'] as List).cast<int>(),
+                      game: a['game'] as String?),
                   onRound: _newRound,
                   onTournament: _newTournament)
               : _HeroCard(hero: hero, onTap: () => _open(hero['action'] as Map?)),
@@ -430,9 +435,15 @@ class _HeroCard extends StatelessWidget {
 
 class _StartCard extends StatelessWidget {
   final bool first;
+  final List<Map> again;
+  final void Function(Map) onAgain;
   final VoidCallback onRound, onTournament;
   const _StartCard(
-      {required this.first, required this.onRound, required this.onTournament});
+      {required this.first,
+      required this.again,
+      required this.onAgain,
+      required this.onRound,
+      required this.onTournament});
 
   @override
   Widget build(BuildContext context) => Column(
@@ -460,6 +471,20 @@ class _StartCard extends StatelessWidget {
               title: 'New tournament',
               sub: 'Cup, trip or field event',
               onTap: onTournament),
+          if (again.isNotEmpty) ...[
+            const _SectionLabel('Play it again'),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final a in again)
+                ActionChip(
+                  backgroundColor: Colors.white,
+                  side: const BorderSide(color: Halved.cardBorder),
+                  avatar: const Icon(Icons.replay, size: 18, color: Halved.pine),
+                  label: Text('${a['label']} · ${a['sub']}',
+                      style: Halved.body(weight: FontWeight.w700)),
+                  onPressed: () => onAgain(a),
+                ),
+            ]),
+          ],
         ],
       );
 }
