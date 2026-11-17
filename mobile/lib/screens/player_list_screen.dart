@@ -364,12 +364,11 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: const Color(0xFFE7EDE8))),
-            child: GridView.count(
-              crossAxisCount: 4,
-              shrinkWrap: true,
+            child: GridView(
+                            shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              childAspectRatio: 0.78,
-              mainAxisSpacing: 8,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4, mainAxisExtent: 90, mainAxisSpacing: 4),
               children: [for (final p in regulars) tile(p), if (isAdmin) newTile],
             ),
           ),

@@ -520,12 +520,11 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
                       Halved.body(color: Halved.muted).copyWith(fontSize: 12.5)),
             ),
           ),
-        GridView.count(
-          crossAxisCount: 4,
+        GridView(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 0.78,
-          mainAxisSpacing: 8,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 4, mainAxisExtent: 90, mainAxisSpacing: 4),
           children: tiles,
         ),
       ]),
