@@ -59,7 +59,7 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
     if (!mounted) return;
     if (auth.isLoggedIn) {
       Navigator.of(context).pushNamedAndRemoveUntil(
-        auth.isNewAccount ? '/profile-setup' : '/tournaments',
+        auth.isNewAccount ? '/profile-setup' : '/home',
         (_) => false,
       );
     }

@@ -252,7 +252,7 @@ class _OnboardingWizardState extends State<OnboardingWizard> {
     if (nav.canPop()) {
       nav.pop();
     } else {
-      nav.pushReplacementNamed('/tournaments');
+      nav.pushReplacementNamed('/home');
     }
   }
 

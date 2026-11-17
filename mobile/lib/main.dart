@@ -88,6 +88,7 @@ import 'screens/match_play_screen.dart';
 import 'screens/course_search_screen.dart';
 import 'screens/score_entry_screen.dart';
 import 'screens/three_person_match_setup_screen.dart';
+import 'screens/home_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/quota_nassau_screen.dart';
 import 'screens/confirm_tees_screen.dart';
@@ -537,7 +538,7 @@ class _GolfAppState extends State<GolfApp> {
   /// then routes to login or tournaments.  Any network error is silently
   /// swallowed so an offline first launch still works.
   Future<void> _navigateAfterSplash() async {
-    final destination = widget.auth.isLoggedIn ? '/tournaments' : '/login';
+    final destination = widget.auth.isLoggedIn ? '/home' : '/login';
 
     try {
       // Use a short timeout so a slow server doesn't delay the startup.
@@ -635,6 +636,8 @@ class _GolfAppState extends State<GolfApp> {
         return page((_) => const ProfileSetupScreen());
       case '/onboarding':
         return page((_) => const OnboardingWizard());
+      case '/home':
+        return page((_) => const HomeScreen());
       case '/tournaments':
         return page((_) => const TournamentListScreen());
       case '/casual-rounds':

@@ -1237,6 +1237,12 @@ class ApiClient {
   /// Multi-foursome rounds (tournaments / multi-group skins) in OTHER accounts
   /// that a friend/TD added me to — I can open these to score my own group and
   /// read the whole-field leaderboard (no scorer designation needed).
+  /// The home screen's "Your last 5 rounds" card.
+  Future<Map<String, dynamic>> getHomeStats({int rotate = 0}) async {
+    final data = await _get('/home/stats/?n=$rotate');
+    return (data as Map).cast<String, dynamic>();
+  }
+
   Future<List<ScoringRound>> getPlayingForMe() async {
     final data = await _get('/rounds/playing-for-me/');
     return (data as List)
