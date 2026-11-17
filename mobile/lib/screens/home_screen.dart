@@ -727,7 +727,7 @@ class _StatsCard extends StatelessWidget {
         ]),
         const SizedBox(height: 14),
         SizedBox(
-          height: 112,
+          height: 130,
           child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
             for (var i = 0; i < rounds.length; i++)
               Expanded(
