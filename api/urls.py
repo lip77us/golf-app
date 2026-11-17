@@ -77,6 +77,7 @@ urlpatterns = [
 
     # ---- Rounds ----
     path('rounds/',                      views.RoundCreateView.as_view(),     name='api-round-create'),
+    path('home/stats/',                  views.HomeStatsView.as_view(), name='api-home-stats'),
     path('rounds/casual/',               views.CasualRoundListView.as_view(), name='api-casual-rounds'),
     path('rounds/shared-with-me/',       views.SharedRoundsView.as_view(),    name='api-shared-rounds'),
     path('rounds/scoring-for-me/',       views.ScoringForMeView.as_view(),    name='api-scoring-for-me'),

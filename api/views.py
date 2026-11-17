@@ -4655,6 +4655,20 @@ class CasualRoundListView(APIView):
         return Response(ser.data)
 
 
+class HomeStatsView(APIView):
+    """GET /api/home/stats/?n=  — the home screen's last-five-rounds card."""
+    def get(self, request):
+        player = getattr(request.user, 'player_profile', None)
+        if player is None:
+            return Response({'enough': False, 'rounds': []})
+        from services.home_stats import home_stats
+        try:
+            n = int(request.query_params.get('n', 0))
+        except ValueError:
+            n = 0
+        return Response(home_stats(request.user.account, player, n))
+
+
 # Shared round-summary helpers (used by the casual list + the cross-account
 # playing/scoring/watching feeds so they all describe a round the same way).
 
