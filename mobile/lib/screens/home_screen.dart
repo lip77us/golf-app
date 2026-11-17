@@ -332,11 +332,12 @@ class _Header extends StatelessWidget {
           onTap: onProfile,
           customBorder: const CircleBorder(),
           child: SizedBox(
-            width: 42,
-            height: 46,
+            width: 46,
+            height: 56,
             child: Stack(clipBehavior: Clip.none, children: [
               Positioned(
                 top: 0,
+                left: 2,
                 child: CircleAvatar(
                   radius: 21,
                   backgroundColor: Halved.brightMint,
@@ -346,8 +347,8 @@ class _Header extends StatelessWidget {
               if (index.isNotEmpty)
                 Positioned(
                   bottom: 0,
-                  left: 6,
-                  right: 6,
+                  left: 0,
+                  right: 0,
                   child: Container(
                     alignment: Alignment.center,
                     padding: const EdgeInsets.symmetric(vertical: 1),
@@ -800,7 +801,7 @@ class _StatsCard extends StatelessWidget {
             tile('Money', _signed(money), 'won ${stats['won']} of ${stats['count']}',
                 vc: money >= 0 ? Halved.pine : Halved.owe),
           tile('Birdies', '${stats['birdies'] ?? 0}',
-              'pars ${stats['pars'] ?? 0} of ${stats['holes'] ?? 0}'),
+              'pars ${stats['pars'] ?? 0}'),
         ]),
         const SizedBox(height: 14),
         SizedBox(
