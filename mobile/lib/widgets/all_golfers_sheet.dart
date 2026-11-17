@@ -126,9 +126,12 @@ class _AllGolfersSheetState extends State<AllGolfersSheet> {
                     final played = widget.counts[p.id]?.rounds ?? 0;
                     return AddPlayersResultRow(
                       avatar: GolferAvatar(
-                          name: p.name, onHalved: p.isOnApp, size: 34),
+                          name: p.name,
+                          onHalved: p.isOnApp,
+                          size: 34,
+                          index: p.handicapIndex),
                       name: p.name,
-                      sub: 'Index ${p.handicapIndex} · ${playedLabel(played)}',
+                      sub: playedLabel(played),
                       added: seated.contains(p.id),
                       onTap: () {
                         widget.onToggle(p);

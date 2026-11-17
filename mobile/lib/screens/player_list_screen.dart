@@ -7,13 +7,17 @@ import 'package:provider/provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart';
-import '../utils/add_players.dart' show addedToast;
+import 'package:google_fonts/google_fonts.dart';
+import '../theme/halved_brand.dart';
+import '../utils/add_players.dart';
+import '../utils/golfer_index.dart';
+import '../widgets/golfer_avatar.dart';
+import '../widgets/index_sheet.dart';
 import '../widgets/new_golfer_sheet.dart';
 import '../providers/auth_provider.dart';
 import '../utils/golfer_invite.dart';
 import '../widgets/error_view.dart';
 import '../widgets/app_drawer.dart';
-import '../widgets/halved_mark.dart';
 import 'player_form_screen.dart';
 
 class PlayerListScreen extends StatefulWidget {
@@ -30,6 +34,7 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
   String? _error;
   bool    _networkError = false;
   String  _search = '';
+  RoundCounts _counts = const {};
 
   @override
   void initState() {
@@ -43,6 +48,10 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
       final client = context.read<AuthProvider>().client;
       final data   = await client.getPlayers();
       if (mounted) setState(() { _all = data; });
+      try {
+        final c = await client.getRegulars();
+        if (mounted) setState(() { _counts = c; });
+      } catch (_) {/* no regulars yet */}
       // Best effort and deliberately AFTER the roster: this is a footnote
       // about where the list came from, and it must never be the reason the
       // list itself fails to draw.
@@ -92,15 +101,6 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
         ],
       ),
     );
-  }
-
-  List<PlayerProfile> get _filtered {
-    final q = _search.trim().toLowerCase();
-    if (q.isEmpty) return _all;
-    return _all.where((p) =>
-      p.name.toLowerCase().contains(q) ||
-      p.email.toLowerCase().contains(q)
-    ).toList();
   }
 
   Future<void> _openForm({PlayerProfile? player}) async {
@@ -215,12 +215,60 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
     }
   }
 
+  Future<void> _editIndex(PlayerProfile p) async {
+    final auth = context.read<AuthProvider>();
+    final me = auth.player;
+    final r = await showIndexSheet(
+      context,
+      name: p.name,
+      currentStored: p.handicapIndex,
+      owner: p.isOnApp ? IndexOwner.halved : IndexOwner.guest,
+      myIndex: me == null ? null : double.tryParse(me.handicapIndex),
+      onEditDetails: () => _openForm(player: p),
+    );
+    if (r == null || !mounted) return;
+    try {
+      final updated =
+          await auth.client.updatePlayer(p.id, handicapIndex: r.stored);
+      if (!mounted) return;
+      setState(() {
+        _all = [for (final x in _all) x.id == updated.id ? updated : x];
+      });
+      final first = p.name.split(' ').first;
+      final lbl = indexLabel(updated.handicapIndex);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+            content: Text(p.isOnApp
+                ? '$first · index $lbl, kept until $first updates it'
+                : '$first · index $lbl, saved')));
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not save that index.')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isAdmin = context.watch<AuthProvider>().isAdmin;
     return Scaffold(
+      backgroundColor: Halved.surface,
       appBar: AppBar(
-        title: const Text('My Golfers'),
+        backgroundColor: Halved.surface,
+        elevation: 0,
+        centerTitle: true,
+        title: Text('My golfers',
+            style: GoogleFonts.schibstedGrotesk(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: Halved.deepPine)),
         actions: [
           Builder(
             builder: (btnContext) => IconButton(
@@ -233,180 +281,184 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
               ),
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _load,
-          ),
         ],
       ),
-      // Only admins can add players; non-admins get a read-only roster.
-      floatingActionButton: isAdmin
-          ? FloatingActionButton.extended(
-              onPressed: () => _openForm(),
-              icon: const Icon(Icons.person_add),
-              label: const Text('Add Player'),
-            )
-          : null,
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: SearchBar(
-              hintText: 'Search players…',
-              leading: const Icon(Icons.search),
-              onChanged: (v) => setState(() => _search = v),
-            ),
-          ),
-          _syncLine(),
-          Expanded(child: _buildList()),
-        ],
-      ),
+      body: _buildList(isAdmin),
     );
   }
 
-  Widget _buildList() {
+  Widget _buildList(bool isAdmin) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null) {
       return ErrorView(message: _error!, isNetwork: _networkError, onRetry: _load);
     }
+    final myId = context.watch<AuthProvider>().player?.id;
+    final regulars = regularsOf(_all, _counts, meId: myId);
+    final everyone = allGolfersOf(_all, _counts, meId: myId);
+    final q = _search.trim();
+    final shown =
+        q.isEmpty ? everyone : searchYourGolfers(_all, q, meId: myId, counts: _counts);
 
-    final auth    = context.watch<AuthProvider>();
-    final isAdmin = auth.isAdmin;
-    final myId    = auth.player?.id;
+    Widget label(String t, String trailing) => Padding(
+          padding: const EdgeInsets.fromLTRB(4, 18, 4, 8),
+          child: Row(children: [
+            Expanded(
+                child: Text(t.toUpperCase(),
+                    style: Halved.body(
+                        color: Halved.muted, weight: FontWeight.w800))),
+            Text(trailing, style: Halved.body(color: Halved.muted)),
+          ]),
+        );
 
-    // Pin my own card to the top so I can update my index quickly even with a
-    // long friends list (the rest stay in the server's alphabetical order).
-    final players = [..._filtered];
-    if (myId != null) {
-      final i = players.indexWhere((p) => p.id == myId);
-      if (i > 0) players.insert(0, players.removeAt(i));
-    }
-    if (players.isEmpty) {
-      return Center(
-        child: Text(
-          _search.isEmpty
-              ? (isAdmin ? 'No players yet. Tap + Add Player.' : 'No players yet.')
-              : 'No matches.',
-          style: Theme.of(context).textTheme.bodyLarge,
+    Widget tile(PlayerProfile p) => InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _editIndex(p),
+          child: Column(children: [
+            const SizedBox(height: 2),
+            GolferAvatar(
+                name: p.name,
+                onHalved: p.isOnApp,
+                size: 44,
+                index: p.handicapIndex,
+                onIndexTap: () => _editIndex(p)),
+            const SizedBox(height: 10),
+            Text(p.name.split(' ').first,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Halved.body(color: Halved.deepPine, weight: FontWeight.w600)
+                    .copyWith(fontSize: 12)),
+          ]),
+        );
+
+    final newTile = InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: isAdmin ? () => _openForm() : null,
+      child: Column(children: [
+        const SizedBox(height: 2),
+        Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+              shape: BoxShape.circle, color: Halved.deepPine),
+          child: const Icon(Icons.add, color: Halved.brightMint),
         ),
-      );
-    }
+        const SizedBox(height: 10),
+        Text('New golfer',
+            style: Halved.body(color: Halved.pine, weight: FontWeight.w700)
+                .copyWith(fontSize: 12)),
+      ]),
+    );
 
-    return ListView.separated(
-      padding: const EdgeInsets.only(bottom: 100),
-      itemCount: players.length,
-      separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
-      itemBuilder: (_, i) {
-        final p = players[i];
-        final tile = ListTile(
-          leading: CircleAvatar(
-            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-            child: Text(
-              p.name.isNotEmpty ? p.name[0].toUpperCase() : '?',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.bold,
-              ),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
+      children: [
+        _syncLine(),
+        if (regulars.isNotEmpty || isAdmin) ...[
+          label('Your regulars', 'tap a golfer to update the index'),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+            decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE7EDE8))),
+            child: GridView.count(
+              crossAxisCount: 4,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              childAspectRatio: 0.78,
+              mainAxisSpacing: 8,
+              children: [for (final p in regulars) tile(p), if (isAdmin) newTile],
             ),
           ),
-          title: Row(
-            children: [
-              Flexible(
-                child: Text(p.id == myId ? '${p.name} (You)' : p.name,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                    overflow: TextOverflow.ellipsis),
+        ],
+        label('All your golfers', '${everyone.length} · most rounds first'),
+        Container(
+          height: 50,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Halved.pine)),
+          child: Row(children: [
+            const Icon(Icons.search, color: Halved.muted),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                onChanged: (v) => setState(() => _search = v),
+                decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    hintText: 'Find one of your golfers'),
               ),
-              if (p.isOnApp) ...[
-                const SizedBox(width: 8),
-                const HalvedMark(size: 20),
-              ],
-            ],
-          ),
-          subtitle: Text(
-            [
-              'Index ${p.displayHandicap}',
-              if (p.email.isNotEmpty) p.email,
-            ].join('  ·  '),
-            style: const TextStyle(fontSize: 13),
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Invite golfers who aren't on the app yet (personalized share).
-              if (!p.isOnApp)
-                Builder(
-                  builder: (btnCtx) => IconButton(
-                    icon: const Icon(Icons.person_add_alt_1_outlined),
-                    tooltip: 'Invite ${p.name}',
-                    onPressed: () => inviteGolfer(btnCtx, p),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 10),
+        if (shown.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Center(
+                child: Text(q.isEmpty ? 'No golfers yet.' : 'No matches.',
+                    style: Halved.body(color: Halved.muted))),
+          )
+        else
+          Container(
+            decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE7EDE8))),
+            child: Column(children: [
+              for (var i = 0; i < shown.length; i++) ...[
+                if (i > 0) const Divider(height: 1, color: Color(0xFFE7EDE8)),
+                InkWell(
+                  onTap: () => _editIndex(shown[i]),
+                  onLongPress: isAdmin ? () => _delete(shown[i]) : null,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                    child: Row(children: [
+                      GolferAvatar(
+                          name: shown[i].name,
+                          onHalved: shown[i].isOnApp,
+                          size: 36,
+                          index: shown[i].handicapIndex,
+                          onIndexTap: () => _editIndex(shown[i])),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(shown[i].name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Halved.body(
+                                          color: Halved.deepPine,
+                                          weight: FontWeight.w700)
+                                      .copyWith(fontSize: 16)),
+                              Text(
+                                  '${shown[i].isOnApp ? 'On Halved' : 'Not on Halved'}'
+                                  ' · ${playedLabel(_counts[shown[i].id]?.rounds ?? 0)}',
+                                  style: Halved.body(color: Halved.muted)),
+                            ]),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 7),
+                        decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Halved.pine)),
+                        child: Text('Index',
+                            style: Halved.body(
+                                color: Halved.pine, weight: FontWeight.w700)),
+                      ),
+                    ]),
                   ),
                 ),
-              // Admins get an explicit delete icon as well as swipe-to-dismiss.
-              if (isAdmin)
-                IconButton(
-                  icon: Icon(Icons.delete_outline,
-                      color: Theme.of(context).colorScheme.error),
-                  tooltip: 'Remove player',
-                  onPressed: () => _delete(p),
-                )
-              else
-                const Icon(Icons.chevron_right, color: Colors.grey),
-            ],
+              ],
+            ]),
           ),
-          onTap: () => _openForm(player: p),
-        );
-
-        if (!isAdmin) return tile;
-        // Swipe-to-delete for admins.  The confirmDismiss callback
-        // wraps the existing confirm + API call so a successful
-        // dismiss reuses the same code path as the trash button.
-        return Dismissible(
-          key: ValueKey('player-${p.id}'),
-          direction: DismissDirection.endToStart,
-          background: Container(
-            color: Theme.of(context).colorScheme.error,
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: const Icon(Icons.delete, color: Colors.white),
-          ),
-          confirmDismiss: (_) async {
-            if (!await _confirmDelete(p)) return false;
-            try {
-              await context.read<AuthProvider>().client.deletePlayer(p.id);
-              if (!mounted) return false;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Removed ${p.name}.')),
-              );
-              return true;
-            } on ApiException catch (e) {
-              if (!mounted) return false;
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(e.message),
-                backgroundColor: Theme.of(context).colorScheme.error,
-                duration: const Duration(seconds: 5),
-              ));
-              return false;
-            } catch (e) {
-              if (!mounted) return false;
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(friendlyError(e)),
-                backgroundColor: Theme.of(context).colorScheme.error,
-              ));
-              return false;
-            }
-          },
-          onDismissed: (_) {
-            // Local list update so the row animates out smoothly;
-            // the next _load() (already triggered nowhere here, but
-            // future actions will refresh) catches up the canonical
-            // state from the server.
-            setState(() => _all.removeWhere((x) => x.id == p.id));
-          },
-          child: tile,
-        );
-      },
+      ],
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../api/client.dart';
 import '../api/models.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
@@ -19,6 +20,8 @@ import '../utils/game_suggestions.dart';
 import '../widgets/all_games_sheet.dart';
 import '../widgets/side_games_sheet.dart';
 import '../utils/add_players.dart';
+import '../utils/golfer_index.dart';
+import '../widgets/index_sheet.dart';
 import '../widgets/add_players_body.dart';
 import '../widgets/all_golfers_sheet.dart';
 import '../widgets/new_golfer_sheet.dart';
@@ -303,6 +306,62 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       hasNumber: true,
       viaAccount: true,
     ));
+  }
+
+  IndexOwner _ownerOf(PlayerProfile p) => p.id == context.read<AuthProvider>().player?.id
+      ? IndexOwner.you
+      : (p.isOnApp ? IndexOwner.halved : IndexOwner.guest);
+
+  /// Opens the index sheet for [p] and saves. Returns true when it saved and
+  /// the caller asked to step on to the next golfer.
+  Future<bool> _editIndex(PlayerProfile p, {String? nextFirst}) async {
+    final auth = context.read<AuthProvider>();
+    final me = auth.player;
+    final r = await showIndexSheet(
+      context,
+      name: p.id == me?.id ? 'You' : p.name,
+      currentStored: p.handicapIndex,
+      owner: _ownerOf(p),
+      myIndex: me == null ? null : double.tryParse(me.handicapIndex),
+      slope: _myTeeSlope,
+      nextFirstName: nextFirst,
+    );
+    if (r == null || !mounted) return false;
+    try {
+      final updated =
+          await auth.client.updatePlayer(p.id, handicapIndex: r.stored);
+      if (p.id == me?.id) auth.applyPlayer(updated);
+      setState(() {
+        _players = [for (final x in _players) x.id == updated.id ? updated : x];
+      });
+      final first = p.name.split(' ').first;
+      final lbl = indexLabel(updated.handicapIndex);
+      _toast(p.isOnApp && p.id != me?.id
+          ? '$first · index $lbl, kept until $first updates it'
+          : '${p.id == me?.id ? 'Your' : '$first ·'} index $lbl, saved');
+      return r.advance;
+    } on ApiException catch (e) {
+      _toast(e.message);
+    } catch (_) {
+      _toast('Could not save that index.');
+    }
+    return false;
+  }
+
+  Future<void> _checkIndexes() async {
+    final queue = [..._seatedProfiles];
+    for (var i = 0; i < queue.length; i++) {
+      // Look the golfer up again: the last save changed the roster.
+      final p = _players.firstWhere((x) => x.id == queue[i].id,
+          orElse: () => queue[i]);
+      final next = i + 1 < queue.length
+          ? (queue[i + 1].id == context.read<AuthProvider>().player?.id
+              ? 'You'
+              : queue[i + 1].name.split(' ').first)
+          : null;
+      final more = await _editIndex(p, nextFirst: next);
+      if (!more || !mounted) return;
+    }
   }
 
   void _toast(String text) {
@@ -1354,6 +1413,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               onHalvedAdded: _onHalvedAdded,
               onNewGolfer: _openNewGolfer,
               onAllGolfers: _openAllGolfers,
+              onEditIndex: (p) => _editIndex(p),
+              onCheckIndexes: _checkIndexes,
             ),
             const SizedBox(height: 80),
           ], // ── end step 2

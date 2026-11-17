@@ -9,6 +9,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../theme/halved_brand.dart';
+import '../utils/golfer_index.dart';
 
 String initialsOf(String name) {
   final parts = name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
@@ -23,11 +24,20 @@ class GolferAvatar extends StatelessWidget {
   final bool onHalved;
   final double size;
 
+  /// The golfer's STORED index. Null draws no chip at all; an empty string
+  /// draws the orange **set** chip (no index yet).
+  final String? index;
+
+  /// Tapping the chip. Null leaves it a plain mark.
+  final VoidCallback? onIndexTap;
+
   const GolferAvatar({
     super.key,
     required this.name,
     required this.onHalved,
     this.size = 42,
+    this.index,
+    this.onIndexTap,
   });
 
   @override
@@ -62,7 +72,7 @@ class GolferAvatar extends StatelessWidget {
           disc,
           Positioned(
             right: -2,
-            bottom: -2,
+            top: -2,
             child: Container(
               width: b,
               height: b,
@@ -82,6 +92,37 @@ class GolferAvatar extends StatelessWidget {
       );
     }
 
-    return avatar;
+    if (index == null) return avatar;
+    final label = indexLabel(index);
+    final chip = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onIndexTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+        decoration: BoxDecoration(
+          color: label == null ? Colors.white : Halved.deepPine,
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: Colors.white, width: 1.5),
+        ),
+        child: Text(label ?? 'set',
+            style: Halved.body(
+                    color: label == null
+                        ? const Color(0xFFB45309)
+                        : Colors.white,
+                    weight: FontWeight.w800)
+                .copyWith(fontSize: 9.5, height: 1.2)),
+      ),
+    );
+    // Centred on the bottom edge, 8pt below the circle.
+    return SizedBox(
+      width: size,
+      height: size + 8,
+      child: Stack(clipBehavior: Clip.none, children: [
+        Positioned(top: 0, left: 0, child: avatar),
+        Positioned(
+            left: -10, right: -10, bottom: -4,
+            child: Center(child: chip)),
+      ]),
+    );
   }
 }

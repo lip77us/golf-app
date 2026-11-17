@@ -79,6 +79,12 @@ class AddPlayersBody extends StatefulWidget {
   /// The eighth tile: open the All golfers sheet.
   final VoidCallback onAllGolfers;
 
+  /// Tapping an index chip: open the index sheet for that golfer.
+  final ValueChanged<PlayerProfile>? onEditIndex;
+
+  /// The dark card: step through the seated golfers' indexes.
+  final VoidCallback? onCheckIndexes;
+
   const AddPlayersBody({
     super.key,
     required this.me,
@@ -93,6 +99,8 @@ class AddPlayersBody extends StatefulWidget {
     required this.onHalvedAdded,
     required this.onNewGolfer,
     required this.onAllGolfers,
+    this.onEditIndex,
+    this.onCheckIndexes,
   }) : minSeated = minSeated ?? seats ?? 2;
 
   @override
@@ -274,6 +282,10 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _seats(),
+      if (widget.seated.isNotEmpty && widget.onCheckIndexes != null) ...[
+        const SizedBox(height: 14),
+        _checkCard(),
+      ],
       const SizedBox(height: 22),
       _label('Your regulars', trailing: 'tap to add'),
       const SizedBox(height: 8),
@@ -374,6 +386,34 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
     ]);
   }
 
+  Widget _checkCard() => Material(
+        color: Halved.deepPine,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: widget.onCheckIndexes,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(children: [
+              const Icon(Icons.check, color: Halved.brightMint),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Check today’s indexes',
+                      style: Halved.body(color: Colors.white, weight: FontWeight.w700)
+                          .copyWith(fontSize: 16)),
+                  Text(
+                      'Step through ${widget.seated.length} golfer'
+                      '${widget.seated.length == 1 ? '' : 's'}, one tap each',
+                      style: Halved.body(color: Halved.cream.withOpacity(0.7))),
+                ]),
+              ),
+              const Icon(Icons.chevron_right, color: Halved.brightMint),
+            ]),
+          ),
+        ),
+      );
+
   Widget _seat(PlayerProfile p) {
     final isMe = p.id == _meId;
     return InkWell(
@@ -382,8 +422,12 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
       child: SizedBox(
         width: 56,
         child: Column(children: [
-          GolferAvatar(name: p.name, onHalved: p.isOnApp),
-          const SizedBox(height: 4),
+          GolferAvatar(
+              name: p.name,
+              onHalved: p.isOnApp,
+              index: p.handicapIndex,
+              onIndexTap: () => widget.onEditIndex?.call(p)),
+          const SizedBox(height: 10),
           Text(isMe ? 'You' : p.name.split(' ').first,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -495,15 +539,18 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
       onTap: () => _toggle(p),
       child: Column(mainAxisAlignment: MainAxisAlignment.start, children: [
         const SizedBox(height: 2),
-        GolferAvatar(name: p.name, onHalved: p.isOnApp, size: 44),
-        const SizedBox(height: 4),
+        GolferAvatar(
+            name: p.name,
+            onHalved: p.isOnApp,
+            size: 44,
+            index: p.handicapIndex,
+            onIndexTap: () => widget.onEditIndex?.call(p)),
+        const SizedBox(height: 10),
         Text(p.name.split(' ').first,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Halved.body(color: Halved.deepPine, weight: FontWeight.w600)
                 .copyWith(fontSize: 12)),
-        Text(p.handicapIndex,
-            style: Halved.body(color: Halved.muted).copyWith(fontSize: 11)),
       ]),
     );
   }
@@ -591,9 +638,14 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
     final seated = _seatedIds.contains(p.id);
     final played = widget.counts[p.id]?.rounds ?? 0;
     return _ResultRow(
-      avatar: GolferAvatar(name: p.name, onHalved: p.isOnApp, size: 34),
+      avatar: GolferAvatar(
+          name: p.name,
+          onHalved: p.isOnApp,
+          size: 34,
+          index: p.handicapIndex,
+          onIndexTap: () => widget.onEditIndex?.call(p)),
       name: p.name,
-      sub: 'Index ${p.handicapIndex} · ${playedLabel(played)}',
+      sub: playedLabel(played),
       added: seated,
       onTap: () {
         _toggle(p);
