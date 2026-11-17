@@ -1243,6 +1243,21 @@ class ApiClient {
     return (data as Map).cast<String, dynamic>();
   }
 
+  /// Your stats. [window] is '20', 'year' or 'all'.
+  Future<Map<String, dynamic>> getPlayerStats(
+      {String window = '20', int? courseId, String? game}) async {
+    final q = ['window=$window', if (courseId != null) 'course=$courseId',
+        if (game != null) 'game=$game'].join('&');
+    final data = await _get('/stats/?$q');
+    return (data as Map).cast<String, dynamic>();
+  }
+
+  /// "On Halved since 2025 · 41 rounds".
+  Future<Map<String, dynamic>> getProfileSummary() async {
+    final data = await _get('/profile/summary/');
+    return (data as Map).cast<String, dynamic>();
+  }
+
   Future<List<ScoringRound>> getPlayingForMe() async {
     final data = await _get('/rounds/playing-for-me/');
     return (data as List)

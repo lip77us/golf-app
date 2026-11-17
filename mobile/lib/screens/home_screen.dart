@@ -11,6 +11,8 @@ import '../theme/halved_brand.dart';
 import '../utils/home_data.dart';
 import '../utils/shared_round.dart';
 import '../widgets/app_drawer.dart';
+import 'profile_screen.dart';
+import 'stats_screen.dart';
 import 'casual_round_screen.dart';
 import 'new_round_wizard.dart';
 import 'player_list_screen.dart';
@@ -233,6 +235,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ? h['context'] as String
             : 'Updated ${_hm(updated)}',
         onMenu: () => _scaffoldKey.currentState?.openDrawer(),
+        initials: initialsOf(context.read<AuthProvider>().player?.name ?? ''),
+        index: context.read<AuthProvider>().player?.handicapIndex ?? '',
+        onProfile: () => Navigator.of(context)
+            .push(MaterialPageRoute(builder: (_) => const ProfileScreen()))
+            .then((_) => setState(() {})),
       ),
       const SizedBox(height: 14),
       AnimatedSwitcher(
@@ -262,13 +269,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         for (final c in coming) _ComingRow(row: c, onTap: () => _open(c['action'] as Map?)),
       ],
       _SectionLabel('Your last 5 rounds',
-          trailing: recent.isEmpty && first ? null : 'All rounds ›',
-          onTrailing: () =>
-              Navigator.of(context).pushNamed('/casual-rounds').then((_) => _refresh())),
+          trailing: stats['enough'] == true ? 'All stats ›' : null,
+          onTrailing: () => Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const StatsScreen()))),
       _StatsCard(stats: stats),
       if (recent.isNotEmpty) ...[
         const _SectionLabel('Recent'),
         for (final r in recent) _RecentRow(row: r, onTap: () => _open(r['action'] as Map?)),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () => Navigator.of(context)
+                .pushNamed('/casual-rounds')
+                .then((_) => _refresh()),
+            child: const Text('All rounds ›'),
+          ),
+        ),
       ],
     ];
   }
@@ -300,19 +316,51 @@ TextStyle _head(double size, {Color color = Halved.deepPine}) =>
 
 class _Header extends StatelessWidget {
   final String greeting, context;
-  final VoidCallback onMenu;
+  final VoidCallback onMenu, onProfile;
+  final String initials, index;
   const _Header(
-      {required this.greeting, required this.context, required this.onMenu});
+      {required this.greeting,
+      required this.context,
+      required this.onMenu,
+      required this.onProfile,
+      required this.initials,
+      required this.index});
 
   @override
   Widget build(BuildContext c) => Row(children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-              color: Halved.deepPine, borderRadius: BorderRadius.circular(11)),
-          padding: const EdgeInsets.all(5),
-          child: SvgPicture.asset('assets/icon/halved_mark.svg'),
+        InkWell(
+          onTap: onProfile,
+          customBorder: const CircleBorder(),
+          child: SizedBox(
+            width: 42,
+            height: 46,
+            child: Stack(clipBehavior: Clip.none, children: [
+              Positioned(
+                top: 0,
+                child: CircleAvatar(
+                  radius: 21,
+                  backgroundColor: Halved.brightMint,
+                  child: Text(initials, style: _head(15)),
+                ),
+              ),
+              if (index.isNotEmpty)
+                Positioned(
+                  bottom: 0,
+                  left: 6,
+                  right: 6,
+                  child: Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(vertical: 1),
+                    decoration: BoxDecoration(
+                        color: Halved.deepPine,
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Text(index,
+                        style: Halved.body(
+                            color: Halved.brightMint, weight: FontWeight.w800)),
+                  ),
+                ),
+            ]),
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -751,7 +799,8 @@ class _StatsCard extends StatelessWidget {
           if (money != null)
             tile('Money', _signed(money), 'won ${stats['won']} of ${stats['count']}',
                 vc: money >= 0 ? Halved.pine : Halved.owe),
-          tile('Index', '${stats['index']}', 'current'),
+          tile('Birdies', '${stats['birdies'] ?? 0}',
+              'pars ${stats['pars'] ?? 0} of ${stats['holes'] ?? 0}'),
         ]),
         const SizedBox(height: 14),
         SizedBox(

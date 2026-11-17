@@ -4669,6 +4669,34 @@ class HomeStatsView(APIView):
         return Response(home_stats(request.user.account, player, n))
 
 
+class PlayerStatsView(APIView):
+    """GET /api/stats/?window=20|year|all&course=&game=  — Your stats."""
+    def get(self, request):
+        player = getattr(request.user, 'player_profile', None)
+        if player is None:
+            return Response({'count': 0})
+        from services.player_stats import player_stats
+        q = request.query_params
+        try:
+            course = int(q.get('course') or 0) or None
+        except ValueError:
+            course = None
+        return Response(player_stats(
+            request.user.account, player,
+            window=q.get('window', '20'), course_id=course,
+            game=q.get('game') or None))
+
+
+class ProfileSummaryView(APIView):
+    """GET /api/profile/summary/  — 'On Halved since 2025 · 41 rounds'."""
+    def get(self, request):
+        player = getattr(request.user, 'player_profile', None)
+        if player is None:
+            return Response({'rounds': 0, 'since': None})
+        from services.player_stats import profile_summary
+        return Response(profile_summary(request.user.account, player))
+
+
 # Shared round-summary helpers (used by the casual list + the cross-account
 # playing/scoring/watching feeds so they all describe a round the same way).
 

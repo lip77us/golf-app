@@ -54,7 +54,7 @@ def last_rounds(account, player, limit=5):
             r, player.id, foursomes=list(r.foursomes.all()))
         out.append({
             'round_id': r.id, 'date': str(r.date), 'course': r.course.name,
-            'holes': len(scores), 'net_to_par': net - par,
+            'holes': len(scores), 'pars': sum(1 for x in scores if (tee.hole(x.hole_number) or {}).get('par') == x.gross_score), 'net_to_par': net - par,
             'money': money, 'birdie_holes': birdies,
             'staked': bool(r.bet_unit),
         })
@@ -99,6 +99,9 @@ def home_stats(account, player, rotate=0):
         'money': None if total is None else round(total, 2),
         'won': sum(1 for r in rows if r['money'] and r['money'] > 0),
         'count': len(rows),
+        'birdies': sum(len(r['birdie_holes']) for r in rows),
+        'pars': sum(r['pars'] for r in rows),
+        'holes': sum(r['holes'] for r in rows),
         'index': str(player.handicap_index),
         'fact': _fact(rows, rotate),
     }
