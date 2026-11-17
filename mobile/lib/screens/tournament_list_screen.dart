@@ -343,6 +343,10 @@ class _TournamentListScreenState extends State<TournamentListScreen>
       ),
       drawer: AppDrawer(
         playerName: auth.player?.name,
+        onHomeTap: () {
+          Navigator.of(context).pop();
+          Navigator.of(context).popUntil((r) => r.isFirst);
+        },
         // Already on tournaments — the entry just closes the drawer.
         onTournamentsTap: () => Navigator.of(context).pop(),
         onCasualRoundsTap: () {

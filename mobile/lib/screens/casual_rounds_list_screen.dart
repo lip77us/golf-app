@@ -228,6 +228,10 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
       ),
       drawer: AppDrawer(
         playerName: auth.player?.name,
+        onHomeTap: () {
+          Navigator.of(context).pop();
+          Navigator.of(context).popUntil((r) => r.isFirst);
+        },
         onTournamentsTap: () {
           // Tournaments is the route below us in the stack (splash pushed it
           // first).  Close the drawer, then pop back to it.

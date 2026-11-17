@@ -18,6 +18,8 @@ import '../providers/settings_provider.dart';
 /// (since there's nothing to navigate to).
 class AppDrawer extends StatelessWidget {
   final String? playerName;
+  /// Back to the home. Null on the home itself, which has no use for it.
+  final VoidCallback? onHomeTap;
   final VoidCallback onTournamentsTap;
   final VoidCallback onCasualRoundsTap;
   final VoidCallback onPlayersTap;
@@ -26,6 +28,7 @@ class AppDrawer extends StatelessWidget {
 
   const AppDrawer({
     super.key,
+    this.onHomeTap,
     required this.onTournamentsTap,
     required this.onCasualRoundsTap,
     required this.onPlayersTap,
@@ -158,6 +161,12 @@ class AppDrawer extends StatelessWidget {
                     ),
                   );
                 }),
+                if (onHomeTap != null)
+                  ListTile(
+                    leading: const Icon(Icons.home_outlined),
+                    title: const Text('Home'),
+                    onTap: onHomeTap,
+                  ),
                 ListTile(
                   leading: const Icon(Icons.sports_golf),
                   title: const Text(kCasualRoundsLabel),
