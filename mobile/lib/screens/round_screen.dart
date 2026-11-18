@@ -11,6 +11,7 @@ import 'tee_times_screen.dart';
 import '../widgets/round_start.dart';
 import '../widgets/director_bar.dart';
 import 'director_screens.dart';
+import 'setup_round_players_screen.dart';
 import '../widgets/solo_board.dart';
 import '../widgets/cup_tally.dart';
 import '../widgets/error_view.dart';
@@ -265,6 +266,8 @@ class _RoundScreenState extends State<RoundScreen> {
     bool live = false;
     if (round.status == 'complete') {
       text = 'Final';
+    } else if (round.foursomes.isEmpty) {
+      text = 'Not set up yet';
     } else if (!anyScore) {
       final first = times.isEmpty ? null : teeShort(times.first);
       text = [
@@ -379,6 +382,50 @@ class _RoundScreenState extends State<RoundScreen> {
             _RoundInfoCard(round: round)
           else
             _statusStrip(round, myId),
+          // A round with no groups yet (round 2 of an event, before the draw):
+          // the way to set it up is right here, not two screens away.
+          if (!round.isCupRound && round.foursomes.isEmpty && !isComplete) ...[
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Halved.cardBorder)),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('This round isn’t set up yet',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 4),
+                    Text(
+                        canManage
+                            ? 'Choose who is playing and draw the groups.'
+                            : 'The director hasn’t drawn the groups yet.',
+                        style: Halved.body(color: Halved.muted)),
+                    if (canManage) ...[
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                              backgroundColor: Halved.brightMint,
+                              foregroundColor: Halved.deepPine,
+                              shape: const StadiumBorder()),
+                          onPressed: () => Navigator.of(context)
+                              .push(MaterialPageRoute(
+                                  builder: (_) => SetupRoundPlayersScreen(
+                                      roundId: widget.roundId)))
+                              .then((_) => _reloadRound()),
+                          child: const Text('Set up the round'),
+                        ),
+                      ),
+                    ],
+                  ]),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (hasMultiSkins && canManage) ...[
             const SizedBox(height: 12),
             Card(

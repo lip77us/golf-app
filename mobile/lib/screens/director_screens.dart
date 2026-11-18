@@ -407,6 +407,37 @@ class _DirectorGroupsScreenState extends State<DirectorGroupsScreen> {
                             style: Halved.body(color: Halved.muted)
                                 .copyWith(fontSize: 15)),
                       ),
+                      if (r.foursomes.isEmpty)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: Halved.cardBorder)),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('No groups yet', style: _head(20)),
+                                const SizedBox(height: 4),
+                                Text('Choose who is playing and draw the groups.',
+                                    style: Halved.body(color: Halved.muted)),
+                                const SizedBox(height: 12),
+                                FilledButton(
+                                  style: FilledButton.styleFrom(
+                                      backgroundColor: Halved.brightMint,
+                                      foregroundColor: Halved.deepPine,
+                                      shape: const StadiumBorder(),
+                                      minimumSize: const Size.fromHeight(48)),
+                                  onPressed: () => Navigator.of(context)
+                                      .push(MaterialPageRoute(
+                                          builder: (_) => SetupRoundPlayersScreen(
+                                              roundId: r.id)))
+                                      .then((_) => _load()),
+                                  child: const Text('Set up the round'),
+                                ),
+                              ]),
+                        ),
                       for (final f in r.foursomes) _groupCard(r, f),
                       const SizedBox(height: 4),
                       _card([
