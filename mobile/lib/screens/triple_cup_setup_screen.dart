@@ -463,13 +463,13 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
                             segments: [
                               ButtonSegment(
                                 value: 1,
-                                label: const Text('Blue',
+                                label: const Text('Pine',
                                     style: TextStyle(
                                         fontWeight: FontWeight.bold)),
                               ),
                               ButtonSegment(
                                 value: 2,
-                                label: const Text('Orange',
+                                label: const Text('Clay',
                                     style: TextStyle(
                                         fontWeight: FontWeight.bold)),
                               ),
@@ -489,13 +489,13 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
                     }),
                     const SizedBox(height: 12),
                     Row(children: [
-                      const _ColoredTeamChip(team: 1, label: 'Blue'),
+                      const _ColoredTeamChip(team: 1, label: 'Pine'),
                       const SizedBox(width: 6),
                       Expanded(child: Text(_teamLabel(members, 1))),
                     ]),
                     const SizedBox(height: 4),
                     Row(children: [
-                      const _ColoredTeamChip(team: 2, label: 'Orange'),
+                      const _ColoredTeamChip(team: 2, label: 'Clay'),
                       const SizedBox(width: 6),
                       Expanded(child: Text(_teamLabel(members, 2))),
                     ]),

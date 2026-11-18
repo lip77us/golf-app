@@ -299,7 +299,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
     }
   }
 
-  /// Per-player row for a SUBSET side Nassau: Out (not in the bet) / Blue / Orange.
+  /// Per-player row for a SUBSET side Nassau: Out (not in the bet) / Pine / Clay.
   /// "Out" removes the player from `_teamMap` so only participants are submitted.
   Widget _sideParticipantRow(Membership m, ThemeData theme) {
     final pid  = m.player.id;
@@ -327,8 +327,8 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           showSelectedIcon: false,
           segments: const [
             ButtonSegment(value: 0, label: Text('Out')),
-            ButtonSegment(value: 1, label: Text('Blue')),
-            ButtonSegment(value: 2, label: Text('Orange')),
+            ButtonSegment(value: 1, label: Text('Pine')),
+            ButtonSegment(value: 2, label: Text('Clay')),
           ],
           selected: {team},
           onSelectionChanged: (s) => setState(() {
@@ -512,7 +512,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Participant picker (Out / Blue / Orange).  Used by a subset
+                // Participant picker (Out / Pine / Clay).  Used by a subset
                 // SIDE Nassau (an independent bet over a chosen subset) AND by a
                 // Singles Match with more than two players (pick which two
                 // duel).  See docs/parallel-games.md.
@@ -598,8 +598,8 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                         SegmentedButton<int>(
                           showSelectedIcon: false,
                           segments: const [
-                            ButtonSegment(value: 1, label: Text('Blue')),
-                            ButtonSegment(value: 2, label: Text('Orange')),
+                            ButtonSegment(value: 1, label: Text('Pine')),
+                            ButtonSegment(value: 2, label: Text('Clay')),
                           ],
                           selected: {team},
                           onSelectionChanged: (s) =>
@@ -623,14 +623,14 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
                 // Team summary chips — colour dot + colour name + roster.
                 Row(children: [
                   nassauTeamDot(1), const SizedBox(width: 6),
-                  const Text('Blue: ',
+                  const Text('Pine: ',
                       style: TextStyle(fontWeight: FontWeight.w600)),
                   Expanded(child: Text(_teamLabel(members, 1))),
                 ]),
                 const SizedBox(height: 4),
                 Row(children: [
                   nassauTeamDot(2), const SizedBox(width: 6),
-                  const Text('Orange: ',
+                  const Text('Clay: ',
                       style: TextStyle(fontWeight: FontWeight.w600)),
                   Expanded(child: Text(_teamLabel(members, 2))),
                 ]),
