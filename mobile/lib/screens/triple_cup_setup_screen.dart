@@ -410,8 +410,8 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
                 children: [
                   if (members.length == 4) ...[
                     Text(
-                      'Drag rows to assemble the Red and Blue teams. '
-                      'In singles the top Red plays the top Blue, and '
+                      'Drag rows to assemble the Pine and Clay teams. '
+                      'In singles the top Pine plays the top Clay, and '
                       'the bottom two face each other.',
                       style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant),
