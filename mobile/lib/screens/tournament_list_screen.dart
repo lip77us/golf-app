@@ -6,6 +6,7 @@ import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../theme/halved_brand.dart';
 import '../utils/shared_round.dart';
+import '../widgets/round_start.dart' show dayLong;
 import '../widgets/app_drawer.dart';
 import '../widgets/cup_tally.dart';
 import '../widgets/error_view.dart';
@@ -370,6 +371,8 @@ class _TournamentListScreenState extends State<TournamentListScreen>
       body: _buildBody(),
       floatingActionButton: !auth.isAdmin ? null :
         FloatingActionButton.extended(
+          backgroundColor: Halved.deepPine,
+          foregroundColor: Colors.white,
           onPressed: () async {
             final created = await Navigator.of(context).push<bool>(
               MaterialPageRoute(builder: (_) => const NewRoundWizard()),
@@ -386,7 +389,7 @@ class _TournamentListScreenState extends State<TournamentListScreen>
             _load();
           },
           icon: const Icon(Icons.emoji_events),
-          label: const Text('New Tournament'),
+          label: const Text('New tournament'),
         ),
     );
   }
@@ -406,7 +409,14 @@ class _TournamentListScreenState extends State<TournamentListScreen>
     final filtered = all.where(
       (t) => _showCompleted ? _isComplete(t) : !_isComplete(t),
     ).toList();
+    // A tournament I host (or already see below) is never also listed under
+    // Shared with you: the cross-account feed also returns rounds in my own
+    // account where I am a player.
+    final ownRoundIds = {
+      for (final t in all) for (final r in t.rounds) r.id
+    };
     final shared = _shared.where((r) {
+      if (ownRoundIds.contains(r.id)) return false;
       return _showCompleted ? r.status == 'complete' : r.status != 'complete';
     }).toList();
     // Tournaments I'm only watching — move to Completed when the event finishes.
@@ -417,25 +427,13 @@ class _TournamentListScreenState extends State<TournamentListScreen>
     return Column(children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-        child: SegmentedButton<bool>(
-          showSelectedIcon: false,
+        child: HalvedSegmented<bool>(
           segments: const [
-            ButtonSegment(
-              value: false,
-              label: Text('Active'),
-              icon: Icon(Icons.play_circle_outline),
-            ),
-            ButtonSegment(
-              value: true,
-              label: Text('Completed'),
-              icon: Icon(Icons.check_circle_outline),
-            ),
+            (value: false, label: 'Active', icon: null),
+            (value: true, label: 'Completed', icon: null),
           ],
-          selected: {_showCompleted},
-          onSelectionChanged: (s) => _onToggle(s.first),
-          style: const ButtonStyle(
-            visualDensity: VisualDensity.compact,
-          ),
+          selected: _showCompleted,
+          onChanged: _onToggle,
         ),
       ),
       Expanded(
@@ -446,7 +444,7 @@ class _TournamentListScreenState extends State<TournamentListScreen>
             : RefreshIndicator(
                 onRefresh: _load,
                 child: ListView(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 110),
                   children: [
                     if (shared.isNotEmpty) ...[
                       _sectionHeader('Shared with you'),
@@ -705,10 +703,14 @@ class _TournamentCard extends StatelessWidget {
         tournament.rounds.any((r) => r.status == 'in_progress');
     final isCup = tournament.activeGames.contains('team_cup');
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Halved.cardBorder)),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 8, 16),
+        padding: const EdgeInsets.fromLTRB(16, 14, 12, 16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           // ── Header: name · (course ·) date · card menu ─────────────────────
           Row(
@@ -718,16 +720,36 @@ class _TournamentCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(tournament.name,
-                        style: Theme.of(context).textTheme.titleLarge
-                            ?.copyWith(fontWeight: FontWeight.bold)),
+                    Row(children: [
+                      Expanded(
+                        child: Text(tournament.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w800)),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                            color: tournament.isOwn
+                                ? const Color(0xFFE3F1E8)
+                                : Halved.surface,
+                            borderRadius: BorderRadius.circular(16)),
+                        child: Text(tournament.isOwn ? 'You host' : 'Shared',
+                            style: Halved.body(
+                                color: tournament.isOwn
+                                    ? Halved.pine
+                                    : Halved.muted,
+                                weight: FontWeight.w700)),
+                      ),
+                    ]),
                     const SizedBox(height: 2),
                     // Course and date belong to the round line; on a cup the
                     // date prints once here rather than twice.
                     Text(
-                      (isCup && tournament.rounds.isNotEmpty)
-                          ? '${tournament.rounds.first.courseName} · ${tournament.startDate}'
-                          : tournament.startDate,
+                      _cardSub(isCup),
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     // Somebody else's event you are playing in. Without it the
@@ -784,7 +806,7 @@ class _TournamentCard extends StatelessWidget {
           else ...[
             // ── Non-cup tournaments ──────────────────────────────────────────
             if (tournament.rounds.isNotEmpty) ...[
-              const Divider(height: 20),
+              const SizedBox(height: 12),
               // **`canRegroup`, not `status == 'pending'`.** Setting a round
               // up flips it to in_progress, so the pending test took the Set
               // up button away the instant the draw was saved — hours before
@@ -794,13 +816,13 @@ class _TournamentCard extends StatelessWidget {
               // men are not together all week. The server answers it, because
               // the real rule is that `HoleScore.foursome` is CASCADE and a
               // redraw after a score would delete the round.
-              ...tournament.rounds.map((r) => r.canRegroup && isStaff
-                  ? _PendingRoundTile(
-                      round: r,
-                      isRedraw: r.status != 'pending',
-                      onSetup: () => onSetupRound(r.id),
-                      onOpen: () => onRoundTap(r.id))
-                  : _RoundTile(round: r, onTap: () => onRoundTap(r.id))),
+              ...tournament.rounds.map((r) => _RoundRow(
+                    round: r,
+                    isStaff: isStaff,
+                    inPlay: identical(r, _roundInPlay),
+                    onOpen: () => onRoundTap(r.id),
+                    onSetup: () => onSetupRound(r.id),
+                  )),
               // Tee times are not a cup thing — an individual tournament sends
               // groups off in an order too. The screen was always generic (it
               // just PATCHes foursome.tee_time); it was only ever REACHABLE
@@ -817,31 +839,28 @@ class _TournamentCard extends StatelessWidget {
                         )),
             ],
             if (tournament.activeGames.isNotEmpty) ...[
-              const Divider(height: 16),
-              _ActionButton(
-                icon : Icons.emoji_events_outlined,
-                label: tournament.activeGames.contains('stableford_championship')
-                    ? 'Stableford Championship Leaderboard'
-                    : tournament.activeGames.contains('low_net')
-                        ? 'Stroke Play Championship Leaderboard'
-                        : 'Championship Leaderboard',
-                onTap: onViewLeaderboard,
-              ),
-              // Settle up was previously reachable ONLY as an unlabelled icon
-              // in the tournament leaderboard's app bar — two screens deep,
-              // findable only if you already knew the icon. It is the last
-              // thing a TD does at an event, so it gets a name here.
-              //
-              // Same gate as the leaderboard's own else-branch: cup and team
-              // play have their own boards and do not settle through
-              // TournamentSettlementScreen.
-              if (!tournament.activeGames.contains('team_cup') &&
-                  !tournament.activeGames.contains('team_play'))
-                _ActionButton(
-                  icon : Icons.receipt_long_outlined,
-                  label: 'Settle up & receipts',
-                  onTap: onSettleUp,
+              const SizedBox(height: 4),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton(
+                    style: _footerButton,
+                    onPressed: onViewLeaderboard,
+                    child: const Text('Leaderboard'),
+                  ),
                 ),
+                if (!tournament.activeGames.contains('team_cup') &&
+                    !tournament.activeGames.contains('team_play')) ...[
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton(
+                      style: _footerButton,
+                      onPressed: onSettleUp,
+                      child: const Text('Settle up'),
+                    ),
+                  ),
+                ],
+              ]),
+              const SizedBox(height: 6),
             ],
             if (isStaff && !isComplete &&
                 tournament.activeGames.contains('low_net'))
@@ -882,6 +901,42 @@ class _TournamentCard extends StatelessWidget {
         ]),
       ),
     );
+  }
+
+  static final ButtonStyle _footerButton = OutlinedButton.styleFrom(
+      foregroundColor: Halved.pine,
+      minimumSize: const Size.fromHeight(46),
+      side: const BorderSide(color: Halved.cardBorder),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15));
+
+  /// `Tilden Park GC · Nov 17–18 · 40 Balls`.
+  String _cardSub(bool isCup) {
+    final r = tournament.rounds;
+    final course = r.isEmpty ? '' : r.first.courseName;
+    final end = tournament.endDate;
+    final dates = (end == null || end == tournament.startDate)
+        ? dayShort(tournament.startDate)
+        : '${dayShort(tournament.startDate)}–${dayShort(end, monthless: true)}';
+    final games = tournament.activeGames
+        .where((g) => g != 'team_cup' && g != 'team_play')
+        .map((g) => g == 'low_net' ? 'Stroke Play' : gameDisplayName(g))
+        .take(2)
+        .join(' + ');
+    return [if (course.isNotEmpty) course, dates, if (games.isNotEmpty) games]
+        .join(' · ');
+  }
+
+  /// The round being played now: today's, else the first in progress.
+  RoundSummary? get _roundInPlay {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    for (final r in tournament.rounds) {
+      if (r.status == 'in_progress' && r.date.startsWith(today)) return r;
+    }
+    for (final r in tournament.rounds) {
+      if (r.status == 'in_progress') return r;
+    }
+    return null;
   }
 
   RoundSummary? _firstRoundWhere(bool Function(RoundSummary) test) {
@@ -1046,60 +1101,119 @@ class _TournamentCard extends StatelessWidget {
   }
 }
 
-/// Tile for a round that has not yet been configured (status = 'pending').
-/// Shows a "Set Up" button instead of navigating to the round screen.
-class _PendingRoundTile extends StatelessWidget {
+/// `Nov 17` — and with [monthless], just the day (`18`) for a range's end.
+String dayShort(String date, {bool monthless = false}) {
+  final d = DateTime.tryParse(date.length >= 10 ? date.substring(0, 10) : date);
+  if (d == null) return date;
+  const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
+    'Oct', 'Nov', 'Dec'];
+  return monthless ? '${d.day}' : '${m[d.month - 1]} ${d.day}';
+}
+
+/// One round inside a tournament card. One set of status words everywhere:
+/// Set up -> Groups open -> Live -> Final.
+class _RoundRow extends StatelessWidget {
   final RoundSummary round;
-  final VoidCallback onSetup;
-
-  /// The round is already drawn and unplayed, so this is a REDRAW rather
-  /// than a first setup. The button says which, and the tile keeps a way
-  /// into the round — a drawn round has somewhere to go, and losing that
-  /// would be a worse trade than the button is worth.
-  final bool isRedraw;
-  final VoidCallback? onOpen;
-
-  const _PendingRoundTile({
+  final bool isStaff, inPlay;
+  final VoidCallback onOpen, onSetup;
+  const _RoundRow({
     required this.round,
+    required this.isStaff,
+    required this.inPlay,
+    required this.onOpen,
     required this.onSetup,
-    this.isRedraw = false,
-    this.onOpen,
   });
+
+  String get _word {
+    if (round.status == 'complete') return 'Final';
+    if (round.status == 'pending') return 'Set up';
+    return round.canRegroup ? 'Groups open' : 'Live';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      // A drawn round keeps its way in; only a round with no draw yet has
-      // nowhere to go.
-      onTap: isRedraw ? onOpen : null,
-      leading: CircleAvatar(
-        backgroundColor: isRedraw
-            ? Colors.green
-            : theme.colorScheme.surfaceContainerHighest,
-        child: Text('R${round.roundNumber}',
-            style: TextStyle(
-                color: isRedraw
-                    ? Colors.white
-                    : theme.colorScheme.onSurfaceVariant,
-                fontSize: 13)),
-      ),
-      title: Text(round.courseName),
-      subtitle: Text(isRedraw
-          // Says WHY it can still be changed, so the window is legible
-          // before it closes rather than discovered after.
-          ? '${round.date} · groups can still change'
-          : round.date),
-      trailing: FilledButton.tonal(
-        onPressed: onSetup,
-        style: FilledButton.styleFrom(
-          padding            : const EdgeInsets.symmetric(horizontal: 12),
-          visualDensity      : VisualDensity.compact,
-          tapTargetSize      : MaterialTapTargetSize.shrinkWrap,
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final isToday = round.date.startsWith(today);
+    final word = _word;
+    final day = isToday ? 'Today' : dayLong(round.date);
+    final title = (word == 'Live' || word == 'Final') ? '$day · $word' : day;
+    final sub = word == 'Set up'
+        ? 'Not set up yet'
+        : (word == 'Groups open' ? 'Groups open · tee times may not be set' : round.courseName);
+
+    final setupFirst = isStaff && round.status == 'pending';
+    String? pill;
+    if (setupFirst) {
+      pill = 'Set up';
+    } else if (inPlay) {
+      pill = 'Open';
+    } else if (isStaff && round.canRegroup) {
+      pill = 'Edit groups';
+    } else if (word == 'Final') {
+      pill = 'Results';
+    }
+    final dark = inPlay && !setupFirst;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: setupFirst || (isStaff && round.canRegroup && !inPlay)
+            ? onSetup
+            : onOpen,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: inPlay ? const Color(0xFFE3F5EA) : Halved.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: inPlay ? Border.all(color: Halved.pine, width: 1.6) : null,
+          ),
+          child: Row(children: [
+            Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: dark ? Halved.deepPine : Colors.white,
+                border: Border.all(
+                    color: dark ? Halved.deepPine : Halved.cardBorder),
+              ),
+              child: Text('R${round.roundNumber}',
+                  style: Halved.body(
+                      color: dark ? Halved.brightMint : Halved.deepPine,
+                      weight: FontWeight.w800)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title,
+                    style: Halved.body(
+                            color: Halved.deepPine, weight: FontWeight.w800)
+                        .copyWith(fontSize: 16)),
+                Text(sub, style: Halved.body(color: Halved.muted)),
+              ]),
+            ),
+            if (pill != null)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                    color: dark
+                        ? Halved.deepPine
+                        : (pill == 'Results'
+                            ? const Color(0xFFE3F1E8)
+                            : Colors.transparent),
+                    borderRadius: BorderRadius.circular(18)),
+                child: Text(pill,
+                    style: Halved.body(
+                        color: dark
+                            ? Colors.white
+                            : (pill == 'Results' ? Halved.pine : Halved.muted),
+                        weight: FontWeight.w800)),
+              ),
+          ]),
         ),
-        child: Text(isRedraw ? 'Edit Groups' : 'Set Up',
-            style: const TextStyle(fontSize: 12)),
       ),
     );
   }
@@ -1143,43 +1257,6 @@ class _ActionButton extends StatelessWidget {
     );
   }
 }
-
-class _RoundTile extends StatelessWidget {
-  final RoundSummary round;
-  final VoidCallback onTap;
-
-  const _RoundTile({required this.round, required this.onTap});
-
-  Color _statusColor(BuildContext context) {
-    switch (round.status) {
-      case 'in_progress': return Colors.green;
-      case 'complete':    return Colors.grey;
-      default:            return Theme.of(context).colorScheme.primary;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: CircleAvatar(
-        backgroundColor: _statusColor(context),
-        child: Text('R${round.roundNumber}',
-            style: const TextStyle(color: Colors.white, fontSize: 13)),
-      ),
-      title: Text(round.courseName),
-      subtitle: Text(round.date),
-      trailing: Chip(
-        label: Text(round.statusLabel,
-            style: const TextStyle(fontSize: 11)),
-        padding: EdgeInsets.zero,
-        visualDensity: VisualDensity.compact,
-      ),
-      onTap: onTap,
-    );
-  }
-}
-
 
 /// Result of the Change Cup Game dialog.
 class _CupGameChange {
