@@ -477,8 +477,15 @@ enum Sixes {
     /// other surface. The protocol still names them `blue` and `orange`: an
     /// installed widget decodes those keys, so renaming them on the wire would
     /// break every phone that has not updated. Only what they DRAW changed.
-    static let blue     = Color(hex: 0x3BD89A)   // pine, lifted for the dark card
-    static let orange   = Color(hex: 0xF2A86E)   // clay, lifted for the dark card
+    ///
+    /// **They differ in BRIGHTNESS, not only hue.** Pine #3BD89A and clay
+    /// #F2A86E had almost the same luminance (ratio 1.08), so a reader who
+    /// cannot tell green from tan had nothing else to go on and a lock-screen
+    /// figure has no bar or header to help. Pine is deepened and clay lifted:
+    /// ratio 1.54, with both still above 7:1 on the card's deep pine. Mint
+    /// (#3BD89A, the app's colour) is now visibly lighter than a side's pine.
+    static let blue     = Color(hex: 0x2FBE86)   // pine, a step deeper than mint
+    static let orange   = Color(hex: 0xFFC49C)   // clay, lifted
     static let plum     = Color(hex: 0xC9A6E8)
     /// Banker's two. **Gold marks the ROLE and does nothing else** — not a
     /// state, not a warning — and amber is the banker's counter-double, the

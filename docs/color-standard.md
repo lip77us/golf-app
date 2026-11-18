@@ -32,8 +32,9 @@ risked; the two are kept apart by shape (a bar and a header vs. a figure).
   Sixes, Las Vegas, Fourball): pine (1) / clay (2). Casual Triple Cup's default
   colour names are now "Pine" and "Clay".
 - **Wolf**: Wolf + partner = **pine**, Opponents = **clay**.
-- **Lock screens (17 Nov 2026):** the widget draws pine (`#3BD89A`) and clay
-  (`#F2A86E`) wherever the server says `blue` / `orange`. The wire keys keep
+- **Lock screens (17 Nov 2026):** the widget draws pine (`#2FBE86`) and clay
+  (`#FFC49C`), set apart in brightness (1.54:1) as well as hue for readers who
+  cannot separate green from tan wherever the server says `blue` / `orange`. The wire keys keep
   their old names so installed builds still decode them; the Vegas card says
   `PINE` / `CLAY` in its text. Mint now also means a side on these cards, so
   "leads" is carried by the figure and the state word, not by mint alone.
