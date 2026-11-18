@@ -1,4 +1,4 @@
-# Store listing copy — Halved (v2.14.1)
+# Store listing copy — Halved (v3.0.0)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -21,6 +21,50 @@ sweep rather than reading this line, which is only true of today's catalog.
 **App Store copy is everything above `## Google Play`; the Play half is its
 own section further down.** They are different fields with different limits
 and the Android build omits two features, so the two are never the same text.
+
+## Submitting 3.0.0 — everything that changes
+
+| Field | 3.0.0 |
+| --- | --- |
+| What's New | NEW — `docs/app-store-3.0.0.txt` (paste-ready, no hard wraps) |
+| Promotional text | NEW — same file, 157 chars |
+| Description | unchanged |
+| Name · Subtitle · Keywords · URLs · Category | unchanged |
+
+**Not named in the copy:** Courses near me is unchanged, the lock-screen cards are iOS-only already.
+
+## Promotional text (170 max) — 3.0.0, 157 chars
+A new home for your golf: your next round, your stats and your regulars on one screen. New menu, new player and course pickers, and a calmer look throughout.
+
+## What's New (v3.0.0)
+
+A NEW HOME. Halved now opens on a home screen that decides what you need: the round you are in (with Back to hole N), the tournament you are playing today, or a one-tap way to start a round — including Play it again with the same group and game. Your last five rounds sit underneath, with your average net, what you won or lost, and one fact worth knowing.
+
+PROFILE AND YOUR STATS. Tap your avatar for your profile, your index and your home course. Your stats has a Money card first: your running total, and what you made by game, by partner, against each opponent and by course.
+
+A NEW MENU. The menu now opens from the right: Rounds, Tournaments, My golfers, Your stats, and a card to text an invite to your group. Games on Halved opens the how-to-play guides, and Help and support is one tap away.
+
+PICKING GOLFERS IS FASTER. One screen for who is playing: your regulars first, an always-open search, and a quick way to add a new golfer. It warns you when a name is already in your list and will not save the same mobile number twice. Golfer indexes show on every avatar, and Check today's indexes walks the whole field in one pass.
+
+PICKING A COURSE AND A GAME. Find a course by name or near you. A new round starts on your home course, and Halved learns it after two rounds there. The game chips are worked out from what you play, with All games for the rest.
+
+NINE-HOLE COURSES. Handicaps now halve your index for a nine's rating, and a nine can be played twice as an 18-hole round.
+
+TOURNAMENT DIRECTORS. A new bar on the round view for Overview and Groups, a clear Set up the round when a round has no groups, and the same circles screen for choosing the field.
+
+ONE SCORE ENTRY FOR EVERY GAME. Every game now enters scores the same way: the course as the title, the leaderboard a tap away, your own row, a big keypad, and the box that tells you what the hole just did. Rabbit, Survivor, Wolf, Sequoya, Points, Nassau and the rest are on it, as are Stableford, the Mini Singles Bracket and the Triple Cup.
+
+ONE SET OF COLORS. The two sides in every match are Pine and Clay (and Slate for a third), on the phone, the lock screen and the web.
+
+LOCK SCREENS. New cards for the solo games, Nassau Nine, Mini Singles and Multi-Group Skins.
+
+ALSO
+• Leaderboards show where each golfer gets strokes, and the Stroke Play board carries the scorecard
+• A ball game round enters on the same screen as its Stroke Play or Stableford
+• Creating a tournament twice no longer happens when a step fails and you retry
+• Rounds you were invited to and never played can be hidden from your list
+
+---
 
 ## Submitting 2.14.1 — everything that changes
 
