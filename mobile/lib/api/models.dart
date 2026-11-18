@@ -1333,6 +1333,7 @@ class Round {
   /// Parent tournament id, or null for a standalone casual round.  Used by the
   /// round hub to fetch the cup standings (live tally).
   final int? tournamentId;
+  final String? tournamentName;
   /// Irish Rumble balls-per-segment config — list of
   /// {start_hole, end_hole, balls_to_count} maps.  Empty when IR is not active.
   final List<Map<String, dynamic>> irBallsConfig;
@@ -1389,6 +1390,7 @@ class Round {
     this.teamPlaySize,
     this.teamPlayBallCounts = const {},
     this.tournamentId,
+    this.tournamentName,
     this.irBallsConfig = const [],
     this.watchToken,
     this.canManage     = false,
@@ -1428,6 +1430,7 @@ class Round {
             int.parse(e.key): e.value as int,
         },
         tournamentId: j['tournament_id'] as int?,
+        tournamentName: j['tournament_name'] as String?,
         watchToken:   j['watch_token']   as String?,
         canManage:    j['can_manage']    as bool?   ?? false,
         isCasual:       j['is_casual']        as bool? ?? false,

@@ -794,6 +794,7 @@ class RoundSerializer(serializers.ModelSerializer):
     # individual-play tournament sets its method once, on the tournament, so
     # the round's own `active_games` carries only its side games.
     scoring_game   = serializers.SerializerMethodField()
+    tournament_name = serializers.SerializerMethodField()
     can_regroup    = serializers.SerializerMethodField()
     # True when this round belongs to a Team Play tournament. The card and the
     # board are different enough — one number a hole, or four with a count —
@@ -829,6 +830,9 @@ class RoundSerializer(serializers.ModelSerializer):
             obj.account_id == getattr(user, 'account_id', None)
             and getattr(user, 'is_account_admin', False)
         )
+
+    def get_tournament_name(self, obj):
+        return obj.tournament.name if obj.tournament_id else None
 
     def get_is_cup_round(self, obj):
         """True when this round has a Ryder Cup config (was set up via CupRoundSetupScreen)."""
@@ -1097,7 +1101,7 @@ class RoundSerializer(serializers.ModelSerializer):
             'is_cup_round', 'is_final_round', 'has_day_bet',
             'has_skins_pool',
             # What this round is scored on when its games do not say.
-            'scoring_game',
+            'scoring_game', 'tournament_name',
             'can_regroup',
             'is_team_play_round', 'team_play',
             'ir_balls_config', 'can_manage',

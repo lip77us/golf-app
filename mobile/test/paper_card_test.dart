@@ -91,7 +91,7 @@ void main() {
       final i = src.indexOf("pushNamed('/enter-card'");
       expect(i, greaterThan(0));
       // The gate above it is the TD, and nothing about paperCard.
-      final gate = src.lastIndexOf('if (canManage) ...[', i);
+      final gate = src.lastIndexOf('onTypeCard: (canManage', i);
       expect(gate, greaterThan(0));
       expect(src.substring(gate, i), isNot(contains('paperCard')));
     });

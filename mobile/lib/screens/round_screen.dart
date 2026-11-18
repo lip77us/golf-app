@@ -8,6 +8,7 @@ import '../utils/side_game_routes.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import 'tee_times_screen.dart';
+import '../widgets/round_start.dart';
 import '../widgets/solo_board.dart';
 import '../widgets/cup_tally.dart';
 import '../widgets/error_view.dart';
@@ -133,11 +134,10 @@ class _RoundScreenState extends State<RoundScreen> {
                 onPressed: () => Navigator.of(context).maybePop(),
               )
             : null,
+        centerTitle: true,
         title: round == null
             ? const Text('Round')
-            : Text(isCasual
-                ? _casualTitle(round.activeGames)
-                : 'Round ${round.roundNumber}'),
+            : _appBarTitle(round, isCasual),
         actions: [
           if (round != null)
             RoundChatButton(roundId: round.id, title: round.course.name),
@@ -153,7 +153,14 @@ class _RoundScreenState extends State<RoundScreen> {
       bottomNavigationBar: round == null ? null : SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: isInProgress
+          child: isInProgress &&
+                  !round.isCupRound &&
+                  !(round.allHolesScored ||
+                      (round.tournamentId != null && round.canManage))
+              // Complete round only appears once 18 holes are in; before that
+              // it is the director's alone.
+              ? const SizedBox.shrink()
+              : isInProgress
               // Closing a cup round ends it for the whole field — the TD's
               // power alone.  A player or group scorer enters their own card
               // but doesn't complete the round; casual rounds are unchanged.
@@ -179,6 +186,76 @@ class _RoundScreenState extends State<RoundScreen> {
       ),
       body: _buildBody(context, rp, myId),
     );
+  }
+
+  /// The course (casual) or `Event · R1` (tournament), with a one-line sub:
+  /// `Tue Nov 17 · Sixes · for fun`.
+  Widget _appBarTitle(Round round, bool isCasual) {
+    if (round.isCupRound) {
+      return Text('Round ${round.roundNumber}');
+    }
+    final games = round.activeGames.map(gameDisplayName).take(2).join(' + ');
+    final stake =
+        round.betUnit > 0 ? '\$${round.betUnit.formatBet()}' : 'for fun';
+    final title = isCasual
+        ? round.course.name
+        : '${round.tournamentName ?? 'Round'} · R${round.roundNumber}';
+    final sub = isCasual
+        ? [dayLong(round.date), if (games.isNotEmpty) games, stake].join(' · ')
+        : [round.course.name, dayLong(round.date), if (games.isNotEmpty) games]
+            .join(' · ');
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Text(title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context)
+              .textTheme
+              .titleMedium
+              ?.copyWith(fontWeight: FontWeight.w800)),
+      Text(sub,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: Halved.muted)),
+    ]);
+  }
+
+  /// One line of truth under the app bar: tees off, live, or final. Never
+  /// "in progress" before a score exists.
+  Widget _statusStrip(Round round, int? myId) {
+    final anyScore = round.foursomes.any((f) => f.hasAnyScore);
+    final golfers =
+        round.foursomes.fold<int>(0, (n, f) => n + f.realPlayers.length);
+    final times = [
+      for (final f in round.foursomes)
+        if (teeShort(f.teeTime) != null) f.teeTime!
+    ]..sort();
+    final multi = round.foursomes.length > 1;
+    String text;
+    bool live = false;
+    if (round.status == 'complete') {
+      text = 'Final';
+    } else if (!anyScore) {
+      final first = times.isEmpty ? null : teeShort(times.first);
+      text = [
+        if (first != null) 'Tees off $first',
+        multi ? '${round.foursomes.length} groups' : '$golfers golfers',
+      ].join(' · ');
+    } else {
+      live = true;
+      final out = round.foursomes.where((f) => f.hasAnyScore).length;
+      text = multi
+          ? 'Live · $out of ${round.foursomes.length} groups on the course'
+          : 'Live';
+    }
+    final mine = round.foursomes
+        .any((f) => f.youScore || (myId != null && f.containsPlayer(myId)));
+    return RoundStatusStrip(
+        text: text,
+        live: live,
+        chip: mine && round.status != 'complete' ? 'You score' : null);
   }
 
   /// Title for a casual round: the single game's name (e.g. "Skins"), or a
@@ -270,7 +347,10 @@ class _RoundScreenState extends State<RoundScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         children: [
-          _RoundInfoCard(round: round),
+          if (round.isCupRound)
+            _RoundInfoCard(round: round)
+          else
+            _statusStrip(round, myId),
           if (hasMultiSkins && canManage) ...[
             const SizedBox(height: 12),
             Card(
@@ -395,12 +475,33 @@ class _RoundScreenState extends State<RoundScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 16),
-          Text('Foursomes',
-              style: Theme.of(context).textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          ...round.foursomes.map((fs) {
+          if (round.isCupRound) ...[
+            const SizedBox(height: 16),
+            Text('Foursomes',
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+          ],
+          ...(() {
+            // Your group first, then the rest in draw order.
+            if (round.isCupRound || myId == null) return round.foursomes;
+            final mine = [for (final f in round.foursomes) if (f.containsPlayer(myId)) f];
+            final rest = [for (final f in round.foursomes) if (!f.containsPlayer(myId)) f];
+            return [...mine, ...rest];
+          })().indexed.map((e) {
+                final fs = e.$2;
+                final isHero = !round.isCupRound &&
+                    (round.foursomes.length == 1 ||
+                        (myId != null && fs.containsPlayer(myId)));
+                // The label that opens the compact rows.
+                final firstOther = !round.isCupRound &&
+                    !isHero &&
+                    (e.$1 == 0 ||
+                        (round.foursomes
+                                .where((f) =>
+                                    myId != null && f.containsPlayer(myId))
+                                .length ==
+                            e.$1));
                 // Effective game list for this foursome: union of round-level
                 // games (irish_rumble, pink_ball, stableford, stroke_play —
                 // shared by all foursomes) and per-foursome games (match_play,
@@ -409,7 +510,29 @@ class _RoundScreenState extends State<RoundScreen> {
                   ...round.activeGames,
                   ...fs.activeGames,
                 }.toList();
-                return _FoursomeCard(
+                return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  if (firstOther)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
+                      child: Row(children: [
+                        Expanded(
+                            child: Text('OTHER GROUPS',
+                                style: Halved.body(
+                                    color: Halved.pine,
+                                    weight: FontWeight.w800))),
+                        InkWell(
+                          onTap: () => _openLeaderboard(context, round),
+                          child: Text('Leaderboard ›',
+                              style: Halved.body(
+                                  color: Halved.pine,
+                                  weight: FontWeight.w700)),
+                        ),
+                      ]),
+                    ),
+                  _FoursomeCard(
+                  tournamentId:    round.tournamentId,
                   foursome:        fs,
                   myPlayerId:      myId,
                   primaryGame:     round.primaryGame,
@@ -697,7 +820,7 @@ class _RoundScreenState extends State<RoundScreen> {
                       if (mounted) rp.loadRound(widget.roundId);
                     });
                   },
-                );
+                )]);
               }),
         ],
       ),
@@ -1339,6 +1462,7 @@ class _FoursomeCard extends StatelessWidget {
   /// menu filters it out at render time.
   final List<Foursome> allFoursomes;
   final int            roundId;
+  final int?           tournamentId;
   final VoidCallback onEnterScores;
   final VoidCallback onGamesChanged;
 
@@ -1357,6 +1481,7 @@ class _FoursomeCard extends StatelessWidget {
     this.primaryHcap,
     required this.allFoursomes,
     required this.roundId,
+    this.tournamentId,
     required this.onEnterScores,
     required this.onGamesChanged,
   });
@@ -2057,6 +2182,271 @@ class _FoursomeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isCupRound) return _classic(context);
+    final mine = myPlayerId != null && foursome.containsPlayer(myPlayerId!);
+    final canEdit = canManage || mine || foursome.youScore;
+    return (mine || allFoursomes.length == 1)
+        ? _hero(context, mine, canEdit)
+        : _otherRow(context, canEdit);
+  }
+
+  bool get _needsBracketSetup {
+    final fsGames = {...roundActiveGames, ...foursome.activeGames};
+    final has = foursome.configuredGames.contains('match_play') ||
+        foursome.configuredGames.contains('three_person_match');
+    return !isCupRound &&
+        ((fsGames.contains('match_play') && !has) ||
+            (fsGames.contains('three_person_match') &&
+                !foursome.configuredGames.contains('three_person_match')));
+  }
+
+  /// Your group: the dark card, one big button, the card-typing link.
+  Widget _hero(BuildContext context, bool mine, bool canEdit) {
+    final games = {...roundActiveGames, ...foursome.activeGames}
+        .map(gameDisplayName)
+        .take(3)
+        .join(' + ');
+    final tees = <String>{
+      for (final m in foursome.realPlayers)
+        if ((m.tee?.teeName ?? '').isNotEmpty) _titleCaseTee(m.tee!.teeName)
+    };
+    final golfers = [
+      for (final m in foursome.realPlayers)
+        HeroGolfer(
+          name: m.player.name,
+          initials: PlayerProfile.computeInitials(m.player.name),
+          ch: hubHandicapLabel(m,
+              primaryHcap: primaryHcap,
+              groupLow: primaryHcap?.$1 == 'strokes_off'
+                  ? foursome.realPlayers
+                      .map((x) => x.playingHandicap)
+                      .fold<int?>(null, (a, b) => a == null || b < a ? b : a)
+                  : null),
+          teeName: m.tee?.teeName == null ? null : _titleCaseTee(m.tee!.teeName),
+          me: myPlayerId != null && m.player.id == myPlayerId,
+        )
+    ];
+    final started = foursome.hasAnyScore;
+    final label = isComplete
+        ? 'View scorecard'
+        : _needsBracketSetup
+            ? 'Set up bracket →'
+            : started
+                ? 'Continue round ›'
+                : 'Start round';
+    final multi = allFoursomes.length > 1;
+    final summaryParts = [
+      if (games.isNotEmpty) games,
+      if (tees.isNotEmpty) '${tees.join(' and ')} tees',
+      if (tournamentId != null && !canManage) '🔒 CH set by the director',
+    ];
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      RoundHero(
+        title: foursome.label.startsWith('Group') && !multi
+            ? 'Your group'
+            : foursome.label,
+        yourGroupTag: multi && mine,
+        teeTime: teeShort(foursome.teeTime),
+        gameLine: [if (games.isNotEmpty) games, if (tees.length == 1) '${tees.first} tees']
+            .join(' · '),
+        golfers: golfers,
+        startLabel: (canEdit || isComplete) ? label : null,
+        onStart: onEnterScores,
+        onTypeCard: (canManage && !isComplete)
+            ? () => Navigator.of(context)
+                .pushNamed('/enter-card', arguments: foursome.id)
+                .then((_) => onGamesChanged())
+            : null,
+      ),
+      if (!isComplete && (canEdit || canManage))
+        RoundSettingsRow(
+            summary: summaryParts.join(' · '),
+            onTap: () => _showSettings(context)),
+    ]);
+  }
+
+  /// Another group in a tournament round: one compact row.
+  Widget _otherRow(BuildContext context, bool canEdit) {
+    final names = foursome.realPlayers
+        .map((m) => m.player.name.split(' ').first)
+        .join(', ');
+    final chs = [for (final m in foursome.realPlayers) m.courseHandicap]..sort();
+    final range = chs.isEmpty
+        ? ''
+        : (chs.first == chs.last
+            ? 'CH ${chs.first}'
+            : 'CH ${chs.first}–${chs.last}');
+    final live = foursome.hasAnyScore && !isComplete;
+    return OtherGroupRow(
+      teeTime: teeShort(foursome.teeTime) ?? '—',
+      groupTag: 'G${foursome.groupNumber}',
+      names: names,
+      sub: [range, live ? 'on the course' : (isComplete ? 'final' : 'not started')]
+          .where((x) => x.isNotEmpty)
+          .join(' · '),
+      trailing: live
+          ? 'Watch'
+          : (teeShort(foursome.teeTime) == null
+              ? null
+              : 'Tees ${teeShort(foursome.teeTime)}'),
+      live: live,
+      onTap: () {
+        if (canEdit) {
+          onEnterScores();
+        } else {
+          final r = roundLeaderboardRoute(
+              roundId: roundId,
+              isTeamPlayRound: isTeamPlayRound,
+              tournamentId: tournamentId);
+          Navigator.of(context).pushNamed(r.route, arguments: r.arguments);
+        }
+      },
+    );
+  }
+
+  /// Round settings: every action the group card used to carry as a button
+  /// or a menu item, in one sheet, each once.
+  Future<void> _showSettings(BuildContext context) async {
+    final canEdit = canManage ||
+        (myPlayerId != null && foursome.containsPlayer(myPlayerId!)) ||
+        foursome.youScore;
+    final merged = {...roundActiveGames, ...foursome.activeGames};
+    final (cfgRoute, cfgArgs) = _editConfigTarget(merged, foursome, primaryGame);
+    final primary = resolvePrimary(primaryGame, merged);
+    final configured =
+        primary != null && foursome.configuredGames.contains(primary);
+    final editable = !isComplete && foursome.setupEditable;
+
+    void go(String route, Object? args) => Navigator.of(context)
+        .pushNamed(route, arguments: args)
+        .then((_) => onGamesChanged());
+
+    final games = <_SettingsItem>[
+      if (canManage && editable && cfgRoute != null)
+        _SettingsItem(Icons.tune,
+            primary == null ? 'Game' : gameDisplayName(primary),
+            configured ? 'Edit configuration' : 'Set up configuration',
+            () => go(cfgRoute, cfgArgs)),
+      if (canManage && editable)
+        for (final t in _sideGamePerFoursomeTargets(merged, primaryGame,
+            foursome.configuredGames.toSet()))
+          _SettingsItem(Icons.tune, t.$2, '',
+              () => go(t.$1, {'id': foursome.id, 'returnToHub': true})),
+      if (canManage && editable && allFoursomes.length == 1)
+        for (final t in _roundLevelEditTargets(
+            roundActiveGames, foursome.configuredGames.toSet()))
+          _SettingsItem(Icons.tune, t.$2, '',
+              () => go(t.$1, {'id': roundId, 'returnToHub': true})),
+      if (canManage && editable && primary != null)
+        ...(() {
+          final eligible = sideGamesFor(primary,
+                  size: foursome.realPlayers.length)
+              .where((m) => !merged.contains(m.id))
+              .toList();
+          if (eligible.isEmpty) return <_SettingsItem>[];
+          return [
+            _SettingsItem(Icons.add, 'Add side game', '',
+                () => _showAddSideGameSheet(context, eligible, foursome.id,
+                    roundId, onGamesChanged))
+          ];
+        })(),
+      if (canManage && !isTeamPlayRound && foursome.groupNumber == 1 &&
+          !roundActiveGames.contains('multi_skins'))
+        _SettingsItem(Icons.link, 'Link to a Skins pool', '',
+            () => linkRoundToPoolFlow(context, roundId: roundId)),
+      if (canManage && !isComplete && allFoursomes.length > 1)
+        _SettingsItem(Icons.sports_golf, 'Group games',
+            'Configure the games this group plays', () => _showGameSheet(context)),
+    ];
+    final people = <_SettingsItem>[
+      if (canEdit && editable)
+        _SettingsItem(
+            Icons.golf_course_outlined,
+            'Tees & handicaps',
+            tournamentId != null && !canManage
+                ? 'Pick your tees · CH set by the director'
+                : (foursome.setupEditNote.isEmpty
+                    ? 'Tees and playing handicaps'
+                    : foursome.setupEditNote),
+            () => go('/confirm-tees', foursome.id)),
+      if (canManage && allFoursomes.length > 1)
+        _SettingsItem(Icons.swap_horiz, 'Move a golfer',
+            'Another group, or swap', () => _showMovePlayerSheet(context)),
+    ];
+    final round = <_SettingsItem>[
+      if (canManage)
+        _SettingsItem(
+            Icons.description_outlined,
+            foursome.paperCard ? 'Not on paper after all' : 'Scoring on paper',
+            foursome.paperCard ? 'On' : 'Off',
+            () => _togglePaperCard(context)),
+      if (canManage || (isTeamPlayRound))
+        _SettingsItem(Icons.edit_outlined,
+            isTeamPlayRound ? 'Rename team' : 'Rename group', '',
+            () => _renameGroup(context, foursome)),
+      if (canManage && allFoursomes.length > 1)
+        _SettingsItem(Icons.flag_outlined, 'Set starting hole',
+            foursome.startingHole == null
+                ? ''
+                : 'Starts ${foursome.startingHole}${foursome.shotgunSlot}',
+            () => _setStartingHole(context, foursome)),
+    ];
+
+    Widget section(String title, List<_SettingsItem> items) => items.isEmpty
+        ? const SizedBox.shrink()
+        : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+              child: Text(title.toUpperCase(),
+                  style: Halved.body(
+                      color: Halved.muted, weight: FontWeight.w800)),
+            ),
+            for (final it in items)
+              ListTile(
+                leading: Icon(it.icon, color: Halved.pine),
+                title: Text(it.title,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: it.sub.isEmpty ? null : Text(it.sub),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  it.onTap();
+                },
+              ),
+          ]);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetCtx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetCtx).size.height * 0.85),
+          child: ListView(shrinkWrap: true, children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+              child: Text('Round settings',
+                  style: Theme.of(sheetCtx).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w800)),
+            ),
+            section('Games', games),
+            section('Golfers', people),
+            if (tournamentId != null && !canManage)
+              const ListTile(
+                leading: Icon(Icons.lock_outline, color: Halved.muted),
+                title: Text('Course handicaps'),
+                subtitle: Text('Set by the director'),
+              ),
+            section('Round', round),
+            const SizedBox(height: 12),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _classic(BuildContext context) {
     final isMyGroup = myPlayerId != null &&
         foursome.containsPlayer(myPlayerId!);
     // Players can only edit scores for their own group.
@@ -2735,4 +3125,11 @@ class _GameSelectionSheetState extends State<_GameSelectionSheet> {
       ),
     );
   }
+}
+
+class _SettingsItem {
+  final IconData icon;
+  final String title, sub;
+  final VoidCallback onTap;
+  const _SettingsItem(this.icon, this.title, this.sub, this.onTap);
 }
