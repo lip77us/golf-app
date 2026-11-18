@@ -777,7 +777,7 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
                   holes:        summary.cardHoles,
                   participants: summary.cardPlayers,
                   holesInPlay:  summary.cardHolesInPlay,
-                  legend: 'blue / orange = the side that won the hole',
+                  legend: 'pine / clay = the side that won the hole',
                 ),
               ),
             ),

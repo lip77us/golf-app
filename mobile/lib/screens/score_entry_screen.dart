@@ -1050,8 +1050,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // the modal reads as "Tilden Green tees off?" instead of the
     // generic "Red".  Falls back to Red/Blue for casual rounds.
     final tcSummary = context.read<RoundProvider>().tripleCupSummary;
-    final t1Label   = tcSummary?.team1Name ?? 'Blue';
-    final t2Label   = tcSummary?.team2Name ?? 'Orange';
+    final t1Label   = tcSummary?.team1Name ?? 'Pine';
+    final t2Label   = tcSummary?.team2Name ?? 'Clay';
     final t1Color   = tcSummary?.team1Color ?? kTripleCupTeam1Color;
     final t2Color   = tcSummary?.team2Color ?? kTripleCupTeam2Color;
 
@@ -9399,7 +9399,7 @@ class _ExtraTeamPickerSheetState extends State<_ExtraTeamPickerSheet> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Drag rows to set Red vs Blue — or let the machine spin.',
+              'Drag rows to set Pine vs Clay — or let the machine spin.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
