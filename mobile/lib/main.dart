@@ -651,8 +651,10 @@ class _GolfAppState extends State<GolfApp> {
       case '/manage-courses':
         return page((_) => const ManageCoursesScreen());
       case '/round':
-        final roundId = settings.arguments as int;
-        return page((_) => RoundScreen(roundId: roundId));
+        final a = settings.arguments;
+        final roundId = a is Map ? a['roundId'] as int : a as int;
+        final enter = a is Map && a['enter'] == true;
+        return page((_) => RoundScreen(roundId: roundId, enterScores: enter));
       case '/round-feed':
         // Arguments may be a plain int (roundId) or a Map with {roundId, title}.
         final args = settings.arguments;

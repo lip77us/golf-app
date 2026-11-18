@@ -47,7 +47,13 @@ String hubHandicapLabel(Membership m,
 
 class RoundScreen extends StatefulWidget {
   final int roundId;
-  const RoundScreen({super.key, required this.roundId});
+
+  /// Open straight into score entry for your group (the home screen's
+  /// "Back to hole N"), and come back to where you were when it closes. The
+  /// round view is still one tap away: it is what the screen shows if you back
+  /// out before the entry opens.
+  final bool enterScores;
+  const RoundScreen({super.key, required this.roundId, this.enterScores = false});
 
   @override
   State<RoundScreen> createState() => _RoundScreenState();
@@ -60,6 +66,12 @@ class _RoundScreenState extends State<RoundScreen> {
   /// rounds fall back to the WHS playing handicap.
   final Map<int, (String, int)> _fsHcap = {};
   bool _hcapLoadStarted = false;
+
+  /// Each group's "Start / Continue" action, kept so the screen can press it
+  /// for you when it was opened with [RoundScreen.enterScores].
+  final Map<int, VoidCallback> _enterFor = {};
+  bool _autoDone = false;
+  bool _autoExit = false;
 
   @override
   void initState() {
@@ -358,7 +370,7 @@ class _RoundScreenState extends State<RoundScreen> {
         showLowNet || hasPinkBall || hasFortyBalls ||
         showMatchPlaySetup || showStableford;
 
-    return RefreshIndicator(
+    final hub = RefreshIndicator(
       onRefresh: _reloadRound,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
@@ -570,7 +582,7 @@ class _RoundScreenState extends State<RoundScreen> {
                   allFoursomes:    round.foursomes,
                   roundId:         widget.roundId,
                   onGamesChanged:  _reloadRound,
-                  onEnterScores:   () {
+                  onEnterScores:   _enterFor[fs.id] = () {
                     context.read<RoundProvider>().loadScorecard(fs.id);
                     // Route priority: setup screens for games that need initial
                     // configuration; otherwise go straight to universal score entry.
@@ -834,6 +846,12 @@ class _RoundScreenState extends State<RoundScreen> {
                         // lingering on stale state.
                         .then((_) {
                       if (mounted) rp.loadRound(widget.roundId);
+                      // Opened from the home screen: back goes home, not to a
+                      // settings page nobody asked for.
+                      if (mounted && _autoExit) {
+                        _autoExit = false;
+                        Navigator.of(context).maybePop();
+                      }
                     });
                   },
                 )]);
@@ -856,6 +874,28 @@ class _RoundScreenState extends State<RoundScreen> {
         ],
       ),
     );
+
+    // Straight into score entry: press the group's button once the hub has
+    // built (so the action exists), with the hub hidden meanwhile.
+    if (widget.enterScores && !_autoDone) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _autoDone) return;
+        _autoDone = true;
+        final mine = round.foursomes.firstWhere(
+            (f) => myId != null && f.containsPlayer(myId),
+            orElse: () => round.foursomes.first);
+        final go = _enterFor[mine.id];
+        if (go == null) {
+          setState(() {});
+          return;
+        }
+        _autoExit = true;
+        go();
+        setState(() {});
+      });
+      return Opacity(opacity: 0, child: hub);
+    }
+    return hub;
   }
 }
 

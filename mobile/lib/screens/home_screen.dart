@@ -123,11 +123,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _open(Map? action) async {
+  Future<void> _open(Map? action, {bool enter = false}) async {
     if (action == null) return;
     final nav = Navigator.of(context);
     if (action['round'] != null) {
-      await nav.pushNamed('/round', arguments: action['round']);
+      await nav.pushNamed('/round',
+          arguments: enter
+              ? {'roundId': action['round'], 'enter': true}
+              : action['round']);
     }
     if (mounted) _refresh();
   }
@@ -257,7 +260,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       game: a['game'] as String?),
                   onRound: _newRound,
                   onTournament: _newTournament)
-              : _HeroCard(hero: hero, onTap: () => _open(hero['action'] as Map?)),
+              : _HeroCard(
+                  hero: hero,
+                  // A casual round: the button is score entry itself, and the
+                  // round's settings are a small link beneath it.
+                  onTap: () => _open(hero['action'] as Map?,
+                      enter: _isCasualHero(hero)),
+                  onSettings: _isCasualHero(hero)
+                      ? () => _open(hero['action'] as Map?)
+                      : null),
         ),
       ),
       if (live.isNotEmpty) ...[
@@ -302,6 +313,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (mounted) _refresh();
   }
 }
+
+/// The hero is a casual round of yours: its button opens score entry.
+bool _isCasualHero(Map<String, dynamic> hero) =>
+    hero['kind'] == 'playing' || hero['kind'] == 'notStarted';
 
 String _hm(DateTime d) {
   final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
@@ -380,7 +395,8 @@ class _Header extends StatelessWidget {
 class _HeroCard extends StatelessWidget {
   final Map<String, dynamic> hero;
   final VoidCallback onTap;
-  const _HeroCard({required this.hero, required this.onTap});
+  final VoidCallback? onSettings;
+  const _HeroCard({required this.hero, required this.onTap, this.onSettings});
 
   @override
   Widget build(BuildContext context) {
@@ -480,6 +496,23 @@ class _HeroCard extends StatelessWidget {
                 style: _head(17, color: Halved.deepPine)),
           ),
         ),
+        if (onSettings != null) ...[
+          const SizedBox(height: 8),
+          Center(
+            child: InkWell(
+              onTap: onSettings,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Text('Round settings',
+                    style: Halved.body(
+                            color: light ? Halved.pine : Colors.white70,
+                            weight: FontWeight.w700)
+                        .copyWith(decoration: TextDecoration.underline)),
+              ),
+            ),
+          ),
+        ],
       ]),
     );
   }
