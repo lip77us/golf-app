@@ -226,7 +226,8 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
           ),
         ],
       ),
-      drawer: AppDrawer(
+      drawerScrimColor: const Color(0x800B1F1A),
+      endDrawer: AppDrawer(
         playerName: auth.player?.name,
         onHomeTap: () {
           Navigator.of(context).pop();

@@ -191,8 +191,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Halved.surface,
-      drawer: AppDrawer(
+      drawerScrimColor: const Color(0x800B1F1A),
+      endDrawer: AppDrawer(
         playerName: auth.player?.name,
+        liveRound: home != null && (home['hero'] as Map?)?['rule'] == 1,
+        tournamentsToday:
+            home != null && (home['hero'] as Map?)?['rule'] == 2 ? 1 : 0,
         onTournamentsTap: () {
           Navigator.of(context).pop();
           Navigator.of(context).pushNamed('/tournaments').then((_) => _refresh());
@@ -263,7 +267,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         context: updated == null
             ? h['context'] as String
             : 'Updated ${_hm(updated)}',
-        onMenu: () => _scaffoldKey.currentState?.openDrawer(),
+        onMenu: () => _scaffoldKey.currentState?.openEndDrawer(),
         initials: initialsOf(context.read<AuthProvider>().player?.name ?? ''),
         index: context.read<AuthProvider>().player?.handicapIndex ?? '',
         onProfile: () => Navigator.of(context)
