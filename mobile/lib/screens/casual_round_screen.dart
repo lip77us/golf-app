@@ -314,7 +314,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
 
   /// Opens the index sheet for [p] and saves. Returns true when it saved and
   /// the caller asked to step on to the next golfer.
-  Future<bool> _editIndex(PlayerProfile p, {String? nextFirst}) async {
+  Future<bool> _editIndex(PlayerProfile p,
+      {String? nextFirst, String? stepLabel}) async {
     final auth = context.read<AuthProvider>();
     final me = auth.player;
     final r = await showIndexSheet(
@@ -325,6 +326,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       myIndex: me == null ? null : double.tryParse(me.handicapIndex),
       slope: _myTeeSlope,
       nextFirstName: nextFirst,
+      stepLabel: stepLabel,
     );
     if (r == null || !mounted) return false;
     try {
@@ -359,7 +361,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               ? 'You'
               : queue[i + 1].name.split(' ').first)
           : null;
-      final more = await _editIndex(p, nextFirst: next);
+      final more = await _editIndex(p,
+          nextFirst: next, stepLabel: 'Player ${i + 1} of ${queue.length}');
       if (!more || !mounted) return;
     }
   }

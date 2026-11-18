@@ -31,6 +31,7 @@ Future<IndexSheetResult?> showIndexSheet(
   required double? myIndex,
   int slope = 113,
   String? nextFirstName,
+  String? stepLabel,
   VoidCallback? onEditDetails,
 }) =>
     showModalBottomSheet<IndexSheetResult>(
@@ -46,6 +47,7 @@ Future<IndexSheetResult?> showIndexSheet(
         myIndex: myIndex,
         slope: slope,
         nextFirstName: nextFirstName,
+        stepLabel: stepLabel,
         onEditDetails: onEditDetails,
       ),
     );
@@ -57,6 +59,8 @@ class IndexSheet extends StatefulWidget {
   final double? myIndex;
   final int slope;
   final String? nextFirstName;
+  /// `Player 2 of 4`, only while stepping through a group.
+  final String? stepLabel;
   final VoidCallback? onEditDetails;
 
   const IndexSheet({
@@ -67,6 +71,7 @@ class IndexSheet extends StatefulWidget {
     required this.myIndex,
     this.slope = 113,
     this.nextFirstName,
+    this.stepLabel,
     this.onEditDetails,
   });
 
@@ -171,7 +176,8 @@ class _IndexSheetState extends State<IndexSheet> {
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
                         color: Halved.deepPine)),
-                Text(_sub,
+                Text(
+                    widget.stepLabel == null ? _sub : '$_sub · ${widget.stepLabel}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Halved.body(color: Halved.muted)),
@@ -217,24 +223,41 @@ class _IndexSheetState extends State<IndexSheet> {
                     color: Halved.deepPine)),
           ]),
           const SizedBox(height: 8),
-          Row(children: [
-            Expanded(
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                    backgroundColor: Halved.brightMint,
-                    foregroundColor: Halved.deepPine,
-                    disabledBackgroundColor: Halved.disabledFill,
-                    minimumSize: const Size.fromHeight(54),
-                    shape: const StadiumBorder()),
-                onPressed: stored == null ? null : () => _done(false),
-                child: Text('Save',
-                    style: Halved.body(weight: FontWeight.w800)
-                        .copyWith(fontSize: 17)),
+          if (widget.nextFirstName == null)
+            FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: Halved.brightMint,
+                  foregroundColor: Halved.deepPine,
+                  disabledBackgroundColor: Halved.disabledFill,
+                  minimumSize: const Size.fromHeight(54),
+                  shape: const StadiumBorder()),
+              onPressed: stored == null ? null : () => _done(false),
+              child: Text('Save',
+                  style: Halved.body(weight: FontWeight.w800)
+                      .copyWith(fontSize: 17)),
+            )
+          else
+            // Stepping through a group: Save & done stops here, the mint
+            // button is the main action and carries on.
+            Row(children: [
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                      backgroundColor: Halved.pine,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Halved.disabledFill,
+                      minimumSize: const Size.fromHeight(54),
+                      shape: const StadiumBorder()),
+                  onPressed: stored == null ? null : () => _done(false),
+                  child: Text('Save & done',
+                      style: Halved.body(weight: FontWeight.w800)
+                          .copyWith(fontSize: 15)),
+                ),
               ),
-            ),
-            if (widget.nextFirstName != null) ...[
               const SizedBox(width: 10),
               Expanded(
+                flex: 3,
                 child: FilledButton(
                   style: FilledButton.styleFrom(
                       backgroundColor: Halved.brightMint,
@@ -243,13 +266,15 @@ class _IndexSheetState extends State<IndexSheet> {
                       minimumSize: const Size.fromHeight(54),
                       shape: const StadiumBorder()),
                   onPressed: stored == null ? null : () => _done(true),
-                  child: Text('Save · ${widget.nextFirstName} ›',
-                      style: Halved.body(weight: FontWeight.w800)
-                          .copyWith(fontSize: 16)),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('Save → Next: ${widget.nextFirstName}',
+                        style: Halved.body(weight: FontWeight.w800)
+                            .copyWith(fontSize: 15)),
+                  ),
                 ),
               ),
-            ],
-          ]),
+            ]),
           if (widget.onEditDetails != null)
             TextButton(
                 onPressed: () {

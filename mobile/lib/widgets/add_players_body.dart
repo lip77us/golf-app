@@ -387,28 +387,38 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
   }
 
   Widget _checkCard() => Material(
-        color: Halved.deepPine,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           onTap: widget.onCheckIndexes,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Halved.pine, width: 1.5),
+            ),
             child: Row(children: [
-              const Icon(Icons.check, color: Halved.brightMint),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(
+                    shape: BoxShape.circle, color: Halved.brightMint),
+                child: const Icon(Icons.check, color: Halved.deepPine, size: 20),
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Check today’s indexes',
-                      style: Halved.body(color: Colors.white, weight: FontWeight.w700)
+                  Text('Update indexes',
+                      style: Halved.body(color: Halved.pine, weight: FontWeight.w700)
                           .copyWith(fontSize: 16)),
                   Text(
-                      'Step through ${widget.seated.length} golfer'
+                      'For today’s ${widget.seated.length} golfer'
                       '${widget.seated.length == 1 ? '' : 's'}, one tap each',
-                      style: Halved.body(color: Halved.cream.withOpacity(0.7))),
+                      style: Halved.body(color: Halved.muted)),
                 ]),
               ),
-              const Icon(Icons.chevron_right, color: Halved.brightMint),
+              const Icon(Icons.chevron_right, color: Halved.pine),
             ]),
           ),
         ),
