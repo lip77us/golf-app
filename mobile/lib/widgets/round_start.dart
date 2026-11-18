@@ -139,50 +139,40 @@ class RoundHero extends StatelessWidget {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          // The name never breaks across lines: it shrinks to fit instead, and
-          // the tag keeps its own width.
-          Flexible(
+          // The name and its tag shrink together as one unit: the name never
+          // breaks across lines and the tee time keeps its place on the right.
+          Expanded(
             child: FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
-              child: Text(title, maxLines: 1, softWrap: false, style: _head(24)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(title, maxLines: 1, softWrap: false, style: _head(24)),
+                if (yourGroupTag) ...[
+                  const SizedBox(width: 10),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                        color: Halved.brightMint,
+                        borderRadius: BorderRadius.circular(14)),
+                    child: Text('YOUR GROUP',
+                        maxLines: 1,
+                        style: Halved.body(
+                                color: Halved.deepPine,
+                                weight: FontWeight.w800)
+                            .copyWith(fontSize: 11, letterSpacing: 0.6)),
+                  ),
+                ],
+              ]),
             ),
           ),
-          if (yourGroupTag) ...[
+          if (teeTime != null) ...[
             const SizedBox(width: 10),
-            Flexible(
-              flex: 0,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                      color: Halved.brightMint,
-                      borderRadius: BorderRadius.circular(14)),
-                  child: Text('YOUR GROUP',
-                      maxLines: 1,
-                      style: Halved.body(
-                              color: Halved.deepPine, weight: FontWeight.w800)
-                          .copyWith(fontSize: 11, letterSpacing: 0.6)),
-                ),
-              ),
-            ),
-          ],
-          const Spacer(),
-          if (teeTime != null)
-            Flexible(
-              flex: 0,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text.rich(TextSpan(children: [
-              TextSpan(
-                  text: 'tee ',
-                  style: Halved.body(color: Colors.white70)),
+            Text.rich(TextSpan(children: [
+              TextSpan(text: 'tee ', style: Halved.body(color: Colors.white70)),
               TextSpan(text: teeTime, style: _head(20)),
             ])),
-              ),
-            ),
+          ],
         ]),
         if (gameLine.isNotEmpty) ...[
           const SizedBox(height: 2),
