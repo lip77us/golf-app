@@ -17,15 +17,15 @@ import '../api/models.dart';
 import '../widgets/side_games_picker.dart';
 import '../providers/auth_provider.dart';
 import '../utils/grouping.dart';
-import '../utils/add_halved_golfer.dart';
 import '../utils/golfer_invite.dart';
+import '../utils/add_players.dart';
+import '../widgets/add_players_body.dart';
+import '../widgets/all_golfers_sheet.dart';
+import '../widgets/new_golfer_sheet.dart';
 import '../widgets/error_view.dart';
 import '../widgets/inline_message.dart';
-import '../widgets/golf_text_field.dart';
 import '../widgets/group_size_editor.dart';
-import '../widgets/halved_mark.dart';
 import '../widgets/tee_assignment.dart';
-import 'player_form_screen.dart';
 
 class SetupRoundPlayersScreen extends StatefulWidget {
   final int roundId;
@@ -52,6 +52,8 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
 
   // ── Step 1: Player selection ──────────────────────────────────────────────
   final Set<int> _selectedIds = {};
+  /// Rounds shared with each golfer, for the regulars and "played N times".
+  RoundCounts _counts = const {};
   /// True once the field was carried over from a sibling round.
   bool _seededFromField = false;
   /// This round already had a draw and we loaded it — so this is an edit of
@@ -68,9 +70,6 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
   bool? _dayBetOn;
   bool? _dayBetInitial;
   String? _dayBetNote;
-  String         _search      = '';
-  final TextEditingController _searchCtrl  = TextEditingController();
-  final FocusNode             _searchFocus = FocusNode();
 
   // ── Step 2: Groups + tees ─────────────────────────────────────────────────
   List<int>          _orderedIds = [];
@@ -125,33 +124,8 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
 
   @override
   void dispose() {
-    _searchCtrl.dispose();
-    _searchFocus.dispose();
     super.dispose();
   }
-
-  /// After ticking a name, leave the search text in place but SELECTED, so the
-  /// next keystroke replaces it.
-  ///
-  /// Clearing it outright would be wrong — one search often has two people
-  /// worth ticking ("Robert" catching both Roberts), and the list has to stay
-  /// filtered while the TD works through it. Selecting instead keeps the
-  /// filter up and still costs nothing to move on: type, and Robert is gone.
-  ///
-  /// Focus is only taken back when the keyboard is already up. A TD who
-  /// scrolled the roster to dismiss it is reading, not typing, and having the
-  /// keyboard jump back over the list on every tick would be worse than the
-  /// problem this fixes.
-  void _reselectSearch() {
-    if (_searchCtrl.text.isEmpty) return;
-    final keyboardUp = MediaQuery.viewInsetsOf(context).bottom > 0;
-    if (keyboardUp && !_searchFocus.hasFocus) {
-      _searchFocus.requestFocus();
-    }
-    _searchCtrl.selection = TextSelection(
-      baseOffset: 0, extentOffset: _searchCtrl.text.length);
-  }
-
   Future<void> _loadData() async {
     setState(() { _loading = true; _loadError = null; });
     try {
@@ -194,6 +168,11 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
       // from a sibling and leaving the groups blank would make "Edit Groups"
       // mean "build it again from scratch", when what a TD wants is to move
       // two golfers and leave the rest alone.
+      // Best effort: without it there are simply no regulars yet.
+      try {
+        final c = await client.getRegulars();
+        if (mounted) setState(() => _counts = c);
+      } catch (_) {}
       if (!await _seedFromOwnDraw()) {
         await _seedFieldFromTournament();
       }
@@ -325,26 +304,6 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
     }
   }
 
-
-  /// Inline-create a login-less golfer during round setup, then add them to the
-  /// roster and auto-select them. Reuses PlayerFormScreen, which pops the saved
-  /// PlayerProfile.
-  Future<void> _addGolfer() async {
-    final created = await Navigator.of(context).push<PlayerProfile>(
-      MaterialPageRoute(builder: (_) => const PlayerFormScreen()),
-    );
-    _addCreatedGolfer(created);
-    if (created != null && mounted) {
-      await maybeOfferRoundSmsInvite(context, created,
-          courseName: _round?.course.name);
-    }
-  }
-
-  /// Add an existing Halved member (not yet in my roster) by phone number.
-  Future<void> _addHalvedGolfer() async {
-    final created = await addHalvedGolferByPhone(context);
-    _addCreatedGolfer(created);
-  }
 
   void _addCreatedGolfer(PlayerProfile? created) {
     if (created == null || !mounted) return;
@@ -568,25 +527,26 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
   // ── Step 1: Player selection ──────────────────────────────────────────────
 
   Widget _buildPlayersStep() {
-    final filtered = _search.isEmpty
-        ? _allPlayers
-        : _allPlayers
-            .where((p) => p.name.toLowerCase().contains(_search.toLowerCase()))
-            .toList();
-
+    final seated = [
+      for (final id in _selectedIds)
+        for (final p in _allPlayers)
+          if (p.id == id) p
+    ];
     return Column(children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Select Players',
-              style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 4),
-          Text(
-            '${_selectedIds.length} selected  •  '
-            '${_effectiveSizes.length} group(s)',
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: Colors.grey),
-          ),
+      Expanded(
+        child: ListView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          children: [
+            Text('Select Players',
+                style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 4),
+            Text(
+              '${_selectedIds.length} selected  •  '
+              '${_effectiveSizes.length} group(s)',
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: Colors.grey),
+            ),
             // A redraw says what it is loading and what it costs, because
             // the screen is otherwise identical to a first setup and the
             // saved draw is rebuilt from scratch underneath.
@@ -599,155 +559,43 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
                     'score is posted.',
               ),
             ],
-            // A pre-ticked list needs to say why it is pre-ticked, or it
-            // reads as a list somebody else chose. Only shown when the
-            // seeding actually fired.
+            // A pre-seated field needs to say why, or it reads as a list
+            // somebody else chose. Only shown when the seeding fired.
             if (_seededFromField) ...[
               const SizedBox(height: 4),
-              Text('Carried over from this tournament — add or remove anyone who is not playing this round.',
+              Text('Carried over from this tournament — take out anyone who '
+                  'is not playing this round, or add more.',
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: Colors.grey)),
             ],
-        ]),
-      ),
-
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(children: [
-          Expanded(
-            child: GolfTextField(
-              hint: 'Search players…',
-              prefixIcon: Icons.search,
-              controller: _searchCtrl,
-              focusNode: _searchFocus,
-              // Names are not words. iOS otherwise offers to "correct"
-              // a surname to a dictionary word — the bubble with the ✕ under
-              // the field — and Steuernagel is not in the dictionary.
-              autocorrect: false,
-              enableSuggestions: false,
-              // One tap back to the whole roster. Typing over the query
-              // only re-filters it; this is the way out of a filter.
-              suffix: _search.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const Icon(Icons.clear),
-                      tooltip: 'Clear',
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        setState(() => _search = '');
-                      },
-                    ),
-              // Give the keyboard a working "done" — otherwise it can't be
-              // closed from the keyboard and covers the bottom action button.
-              textInputAction: TextInputAction.search,
-              onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
-              onChanged: (s) => setState(() => _search = s),
-            ),
-          ),
-          const SizedBox(width: 8),
-          TextButton(
-            onPressed: () => setState(() {
-              _selectedIds.addAll(_allPlayers.map((p) => p.id));
-              _dropSizeOverride();
-            }),
-            child: const Text('All'),
-          ),
-          TextButton(
-            onPressed: () => setState(() {
-              _selectedIds.clear();
-              _dropSizeOverride();
-            }),
-            child: const Text('None'),
-          ),
-        ]),
-      ),
-      const SizedBox(height: 4),
-
-      // Inline add: a login-less golfer, or look one up on Halved by number.
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Wrap(
-          children: [
-            TextButton.icon(
-              onPressed: _addGolfer,
-              icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
-              label: const Text('Add Golfer'),
-            ),
-            TextButton.icon(
-              onPressed: _addHalvedGolfer,
-              icon: const Icon(Icons.phone_iphone, size: 18),
-              label: const Text('Halved Golfer search'),
+            const SizedBox(height: 16),
+            // The same circles screen a casual round uses: who is in, on top,
+            // then your regulars, search and the new-golfer card.
+            AddPlayersBody(
+              // A tournament director is not necessarily playing, so nobody is
+              // locked in.
+              me: null,
+              seated: seated,
+              seats: null,
+              minSeated: 2,
+              gameLabel: 'Round ${_round?.roundNumber ?? ''}',
+              roster: _allPlayers,
+              counts: _counts,
+              onAdd: (p) => setState(() {
+                _selectedIds.add(p.id);
+                _dropSizeOverride();
+              }),
+              onRemove: (p) => setState(() {
+                _selectedIds.remove(p.id);
+                _dropSizeOverride();
+              }),
+              onHalvedAdded: (p) => _addCreatedGolfer(p),
+              onNewGolfer: _openNewGolfer,
+              onAllGolfers: _openAllGolfers,
             ),
           ],
         ),
       ),
-      const SizedBox(height: 4),
-
-      Expanded(
-        child: filtered.isEmpty
-            ? const Center(child: Text('No players found.'))
-            : ListView.builder(
-                // Scrolling the roster also puts the keyboard away.
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                itemCount: filtered.length,
-                itemBuilder: (_, i) {
-                  final p   = filtered[i];
-                  final sel = _selectedIds.contains(p.id);
-                  return CheckboxListTile(
-                    value    : sel,
-                    onChanged: (_) {
-                      setState(() {
-                        sel
-                            ? _selectedIds.remove(p.id)
-                            : _selectedIds.add(p.id);
-                        _dropSizeOverride();
-                      });
-                      _reselectSearch();
-                    },
-                    title    : Row(
-                      children: [
-                        Flexible(child: Text(p.name,
-                            overflow: TextOverflow.ellipsis)),
-                        if (p.isOnApp) ...[
-                          const SizedBox(width: 6),
-                          const HalvedMark(size: 18),
-                        ] else ...[
-                          const SizedBox(width: 6),
-                          // Invite a golfer who isn't on the app yet
-                          // (personalized share, sent from the TD's phone).
-                          Builder(
-                            builder: (btnCtx) => IconButton(
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              tooltip: 'Invite ${p.name}',
-                              icon: const Icon(
-                                  Icons.person_add_alt_1_outlined, size: 18),
-                              onPressed: () => inviteGolfer(btnCtx, p),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    subtitle : Text('Index ${p.handicapIndex}'),
-                    secondary: CircleAvatar(
-                      backgroundColor: sel
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.surfaceContainerHighest,
-                      child: Text(
-                        p.name.isNotEmpty ? p.name[0].toUpperCase() : '?',
-                        style: TextStyle(
-                          color   : sel ? Colors.white : null,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-      ),
-
       if (_selectedIds.length < 2)
         Container(
           width  : double.infinity,
@@ -761,6 +609,39 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
           ),
         ),
     ]);
+  }
+
+  Future<void> _openNewGolfer(String query) async {
+    final me = context.read<AuthProvider>().player;
+    final result = await showNewGolferSheet(
+      context,
+      seed: query,
+      myIndex: me == null ? null : double.tryParse(me.handicapIndex),
+      roster: _allPlayers,
+      counts: _counts,
+    );
+    if (result == null || !mounted) return;
+    _addCreatedGolfer(result.player);
+    if (!result.existing) {
+      await maybeOfferRoundSmsInvite(context, result.player,
+          courseName: _round?.course.name);
+    }
+  }
+
+  void _openAllGolfers() {
+    final myId = context.read<AuthProvider>().player?.id;
+    showAllGolfersSheet(
+      context,
+      golfers: allGolfersOf(_allPlayers, _counts, meId: myId),
+      counts: _counts,
+      seatedIds: () => _selectedIds.toSet(),
+      onToggle: (p) => setState(() {
+        _selectedIds.contains(p.id)
+            ? _selectedIds.remove(p.id)
+            : _selectedIds.add(p.id);
+        _dropSizeOverride();
+      }),
+    );
   }
 
   // ── Step 1: Groups + tees ─────────────────────────────────────────────────

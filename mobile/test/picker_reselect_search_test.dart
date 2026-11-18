@@ -74,8 +74,8 @@ void main() {
       for (final f in [
         // The casual setup's own roster list was replaced by the Add players
         // body, which keeps the behaviour.
+        // The tournament round setup uses the same body.
         'lib/widgets/add_players_body.dart',
-        'lib/screens/setup_round_players_screen.dart',
         'lib/screens/new_round_wizard.dart',
         'lib/screens/ryder_cup_draft_screen.dart',
       ]) {
