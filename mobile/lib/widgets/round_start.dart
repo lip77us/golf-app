@@ -150,25 +150,39 @@ class RoundHero extends StatelessWidget {
           ),
           if (yourGroupTag) ...[
             const SizedBox(width: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                  color: Halved.brightMint,
-                  borderRadius: BorderRadius.circular(14)),
-              child: Text('YOUR GROUP',
-                  style: Halved.body(
-                          color: Halved.deepPine, weight: FontWeight.w800)
-                      .copyWith(fontSize: 11, letterSpacing: 0.6)),
+            Flexible(
+              flex: 0,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                      color: Halved.brightMint,
+                      borderRadius: BorderRadius.circular(14)),
+                  child: Text('YOUR GROUP',
+                      maxLines: 1,
+                      style: Halved.body(
+                              color: Halved.deepPine, weight: FontWeight.w800)
+                          .copyWith(fontSize: 11, letterSpacing: 0.6)),
+                ),
+              ),
             ),
           ],
           const Spacer(),
           if (teeTime != null)
-            Text.rich(TextSpan(children: [
+            Flexible(
+              flex: 0,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text.rich(TextSpan(children: [
               TextSpan(
                   text: 'tee ',
                   style: Halved.body(color: Colors.white70)),
               TextSpan(text: teeTime, style: _head(20)),
             ])),
+              ),
+            ),
         ]),
         if (gameLine.isNotEmpty) ...[
           const SizedBox(height: 2),
