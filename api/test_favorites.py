@@ -87,8 +87,10 @@ class FavoriteGolferTests(TestCase):
 
     def test_roster_favorites_cost_one_query_not_one_per_golfer(self):
         self.client.post(self._url(self.dave))
-        with self.assertNumQueries(2):
-            # The roster, then ONE batched favorites lookup — not one per row.
+        with self.assertNumQueries(4):
+            # The roster, ONE batched favorites lookup, and the two batched
+            # guest lookups (who has played, who is still in a live round) —
+            # a fixed four, not one per row.
             self.client.get(reverse('api-players'))
 
     # ── private to the owner ─────────────────────────────────────────────────

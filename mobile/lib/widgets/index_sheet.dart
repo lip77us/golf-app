@@ -21,7 +21,7 @@ class IndexSheetResult {
 }
 
 /// Whose index this is, and so what saving it means (handoff §5).
-enum IndexOwner { you, halved, guest }
+enum IndexOwner { you, halved, guest, saved }
 
 Future<IndexSheetResult?> showIndexSheet(
   BuildContext context, {
@@ -87,6 +87,8 @@ class _IndexSheetState extends State<IndexSheet> {
   String get _sub {
     switch (widget.owner) {
       case IndexOwner.guest:
+        return 'Guest · this round only';
+      case IndexOwner.saved:
         return 'Saved in your golfers';
       case IndexOwner.halved:
         return 'On Halved · yours until $_first updates it';

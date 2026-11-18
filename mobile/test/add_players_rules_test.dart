@@ -183,9 +183,9 @@ void main() {
 
     test('the toasts', () {
       expect(addedToast(firstName: 'Jo', hasNumber: true, viaAccount: false),
-          'Jo added. The game is texted when the round starts.');
+          'Jo added for this round. The game and a Halved link are texted at the start.');
       expect(addedToast(firstName: 'Jo', hasNumber: false, viaAccount: false),
-          'Jo added as a guest.');
+          'Jo added for this round. Not saved after.');
       expect(addedToast(firstName: 'Mike', hasNumber: true, viaAccount: true),
           'Mike added from Halved. A push goes out at Start round.');
     });

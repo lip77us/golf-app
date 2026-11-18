@@ -283,7 +283,7 @@ class _NewGolferSheetState extends State<NewGolferSheet> {
                 overflow: TextOverflow.ellipsis,
                 style: Halved.sectionHead()
                     .copyWith(fontSize: 20, fontWeight: FontWeight.w700)),
-            Text('Not on Halved yet. Joins your golfers for next time.',
+            Text('Not on Halved: plays this round only, then isn’t saved.',
                 style:
                     Halved.body(color: Halved.muted).copyWith(fontSize: 12.5)),
           ]),

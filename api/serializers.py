@@ -53,6 +53,7 @@ class PlayerSerializer(serializers.ModelSerializer):
     # only when the list view supplies `on_app_phones` in context; defaults
     # False for single-player uses (login/me).
     is_on_app = serializers.SerializerMethodField()
+    is_guest  = serializers.SerializerMethodField()
 
     # True when the requesting USER has flagged this golfer as a favorite — the
     # shortlist behind the picker's Favorites filter.  Private to the owner, so
@@ -73,7 +74,7 @@ class PlayerSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Player
         fields = ['id', 'name', 'short_name', 'handicap_index',
-                  'is_phantom', 'email', 'phone', 'sex', 'user_id', 'is_on_app',
+                  'is_phantom', 'email', 'phone', 'sex', 'user_id', 'is_on_app', 'is_guest',
                   'is_favorite', 'home_course_id', 'home_course_name']
         read_only_fields = ['id']
 
@@ -118,6 +119,11 @@ class PlayerSerializer(serializers.ModelSerializer):
             return False
         n = normalize(obj.phone)
         return bool(n and n in phones)
+
+    def get_is_guest(self, obj) -> bool:
+        """Not on Halved and no GHIN: plays this round or tournament only."""
+        from services.guests import is_guest
+        return is_guest(obj, self.context.get('on_app_phones') or set())
 
     def get_is_favorite(self, obj) -> bool:
         return obj.id in (self.context.get('favorite_ids') or ())

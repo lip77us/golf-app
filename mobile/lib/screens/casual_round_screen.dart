@@ -310,7 +310,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
 
   IndexOwner _ownerOf(PlayerProfile p) => p.id == context.read<AuthProvider>().player?.id
       ? IndexOwner.you
-      : (p.isOnApp ? IndexOwner.halved : IndexOwner.guest);
+      : (p.isOnApp ? IndexOwner.halved : (p.isGuest ? IndexOwner.guest : IndexOwner.saved));
 
   /// Opens the index sheet for [p] and saves. Returns true when it saved and
   /// the caller asked to step on to the next golfer.
@@ -340,7 +340,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       final lbl = indexLabel(updated.handicapIndex);
       _toast(p.isOnApp && p.id != me?.id
           ? '$first · index $lbl, kept until $first updates it'
-          : '${p.id == me?.id ? 'Your' : '$first ·'} index $lbl, saved');
+          : '${p.id == me?.id ? 'Your' : '$first ·'} index $lbl, '
+              '${p.isGuest ? 'for this round' : 'saved'}');
       return r.advance;
     } on ApiException catch (e) {
       _toast(e.message);

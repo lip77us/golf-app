@@ -568,7 +568,7 @@ void main() {
       expect(find.text('New golfer'), findsOneWidget);
       expect(find.text('Enter a name'), findsOneWidget);
       expect(
-          find.text('Not on Halved yet. Joins your golfers for next time.'),
+          find.text('Not on Halved: plays this round only, then isn’t saved.'),
           findsOneWidget);
     });
 

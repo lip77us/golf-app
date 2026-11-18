@@ -222,7 +222,7 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
       context,
       name: p.name,
       currentStored: p.handicapIndex,
-      owner: p.isOnApp ? IndexOwner.halved : IndexOwner.guest,
+      owner: p.isOnApp ? IndexOwner.halved : (p.isGuest ? IndexOwner.guest : IndexOwner.saved),
       myIndex: me == null ? null : double.tryParse(me.handicapIndex),
       onEditDetails: () => _openForm(player: p),
     );
@@ -241,7 +241,7 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
         ..showSnackBar(SnackBar(
             content: Text(p.isOnApp
                 ? '$first · index $lbl, kept until $first updates it'
-                : '$first · index $lbl, saved')));
+                : '$first · index $lbl, ${p.isGuest ? 'for this round' : 'saved'}')));
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)

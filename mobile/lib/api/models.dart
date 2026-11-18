@@ -240,6 +240,9 @@ class PlayerProfile {
   /// matches this golfer's phone). Only populated by GET /api/players/.
   final bool isOnApp;
 
+  /// Not on Halved and no GHIN: a one-round guest.
+  final bool isGuest;
+
   /// This golfer's home course (personal preference), or null when unset.
   /// Pinned to the top of the course picker's default list. `homeCourseName`
   /// is a display label so we don't need a second fetch to render it.
@@ -257,6 +260,7 @@ class PlayerProfile {
     this.sex = 'M',
     this.userId,
     this.isOnApp = false,
+    this.isGuest = false,
     this.homeCourseId,
     this.homeCourseName = '',
   });
@@ -272,6 +276,7 @@ class PlayerProfile {
         sex: j['sex'] as String? ?? 'M',
         userId: j['user_id'] as int?,
         isOnApp: j['is_on_app'] as bool? ?? false,
+        isGuest: j['is_guest'] as bool? ?? false,
         homeCourseId: j['home_course_id'] as int?,
         homeCourseName: prettyCourseName(j['home_course_name'] as String? ?? ''),
       );

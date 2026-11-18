@@ -706,7 +706,7 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
                           style: Halved.sectionHead()
                               .copyWith(fontSize: 16, color: Colors.white)),
                       const SizedBox(height: 2),
-                      Text('Not on Halved yet: name, index and mobile',
+                      Text('Not on Halved: plays this round only',
                           style: Halved.body(
                                   color: Colors.white.withValues(alpha: 0.65))
                               .copyWith(fontSize: 12.5)),

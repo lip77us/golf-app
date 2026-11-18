@@ -284,8 +284,9 @@ String addedToast({
     return '$firstName added from Halved. A push goes out at Start round.';
   }
   return hasNumber
-      ? '$firstName added. The game is texted when the round starts.'
-      : '$firstName added as a guest.';
+      ? '$firstName added for this round. The game and a Halved link are '
+          'texted at the start.'
+      : '$firstName added for this round. Not saved after.';
 }
 
 /// The header over the seats of an OPEN-ENDED round — Multi-Group Skins, where

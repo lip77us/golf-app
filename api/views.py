@@ -1911,10 +1911,12 @@ class PlayerListView(APIView):
         # "On the app" = a registered user's verified phone matches this
         # golfer's normalized phone; that user's profile also carries the
         # authoritative handicap index for connected golfers.
-        data = PlayerSerializer(
-            players, many=True,
-            context=_on_app_context(players, request.user),
-        ).data
+        ctx = _on_app_context(players, request.user)
+        # One-round guests (no Halved account, no GHIN) are listed only while
+        # a round of theirs is still going.
+        from services.guests import listable
+        players = listable(players, ctx['on_app_phones'])
+        data = PlayerSerializer(players, many=True, context=ctx).data
         return Response(data)
 
     def post(self, request):
@@ -1931,6 +1933,19 @@ class PlayerListView(APIView):
         taken = _phone_taken_by(request.user.account,
                                 ser.validated_data.get('phone'))
         if taken is not None:
+            # A guest from an earlier round is no longer in anybody's list, so
+            # the number is not "in use": adding him again IS the plan. Reuse
+            # the row (every old score points at it) with the new details.
+            from services.guests import listable
+            if taken not in listable([taken]):
+                for f in ('name', 'short_name', 'handicap_index', 'email', 'sex'):
+                    if f in ser.validated_data:
+                        setattr(taken, f, ser.validated_data[f])
+                taken.save()
+                return Response(
+                    PlayerSerializer(taken, context=_on_app_context(
+                        [taken], request.user)).data,
+                    status=status.HTTP_201_CREATED)
             return _phone_taken_response(taken)
         # account is injected via save() so the client can never
         # spoof which tenant a new Player belongs to.
