@@ -1139,7 +1139,7 @@ class TournamentRoundRow extends StatelessWidget {
     final title = (word == 'Live' || word == 'Final') ? '$day · $word' : day;
     final sub = word == 'Set up'
         ? 'Not set up yet'
-        : (word == 'Groups open' ? 'Groups open · tee times may not be set' : round.courseName);
+        : (word == 'Groups open' ? 'Groups can still change' : round.courseName);
 
     final setupFirst = isStaff && round.status == 'pending';
     String? pill;

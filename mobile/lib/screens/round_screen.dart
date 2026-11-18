@@ -2315,11 +2315,9 @@ class _FoursomeCard extends StatelessWidget {
       sub: [range, live ? 'on the course' : (isComplete ? 'final' : 'not started')]
           .where((x) => x.isNotEmpty)
           .join(' · '),
-      trailing: live
-          ? 'Watch'
-          : (teeShort(foursome.teeTime) == null
-              ? null
-              : 'Tees ${teeShort(foursome.teeTime)}'),
+      // The tee time is already the tile on the left; only a live group
+      // gets a pill.
+      trailing: live ? 'Watch' : null,
       live: live,
       onTap: () {
         if (canEdit) {
