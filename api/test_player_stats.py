@@ -42,3 +42,22 @@ class PlayerStatsTests(_Base):
         d = self.c.get('/api/profile/summary/').data
         self.assertEqual(d['rounds'], 1)
         self.assertIsNotNone(d['since'])
+
+
+class MoneyCardTests(PlayerStatsTests):
+    test_scoring_money_and_people = None
+    test_unstaked_rounds_have_no_money = None
+    test_filters = None
+    test_profile_summary = None
+
+    def test_the_money_card_reads_the_stake_rounds_four_ways(self):
+        for mine in (3, 5, 3):
+            self._round(mine, 4)
+        m = self.c.get(self.stats).data['money']
+        self.assertEqual(len(m['series']), 3)
+        self.assertEqual(m['series'][-1], m['total'])
+        self.assertEqual(m['record'], {'won': 2, 'lost': 1})
+        for k in ('game', 'partner', 'opponent', 'course'):
+            self.assertIn(k, m['views'])
+        self.assertEqual(m['views']['course'][0]['name'], 'Tilden')
+        self.assertEqual(m['views']['opponent'][0]['name'], 'Pal Pal')

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../api/client.dart';
 import '../providers/auth_provider.dart';
 import '../theme/halved_brand.dart';
+import '../widgets/halved_marks.dart';
 import 'course_find_screen.dart';
 import 'player_list_screen.dart';
 import 'stats_screen.dart';
@@ -222,7 +223,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   : 'Not set — learned after a couple of rounds',
               action: 'Change',
               onTap: _changeHome),
-          row(tile(const Icon(Icons.bar_chart, color: Halved.brightMint), dark: true),
+          row(const StatsMark(size: 44),
               'Your stats', 'Scoring, money, games, courses, who you play',
               onTap: () => Navigator.of(context)
                   .push(MaterialPageRoute(builder: (_) => const StatsScreen()))),

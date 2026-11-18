@@ -11,6 +11,8 @@ import '../theme/halved_brand.dart';
 import '../utils/home_data.dart';
 import '../utils/shared_round.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/halved_marks.dart';
+import 'course_find_screen.dart';
 import 'profile_screen.dart';
 import 'stats_screen.dart';
 import 'casual_round_screen.dart';
@@ -135,6 +137,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (mounted) _refresh();
   }
 
+  /// Find a course; the pick becomes the home course and the bar goes away.
+  Future<void> _setHomeCourse() async {
+    final auth = context.read<AuthProvider>();
+    final me = auth.player;
+    if (me == null) return;
+    final r = await Navigator.of(context).push<CourseFindResult>(
+        MaterialPageRoute(builder: (_) => const CourseFindScreen()));
+    if (r == null || !mounted) return;
+    try {
+      auth.applyPlayer(
+          await auth.client.updatePlayer(me.id, homeCourseId: r.course.id));
+      if (mounted) setState(() {});
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not set your home course.')));
+      }
+    }
+  }
+
   Future<void> _newRound({List<int> ids = const [], String? game}) async {
     await Navigator.of(context).push(MaterialPageRoute(
         builder: (_) =>
@@ -232,6 +254,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         : null;
 
     return [
+      if (context.read<AuthProvider>().player?.homeCourseId == null) ...[
+        _HomeCourseBar(onTap: _setHomeCourse),
+        const SizedBox(height: 12),
+      ],
       _Header(
         greeting: h['greeting'] as String,
         context: updated == null
@@ -390,6 +416,50 @@ class _Header extends StatelessWidget {
         ),
         IconButton(icon: const Icon(Icons.menu), onPressed: onMenu),
       ]);
+}
+
+/// Shown first in the scrolling content (not pinned) until there is a home
+/// course.
+class _HomeCourseBar extends StatelessWidget {
+  final VoidCallback onTap;
+  const _HomeCourseBar({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: const Color(0xFFFFF4D9),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFF2C14E), width: 1.5)),
+            child: Row(children: [
+              const FlagMark(size: 32),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Set your home course', style: _head(14)),
+                  Text('New rounds start there when you’re not at a course.',
+                      style: Halved.body(color: const Color(0xFF6B5A2A))
+                          .copyWith(fontSize: 12)),
+                ]),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                    color: Halved.deepPine,
+                    borderRadius: BorderRadius.circular(18)),
+                child: Text('Set ›',
+                    style: Halved.body(color: Colors.white, weight: FontWeight.w800)),
+              ),
+            ]),
+          ),
+        ),
+      );
 }
 
 class _HeroCard extends StatelessWidget {

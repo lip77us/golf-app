@@ -138,6 +138,60 @@ def player_stats(account, player, *, window='20', course_id=None, game=None):
     games.sort(key=lambda e: -abs(e['net']))
     out['money'] = {'total': round(sum(e['net'] for e in games), 2), 'games': games}
 
+    # The Money card: the same stake-only rounds, read four ways.
+    money_rows = []   # (row, my_net) oldest -> newest
+    for r in reversed(rows):
+        if not r['staked'] or not r['sett']:
+            continue
+        mine = next((p['net'] for p in r['sett']['players']
+                     if p['player_id'] == player.id), None)
+        if mine is None:
+            continue
+        money_rows.append((r, mine))
+    run, series = 0.0, []
+    for _r, m in money_rows:
+        run += m
+        series.append(round(run, 2))
+    by_partner, by_opponent, by_course = {}, {}, {}
+    for r, m in money_rows:
+        by_course.setdefault(r['round'].course.name, [0.0, 0])
+        by_course[r['round'].course.name][0] += m
+        by_course[r['round'].course.name][1] += 1
+        for o in r['others']:
+            e = by_partner.setdefault(o.name, [0.0, 0])
+            e[0] += m
+            e[1] += 1
+        names = {o.id: o.name for o in r['others']}
+        for t in r['sett']['transfers']:
+            if t['from'] == player.id:
+                other, amt = names.get(t['to'], t['to_name']), -t['amount']
+            elif t['to'] == player.id:
+                other, amt = names.get(t['from'], t['from_name']), t['amount']
+            else:
+                continue
+            e = by_opponent.setdefault(other, [0.0, 0])
+            e[0] += amt
+            e[1] += 1
+
+    def _items(d):
+        out_ = [{'name': k, 'net': round(v[0], 2), 'rounds': v[1]}
+                for k, v in d.items()]
+        out_.sort(key=lambda e: -abs(e['net']))
+        return out_
+
+    out['money'].update({
+        'series': series,
+        'record': {'won': sum(1 for _r, m in money_rows if m > 0),
+                   'lost': sum(1 for _r, m in money_rows if m < 0)},
+        'views': {
+            'game': [{'name': g['label'], 'net': g['net'], 'rounds': g['rounds']}
+                     for g in games],
+            'partner': _items(by_partner),
+            'opponent': _items(by_opponent),
+            'course': _items(by_course),
+        },
+    })
+
     # Who you play — rounds together, how you do on net, money between you.
     pals = {}
     for r in rows:
