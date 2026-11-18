@@ -473,8 +473,12 @@ enum Sixes {
     static let muted    = Color(hex: 0x5C6B62)
     /// The mark's cream — the H, its flagstick leg, and the pennant.
     static let cream    = Color(hex: 0xF3F1EA)
-    static let blue     = Color(hex: 0x5AA7F5)
-    static let orange   = Color(hex: 0xF3A059)
+    /// **The sides are pine and clay** (`docs/color-standard.md`), as on every
+    /// other surface. The protocol still names them `blue` and `orange`: an
+    /// installed widget decodes those keys, so renaming them on the wire would
+    /// break every phone that has not updated. Only what they DRAW changed.
+    static let blue     = Color(hex: 0x3BD89A)   // pine, lifted for the dark card
+    static let orange   = Color(hex: 0xF2A86E)   // clay, lifted for the dark card
     static let plum     = Color(hex: 0xC9A6E8)
     /// Banker's two. **Gold marks the ROLE and does nothing else** — not a
     /// state, not a warning — and amber is the banker's counter-double, the

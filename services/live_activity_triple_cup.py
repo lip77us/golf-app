@@ -254,8 +254,8 @@ def _casual_sides(summary, live, hole, player_id, mine_is_t1) -> list:
                 {'names': _pairing(live, second), 'note': '',
                  'colour': theirs, 'leading': False}]
 
-    names = [summary.get('team1_name') or 'Blue',
-             summary.get('team2_name') or 'Orange']
+    names = [summary.get('team1_name') or 'Pine',
+             summary.get('team2_name') or 'Clay']
     if not mine_is_t1:
         names.reverse()
     return [{'names': names[0], 'note': 'v.', 'colour': mine, 'leading': True},

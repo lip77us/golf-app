@@ -173,7 +173,7 @@ def _state_slot(summary, row, player_id) -> dict:
         return {'word': f'{pts} PTS', 'to_play': word, 'colour': 'orange'}
 
     won_by_me = row.get('winner') == mine_key
-    side = 'BLUE' if won_by_me else 'ORANGE'
+    side = 'PINE' if won_by_me else 'CLAY'
     return {'word': f'{pts} PTS', 'to_play': f'{side}, LAST HOLE'}
 
 
