@@ -279,7 +279,7 @@ class _RoundScreenState extends State<RoundScreen> {
           : 'Live';
     }
     final mine = round.foursomes
-        .any((f) => f.youScore || (myId != null && f.containsPlayer(myId)));
+        .any((f) => f.isMine(myId));
     return RoundStatusStrip(
         text: text,
         live: live,
@@ -513,21 +513,21 @@ class _RoundScreenState extends State<RoundScreen> {
           ...(() {
             // Your group first, then the rest in draw order.
             if (round.isCupRound || myId == null) return round.foursomes;
-            final mine = [for (final f in round.foursomes) if (f.containsPlayer(myId)) f];
-            final rest = [for (final f in round.foursomes) if (!f.containsPlayer(myId)) f];
+            final mine = [for (final f in round.foursomes) if (f.isMine(myId)) f];
+            final rest = [for (final f in round.foursomes) if (!f.isMine(myId)) f];
             return [...mine, ...rest];
           })().indexed.map((e) {
                 final fs = e.$2;
                 final isHero = !round.isCupRound &&
                     (round.foursomes.length == 1 ||
-                        (myId != null && fs.containsPlayer(myId)));
+                        fs.isMine(myId));
                 // The label that opens the compact rows.
                 final firstOther = !round.isCupRound &&
                     !isHero &&
                     (e.$1 == 0 ||
                         (round.foursomes
                                 .where((f) =>
-                                    myId != null && f.containsPlayer(myId))
+                                    f.isMine(myId))
                                 .length ==
                             e.$1));
                 // Effective game list for this foursome: union of round-level
@@ -882,7 +882,7 @@ class _RoundScreenState extends State<RoundScreen> {
         if (!mounted || _autoDone) return;
         _autoDone = true;
         final mine = round.foursomes.firstWhere(
-            (f) => myId != null && f.containsPlayer(myId),
+            (f) => f.isMine(myId),
             orElse: () => round.foursomes.first);
         final go = _enterFor[mine.id];
         if (go == null) {
@@ -2254,7 +2254,7 @@ class _FoursomeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isCupRound) return _classic(context);
-    final mine = myPlayerId != null && foursome.containsPlayer(myPlayerId!);
+    final mine = foursome.isMine(myPlayerId);
     final canEdit = canManage || mine || foursome.youScore;
     return (mine || allFoursomes.length == 1)
         ? _hero(context, mine, canEdit)
@@ -2377,8 +2377,7 @@ class _FoursomeCard extends StatelessWidget {
   /// or a menu item, in one sheet, each once.
   Future<void> _showSettings(BuildContext context) async {
     final canEdit = canManage ||
-        (myPlayerId != null && foursome.containsPlayer(myPlayerId!)) ||
-        foursome.youScore;
+        foursome.isMine(myPlayerId);
     final merged = {...roundActiveGames, ...foursome.activeGames};
     final (cfgRoute, cfgArgs) = _editConfigTarget(merged, foursome, primaryGame);
     final primary = resolvePrimary(primaryGame, merged);

@@ -1257,6 +1257,11 @@ class Foursome {
   List<Membership> get realPlayers =>
       memberships.where((m) => !m.player.isPhantom).toList();
 
+  /// This is my group: I am in it, or (in somebody else's event, where my
+  /// golfer is a different row) I am the phone-matched scorer for it.
+  bool isMine(int? myPlayerId) =>
+      youScore || (myPlayerId != null && containsPlayer(myPlayerId));
+
   bool containsPlayer(int playerId) =>
       memberships.any((m) => m.player.id == playerId);
 
