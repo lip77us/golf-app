@@ -302,6 +302,32 @@ class _RoundScreenState extends State<RoundScreen> {
     if (rp.loadingRound) {
       return const Center(child: CircularProgressIndicator());
     }
+    // A golfer in somebody else's event who is not in any group yet gets the
+    // server's "No such round" — which means "nothing for you here yet", not
+    // a fault.
+    if (rp.error != null && rp.error!.toLowerCase().contains('no such round')) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.schedule, size: 40, color: Halved.muted),
+            const SizedBox(height: 12),
+            Text('This round isn’t set up yet',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            Text('The director hasn’t drawn the groups. Try again later.',
+                textAlign: TextAlign.center,
+                style: Halved.body(color: Halved.muted)),
+            const SizedBox(height: 16),
+            OutlinedButton(
+                onPressed: () => rp.loadRound(widget.roundId),
+                child: const Text('Check again')),
+          ]),
+        ),
+      );
+    }
     if (rp.error != null) {
       return ErrorView(
         message: rp.error!,
