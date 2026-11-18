@@ -27,7 +27,10 @@ import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/net_double_bogey_card.dart';
-import '../utils/add_halved_golfer.dart';
+import '../utils/add_players.dart';
+import '../widgets/add_players_body.dart';
+import '../widgets/all_golfers_sheet.dart';
+import '../widgets/new_golfer_sheet.dart';
 import '../utils/golfer_invite.dart';
 import '../widgets/course_bar.dart';
 import '../widgets/payout_config_field.dart';
@@ -37,7 +40,6 @@ import '../widgets/tee_assignment.dart';
 import 'better_ball_setup_screen.dart';
 import 'irish_rumble_setup_screen.dart'; // also exports LowNetSetupScreen
 import 'pink_ball_setup_screen.dart';
-import 'player_form_screen.dart';
 import 'ryder_cup_draft_screen.dart';
 import '../widgets/group_size_editor.dart';
 
@@ -649,11 +651,10 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   // ---- Step 2: Players ----
   List<PlayerProfile> _allPlayers = [];
   final Set<int>      _selectedIds = {};
-  String              _search = '';
+  /// Rounds shared with each golfer: the regulars and "played N times".
+  RoundCounts         _counts = const {};
   /// The player-search field. Owned here rather than by the step widget so it
   /// survives the step being rebuilt as the wizard moves.
-  final TextEditingController _playerSearchCtrl  = TextEditingController();
-  final FocusNode             _playerSearchFocus = FocusNode();
 
   // ---- Step 3: Drag-and-drop group assignment + per-player tee ----
   List<int>           _orderedPlayerIds = [];
@@ -742,8 +743,6 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
 
   @override
   void dispose() {
-    _playerSearchCtrl.dispose();
-    _playerSearchFocus.dispose();
     _nameCtrl.dispose();
     for (final c in _teamNameCtrls) c.dispose();
     for (final c in _teamBadgeCtrls) c.dispose();
@@ -796,6 +795,11 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           ..sort((a, b) => a.name.compareTo(b.name));
         _dataLoading = false;
       });
+      // Best effort: without it there are simply no regulars yet.
+      try {
+        final c = await context.read<AuthProvider>().client.getRegulars();
+        if (mounted) setState(() => _counts = c);
+      } catch (_) {}
     } catch (e) {
       if (mounted) {
         setState(() { _dataError = friendlyError(e); _dataLoading = false; });
@@ -849,23 +853,37 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     }
   }
 
-  /// Create a new login-less golfer inline, then select them.
-  Future<void> _addGolfer() async {
-    final created = await Navigator.of(context).push<PlayerProfile>(
-      MaterialPageRoute(builder: (_) => const PlayerFormScreen()),
+  Future<void> _openNewGolfer(String query) async {
+    final me = context.read<AuthProvider>().player;
+    final result = await showNewGolferSheet(
+      context,
+      seed: query,
+      myIndex: me == null ? null : double.tryParse(me.handicapIndex),
+      roster: _allPlayers,
+      counts: _counts,
     );
-    _selectCreatedGolfer(created);
-    if (created != null && mounted) {
-      await maybeOfferRoundSmsInvite(context, created,
+    if (result == null || !mounted) return;
+    _selectCreatedGolfer(result.player);
+    if (!result.existing) {
+      await maybeOfferRoundSmsInvite(context, result.player,
           courseName: _selectedCourse?.name);
     }
   }
 
-  /// Add an existing Halved member (not yet in my roster) by phone number,
-  /// then select them for the tournament.
-  Future<void> _addHalvedGolfer() async {
-    final created = await addHalvedGolferByPhone(context);
-    _selectCreatedGolfer(created);
+  void _openAllGolfers() {
+    final myId = context.read<AuthProvider>().player?.id;
+    showAllGolfersSheet(
+      context,
+      golfers: allGolfersOf(_allPlayers, _counts, meId: myId),
+      counts: _counts,
+      seatedIds: () => _selectedIds.toSet(),
+      onToggle: (p) => setState(() {
+        _selectedIds.contains(p.id)
+            ? _selectedIds.remove(p.id)
+            : _selectedIds.add(p.id);
+        _groupSizesOverride = null;
+      }),
+    );
   }
 
   void _selectCreatedGolfer(PlayerProfile? created) {
@@ -2076,7 +2094,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         return _Step2Players(
           players    : _allPlayers,
           selectedIds: _selectedIds,
-          search     : _search,
+          counts     : _counts,
           onToggle   : (id) => setState(() {
             _selectedIds.contains(id)
                 ? _selectedIds.remove(id)
@@ -2085,19 +2103,9 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             // stale; drop it so Step 3 reverts to the fresh auto-balance.
             _groupSizesOverride = null;
           }),
-          onSearch   : (s) => setState(() => _search = s),
-          searchController: _playerSearchCtrl,
-          searchFocusNode : _playerSearchFocus,
-          onSelectAll: () => setState(() {
-            _selectedIds.addAll(_allPlayers.map((p) => p.id));
-            _groupSizesOverride = null;
-          }),
-          onClearAll : () => setState(() {
-            _selectedIds.clear();
-            _groupSizesOverride = null;
-          }),
-          onAddByPhone: _addHalvedGolfer,
-          onAddGolfer:  _addGolfer,
+          onHalvedAdded: _selectCreatedGolfer,
+          onNewGolfer  : _openNewGolfer,
+          onAllGolfers : _openAllGolfers,
         );
       case _StepKind.groups:
         return _Step3GroupsAndTees(
@@ -4939,166 +4947,66 @@ class _PointsCell extends StatelessWidget {
 class _Step2Players extends StatelessWidget {
   final List<PlayerProfile> players;
   final Set<int>            selectedIds;
-  final String              search;
+  final RoundCounts         counts;
   final ValueChanged<int>   onToggle;
-  final ValueChanged<String> onSearch;
-  final VoidCallback onSelectAll;
-  final VoidCallback onClearAll;
-  final VoidCallback onAddByPhone;
-  final VoidCallback onAddGolfer;
-  /// Owned by the wizard so it survives step changes.
-  final TextEditingController searchController;
-  final FocusNode             searchFocusNode;
+  final ValueChanged<PlayerProfile> onHalvedAdded;
+  final ValueChanged<String> onNewGolfer;
+  final VoidCallback onAllGolfers;
 
   const _Step2Players({
     required this.players,
     required this.selectedIds,
-    required this.search,
+    required this.counts,
     required this.onToggle,
-    required this.onSearch,
-    required this.onSelectAll,
-    required this.onClearAll,
-    required this.onAddByPhone,
-    required this.onAddGolfer,
-    required this.searchController,
-    required this.searchFocusNode,
+    required this.onHalvedAdded,
+    required this.onNewGolfer,
+    required this.onAllGolfers,
   });
-
-  /// After ticking a name, leave the query up but SELECTED, so the next
-  /// keystroke replaces it.
-  ///
-  /// Clearing would be wrong: one search often matches two people worth
-  /// taking, and the list has to stay narrowed while both get ticked.
-  /// Selecting keeps the filter and still costs nothing to move on.
-  ///
-  /// Focus comes back only when the keyboard is already up — a TD scrolling
-  /// the roster to read it is not typing, and the keyboard springing back over
-  /// the list would be worse than the thing this fixes.
-  void _reselectSearch(BuildContext context) {
-    if (searchController.text.isEmpty) return;
-    if (MediaQuery.viewInsetsOf(context).bottom > 0 &&
-        !searchFocusNode.hasFocus) {
-      searchFocusNode.requestFocus();
-    }
-    searchController.selection = TextSelection(
-      baseOffset: 0, extentOffset: searchController.text.length);
-  }
 
   @override
   Widget build(BuildContext context) {
-    final filtered = search.isEmpty
-        ? players
-        : players
-            .where((p) => p.name.toLowerCase().contains(search.toLowerCase()))
-            .toList();
-
+    final seated = [
+      for (final id in selectedIds)
+        for (final p in players)
+          if (p.id == id) p
+    ];
     return Column(children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Select Players',
-              style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 4),
-          Text(
-            '${selectedIds.length} selected  •  '
-            '${groupSizes(selectedIds.length).length} group(s)  •  '
-            'Assign tees in the next step',
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: Colors.grey),
-          ),
-        ]),
-      ),
-
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(children: [
-          Expanded(
-            child: GolfTextField(
-              hint: 'Search players…',
-              prefixIcon: Icons.search,
-              controller: searchController,
-              focusNode: searchFocusNode,
-              // Names are not words. iOS otherwise offers to "correct"
-              // a surname to a dictionary word — the bubble with the ✕ under
-              // the field — and Steuernagel is not in the dictionary.
-              autocorrect: false,
-              enableSuggestions: false,
-              // One tap back to the whole roster. Typing over the query
-              // only re-filters it; this is the way out of a filter.
-              suffix: search.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const Icon(Icons.clear),
-                      tooltip: 'Clear',
-                      onPressed: () {
-                        searchController.clear();
-                        onSearch('');
-                      },
-                    ),
-              // Give the keyboard a working "done" — otherwise it can't be
-              // closed from the keyboard and covers the bottom action button.
-              textInputAction: TextInputAction.search,
-              onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
-              onChanged: onSearch,
-            ),
-          ),
-          const SizedBox(width: 8),
-          TextButton(onPressed: onSelectAll, child: const Text('All')),
-          TextButton(onPressed: onClearAll,  child: const Text('None')),
-        ]),
-      ),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Wrap(children: [
-          TextButton.icon(
-            onPressed: onAddGolfer,
-            icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
-            label: const Text('Add Golfer'),
-          ),
-          TextButton.icon(
-            onPressed: onAddByPhone,
-            icon: const Icon(Icons.phone_iphone, size: 18),
-            label: const Text('Halved Golfer search'),
-          ),
-        ]),
-      ),
-      const SizedBox(height: 4),
-
       Expanded(
-        child: filtered.isEmpty
-            ? const Center(child: Text('No players found.'))
-            : ListView.builder(
-                itemCount: filtered.length,
-                itemBuilder: (_, i) {
-                  final p   = filtered[i];
-                  final sel = selectedIds.contains(p.id);
-                  return CheckboxListTile(
-                    value    : sel,
-                    onChanged: (_) {
-                      onToggle(p.id);
-                      // Only on the way IN. Unchecking by mistake should not
-                      // disturb the search that found them.
-                      if (!sel) _reselectSearch(context);
-                    },
-                    title    : Text(p.name),
-                    subtitle : Text('Index ${p.handicapIndex}'),
-                    secondary: CircleAvatar(
-                      backgroundColor: sel
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.surfaceContainerHighest,
-                      child: Text(
-                        p.name.isNotEmpty ? p.name[0].toUpperCase() : '?',
-                        style: TextStyle(
-                          color: sel ? Colors.white : null,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
+        child: ListView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          children: [
+            Text('Select Players',
+                style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 4),
+            Text(
+              '${selectedIds.length} selected  •  '
+              '${groupSizes(selectedIds.length).length} group(s)  •  '
+              'Assign tees in the next step',
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            // The same circles screen a casual round uses: who is in, on top,
+            // then your regulars, search and the new-golfer card.
+            AddPlayersBody(
+              // A director is not necessarily playing: nobody is locked in.
+              me: null,
+              seated: seated,
+              seats: null,
+              minSeated: 2,
+              gameLabel: 'Tournament',
+              roster: players,
+              counts: counts,
+              onAdd: (p) => onToggle(p.id),
+              onRemove: (p) => onToggle(p.id),
+              onHalvedAdded: onHalvedAdded,
+              onNewGolfer: onNewGolfer,
+              onAllGolfers: onAllGolfers,
+            ),
+          ],
+        ),
       ),
-
       if (selectedIds.length < 2)
         Container(
           width: double.infinity,
