@@ -1334,6 +1334,8 @@ class Round {
   /// round hub to fetch the cup standings (live tally).
   final int? tournamentId;
   final String? tournamentName;
+  /// Nobody has teed off, so the groups can still be redrawn.
+  final bool canRegroup;
   /// Irish Rumble balls-per-segment config — list of
   /// {start_hole, end_hole, balls_to_count} maps.  Empty when IR is not active.
   final List<Map<String, dynamic>> irBallsConfig;
@@ -1391,6 +1393,7 @@ class Round {
     this.teamPlayBallCounts = const {},
     this.tournamentId,
     this.tournamentName,
+    this.canRegroup = false,
     this.irBallsConfig = const [],
     this.watchToken,
     this.canManage     = false,
@@ -1431,6 +1434,7 @@ class Round {
         },
         tournamentId: j['tournament_id'] as int?,
         tournamentName: j['tournament_name'] as String?,
+        canRegroup: j['can_regroup'] as bool? ?? false,
         watchToken:   j['watch_token']   as String?,
         canManage:    j['can_manage']    as bool?   ?? false,
         isCasual:       j['is_casual']        as bool? ?? false,

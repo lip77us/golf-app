@@ -9,6 +9,8 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import 'tee_times_screen.dart';
 import '../widgets/round_start.dart';
+import '../widgets/director_bar.dart';
+import 'director_screens.dart';
 import '../widgets/solo_board.dart';
 import '../widgets/cup_tally.dart';
 import '../widgets/error_view.dart';
@@ -149,8 +151,22 @@ class _RoundScreenState extends State<RoundScreen> {
           ),
         ],
       ),
+      // The tournament director's bar; a golfer never sees it.
       // Persistent bottom bar — always visible regardless of scroll position
-      bottomNavigationBar: round == null ? null : SafeArea(
+      bottomNavigationBar: round != null &&
+              round.canManage &&
+              round.tournamentId != null &&
+              !round.isCupRound
+          ? DirectorBar(
+              active: DirectorTab.round,
+              inRound: true,
+              onTap: (tab) => directorGo(context, tab,
+                  tournamentId: round.tournamentId!,
+                  tournamentName: round.tournamentName ?? 'Tournament',
+                  roundId: round.id,
+                  fromDirector: false),
+            )
+          : round == null ? null : SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
           child: isInProgress &&
@@ -822,6 +838,21 @@ class _RoundScreenState extends State<RoundScreen> {
                   },
                 )]);
               }),
+          if (round.canManage &&
+              round.tournamentId != null &&
+              !round.isCupRound &&
+              round.status == 'in_progress') ...[
+            const SizedBox(height: 12),
+            _CompleteRoundButton(
+              roundId: round.id,
+              isTeamPlayRound: round.isTeamPlayRound == true,
+              tournamentId: round.tournamentId,
+              submitting: rp.submitting,
+              allScored: round.allHolesScored,
+              unscoredHoles: round.holesUnscored,
+              awaitingHoles: round.holesAwaiting,
+            ),
+          ],
         ],
       ),
     );

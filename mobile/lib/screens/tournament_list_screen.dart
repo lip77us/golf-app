@@ -816,7 +816,7 @@ class _TournamentCard extends StatelessWidget {
               // men are not together all week. The server answers it, because
               // the real rule is that `HoleScore.foursome` is CASCADE and a
               // redraw after a score would delete the round.
-              ...tournament.rounds.map((r) => _RoundRow(
+              ...tournament.rounds.map((r) => TournamentRoundRow(
                     round: r,
                     isStaff: isStaff,
                     inPlay: identical(r, _roundInPlay),
@@ -1112,11 +1112,11 @@ String dayShort(String date, {bool monthless = false}) {
 
 /// One round inside a tournament card. One set of status words everywhere:
 /// Set up -> Groups open -> Live -> Final.
-class _RoundRow extends StatelessWidget {
+class TournamentRoundRow extends StatelessWidget {
   final RoundSummary round;
   final bool isStaff, inPlay;
   final VoidCallback onOpen, onSetup;
-  const _RoundRow({
+  const TournamentRoundRow({
     required this.round,
     required this.isStaff,
     required this.inPlay,
