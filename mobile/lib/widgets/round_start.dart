@@ -139,7 +139,15 @@ class RoundHero extends StatelessWidget {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          Flexible(child: Text(title, style: _head(24))),
+          // The name never breaks across lines: it shrinks to fit instead, and
+          // the tag keeps its own width.
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(title, maxLines: 1, softWrap: false, style: _head(24)),
+            ),
+          ),
           if (yourGroupTag) ...[
             const SizedBox(width: 10),
             Container(
