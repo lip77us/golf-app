@@ -12,6 +12,7 @@ import 'package:golf_mobile/providers/auth_provider.dart';
 import 'package:golf_mobile/utils/add_players.dart';
 import 'package:golf_mobile/widgets/add_players_body.dart';
 import 'package:golf_mobile/widgets/all_golfers_sheet.dart';
+import 'package:golf_mobile/widgets/index_tap_field.dart';
 import 'package:golf_mobile/widgets/new_golfer_sheet.dart';
 import 'package:golf_mobile/widgets/pool_sheet.dart';
 import 'package:provider/provider.dart';
@@ -611,11 +612,7 @@ void main() {
       await openSheet(t, seed: 'jo', myIndex: 10.0);
       expect(find.text('Leave blank and they play off scratch until it is set.'),
           findsOneWidget);
-      await t.enterText(
-          find.byWidgetPredicate((w) =>
-              w is TextField && w.decoration?.labelText == 'HANDICAP INDEX'),
-          '16');
-      await t.pump();
+      await _typeIndex(t, '16');
       expect(find.textContaining('strokes from you.', findRichText: true),
           findsOneWidget);
       expect(find.textContaining('Gets ', findRichText: true), findsOneWidget);
@@ -624,11 +621,7 @@ void main() {
     testWidgets('with no round to measure against there is no strokes claim',
         (t) async {
       await openSheet(t, seed: 'jo', myIndex: null);
-      await t.enterText(
-          find.byWidgetPredicate((w) =>
-              w is TextField && w.decoration?.labelText == 'HANDICAP INDEX'),
-          '16');
-      await t.pump();
+      await _typeIndex(t, '16');
       expect(find.textContaining('strokes', findRichText: true), findsNothing);
     });
 
@@ -880,3 +873,15 @@ void main() {
 }
 
 NewGolferResult? _result;
+
+/// The index field opens the number pad: tap it, key the digits, Save.
+Future<void> _typeIndex(WidgetTester t, String digits) async {
+  await t.tap(find.byType(IndexTapField));
+  await t.pumpAndSettle();
+  for (final d in digits.split('')) {
+    await t.tap(find.text(d).last);
+  }
+  await t.pump();
+  await t.tap(find.text('Save').last);
+  await t.pumpAndSettle();
+}

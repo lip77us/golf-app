@@ -23,6 +23,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../widgets/playing_hcp_sheet.dart';
 import '../widgets/error_view.dart';
 import '../widgets/tee_assignment.dart';
 
@@ -544,17 +545,32 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
         // Wide enough for the floating label — at 96 it clipped to "Playin…",
         // which reads as a broken field rather than a narrow one.
         width: 124,
-        child: TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.number,
-          textAlign: TextAlign.center,
-          decoration: const InputDecoration(
-            labelText: 'Playing hcp',
-            hintText:  'auto',
-            isDense: true,
-            border: OutlineInputBorder(),
+        child: InkWell(
+          key: Key('playing-hcp-${p.id}'),
+          borderRadius: BorderRadius.circular(4),
+          onTap: () async {
+            final r = await showPlayingHcpSheet(context,
+                name: p.name, current: ctrl.text);
+            if (r == null) return;
+            setState(() => ctrl.text = r);
+          },
+          child: InputDecorator(
+            // Never "empty": the label stays up and the field says auto.
+            isEmpty: false,
+            decoration: const InputDecoration(
+              labelText: 'Playing hcp',
+              hintText:  'auto',
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+            child: Text(
+                ctrl.text.trim().isEmpty ? 'auto' : ctrl.text.trim(),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                    color: ctrl.text.trim().isEmpty
+                        ? theme.colorScheme.onSurfaceVariant
+                        : null)),
           ),
-          onChanged: (_) => setState(() {}),
         ),
       ),
       const SizedBox(width: 10),

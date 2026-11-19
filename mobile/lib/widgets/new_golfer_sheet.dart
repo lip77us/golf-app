@@ -24,6 +24,8 @@ import '../providers/auth_provider.dart';
 import '../theme/halved_brand.dart';
 import '../utils/add_players.dart';
 import 'golfer_avatar.dart';
+import 'index_sheet.dart';
+import 'index_tap_field.dart';
 
 class NewGolferResult {
   final PlayerProfile player;
@@ -243,13 +245,16 @@ class _NewGolferSheetState extends State<NewGolferSheet> {
                       onChanged: (_) => setState(() {})),
                   _duplicates(),
                   const SizedBox(height: 16),
-                  _field('Handicap index', _index,
-                      keyboard: const TextInputType.numberWithOptions(
-                          decimal: true, signed: true),
-                      formatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.+\-]')),
-                      ],
-                      onChanged: (_) => setState(() {})),
+                  IndexTapField(
+                    controller: _index,
+                    name: name.isEmpty ? 'New golfer' : name,
+                    owner: IndexOwner.guest,
+                    myIndex: widget.myIndex,
+                    label: 'Handicap index',
+                    hint: 'Tap to enter (blank plays off scratch)',
+                    decoration: _indexDecoration(),
+                    onChanged: (_) => setState(() {}),
+                  ),
                   const SizedBox(height: 6),
                   _strokes(),
                   const SizedBox(height: 16),
@@ -289,6 +294,23 @@ class _NewGolferSheetState extends State<NewGolferSheet> {
           ]),
         ),
       ]);
+
+  /// The index field's look: the same as [_field], for a field that opens the
+  /// number pad instead of the keyboard.
+  InputDecoration _indexDecoration() => InputDecoration(
+        labelText: 'HANDICAP INDEX',
+        labelStyle: Halved.label(color: Halved.muted, weight: FontWeight.w700)
+            .copyWith(fontSize: 11, letterSpacing: 0.7),
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Halved.cardBorder, width: 1.5),
+        ),
+      );
 
   Widget _field(String label, TextEditingController c,
           {TextInputType? keyboard,

@@ -6,6 +6,7 @@ import '../api/client.dart';
 import '../providers/auth_provider.dart';
 import '../theme/halved_brand.dart';
 import '../widgets/halved_marks.dart';
+import '../widgets/index_sheet.dart';
 import 'course_find_screen.dart';
 import 'player_list_screen.dart';
 import 'stats_screen.dart';
@@ -46,32 +47,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final auth = context.read<AuthProvider>();
     final me = auth.player;
     if (me == null) return;
-    final ctrl = TextEditingController(text: me.handicapIndex);
-    final value = await showDialog<String>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Handicap index'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(
-              decimal: true, signed: true),
-          decoration: const InputDecoration(hintText: 'e.g. 12.1'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(c, ctrl.text.trim()),
-              child: const Text('Save')),
-        ],
-      ),
+    final r = await showIndexSheet(
+      context,
+      name: me.name,
+      currentStored: me.handicapIndex,
+      owner: IndexOwner.you,
+      myIndex: double.tryParse(me.handicapIndex),
     );
-    if (value == null || value == me.handicapIndex) return;
-    final idx = double.tryParse(value);
-    if (idx == null || idx < -10 || idx > 54) {
-      _snack('Enter a valid handicap index (-10 to 54).');
-      return;
-    }
+    if (r == null || r.stored == me.handicapIndex) return;
+    final value = r.stored;
     try {
       auth.applyPlayer(
           await auth.client.updatePlayer(me.id, handicapIndex: value));

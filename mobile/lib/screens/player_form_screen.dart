@@ -9,6 +9,8 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
+import '../widgets/index_sheet.dart';
+import '../widgets/index_tap_field.dart';
 
 class PlayerFormScreen extends StatefulWidget {
   /// Pass null to create a new player, or a PlayerProfile to edit.
@@ -220,12 +222,18 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
               const SizedBox(height: 16),
 
               // ---- Handicap Index ----
-              GolfTextField(
+              IndexTapField(
                 controller: _hcpCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                name: _nameCtrl.text.trim().isEmpty ? 'Golfer' : _nameCtrl.text.trim(),
+                owner: !_isEdit
+                    ? IndexOwner.saved
+                    : (widget.player!.isOnApp
+                        ? IndexOwner.halved
+                        : (widget.player!.isGuest ? IndexOwner.guest : IndexOwner.saved)),
+                myIndex: double.tryParse(
+                    context.read<AuthProvider>().player?.handicapIndex ?? ''),
                 label: 'Handicap Index',
-                hint: 'e.g. 14.2',
-                prefixIcon: Icons.golf_course,
+                hint: 'Tap to enter, e.g. 14.2',
                 helper: 'WHS index between -10.0 and 54.0',
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Handicap is required';

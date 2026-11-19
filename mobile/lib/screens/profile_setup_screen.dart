@@ -11,6 +11,8 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/golf_primary_button.dart';
 import '../widgets/golf_text_field.dart';
+import '../widgets/index_sheet.dart';
+import '../widgets/index_tap_field.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -185,25 +187,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                GolfTextField(
+                IndexTapField(
                   controller: _hcpCtrl,
+                  name: _nameCtrl.text.trim().isEmpty ? 'You' : _nameCtrl.text.trim(),
+                  owner: IndexOwner.you,
                   label: 'Handicap index',
-                  hint: 'e.g. 14.2',
+                  hint: 'Tap to enter, e.g. 14.2',
                   helper: 'Leave blank if you don\'t know it yet',
-                  prefixIcon: Icons.sports_golf_outlined,
-                  keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true, signed: true),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]')),
-                  ],
-                  validator: (v) {
-                    final t = (v ?? '').trim();
-                    if (t.isEmpty) return null;
-                    final n = double.tryParse(t);
-                    if (n == null) return 'Enter a number';
-                    if (n < -10 || n > 54) return 'Must be between -10 and 54';
-                    return null;
-                  },
                 ),
                 const SizedBox(height: 20),
 

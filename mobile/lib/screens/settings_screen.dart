@@ -16,6 +16,8 @@ import '../providers/auth_provider.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/course_bar.dart';
 import '../widgets/halved_mark.dart';
+import '../widgets/index_sheet.dart';
+import '../widgets/index_tap_field.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -351,15 +353,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: TextField(
+                child: IndexTapField(
                   controller: _indexCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true, signed: true),
+                  name: _nameCtrl.text.trim().isEmpty ? 'You' : _nameCtrl.text.trim(),
+                  owner: IndexOwner.you,
+                  label: 'Handicap index',
                   onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
-                    labelText: 'Handicap index',
-                    border: OutlineInputBorder(),
-                  ),
                 ),
               ),
             ],
