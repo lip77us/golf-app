@@ -216,7 +216,7 @@ class _IndexSheetState extends State<IndexSheet> {
           keyRow([key('7', '7'), key('8', '8'), key('9', '9')]),
           keyRow([
             key('+ / .', '+.',
-                child: Text('+ / .',
+                child: Text(_typed.isEmpty ? '+ / .' : '.',
                     style: Halved.body(
                         color: Halved.muted, weight: FontWeight.w700))),
             key('0', '0'),

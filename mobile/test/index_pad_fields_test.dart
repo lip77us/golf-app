@@ -12,6 +12,7 @@ import 'package:golf_mobile/widgets/index_tap_field.dart';
 import 'package:golf_mobile/widgets/playing_hcp_sheet.dart';
 
 void main() {
+  padKeyLabelTests();
   group('the playing handicap pad', () {
     test('digits append, two at most, a leading zero is dropped', () {
       expect(playingHcpKey('', '1'), '1');
@@ -155,5 +156,29 @@ void main() {
         }
       });
     }
+  });
+}
+
+// The pad's first key is "+ / ." only until something is typed: a plus
+// handicap can only be started on an empty pad, so after that it is just a dot.
+void padKeyLabelTests() {
+  group('the +/. key', () {
+    testWidgets('reads + / . on an empty pad and . once anything is typed',
+        (t) async {
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: IndexSheet(
+              name: 'Dave',
+              currentStored: null,
+              owner: IndexOwner.guest,
+              myIndex: null),
+        ),
+      ));
+      expect(find.text('+ / .'), findsOneWidget);
+      await t.tap(find.text('1'));
+      await t.pump();
+      expect(find.text('+ / .'), findsNothing);
+      expect(find.text('.'), findsOneWidget);
+    });
   });
 }
