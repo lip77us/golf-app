@@ -32,6 +32,10 @@
               <span class="m-seg-label">{{ seg.label }}</span>
               <span class="m-seg-text {{ seg.leader }}">{{ seg.text }}</span>
             </div>
+            {% if seg.strip %}<div class="cl-strip">{% for cell in seg.strip %}<span class="{{ cell.cls }}">{{ cell.num }}</span>{% endfor %}</div>{% endif %}
+          {% endfor %}
+          {% for pr in c.top_presses %}
+            <div class="m-seg"><span class="m-seg-label">{{ pr.label }}</span><span class="m-seg-text {{ pr.leader }}">{{ pr.text }}</span></div>
           {% endfor %}
         </div>
         <div style="margin-top:14px;">
@@ -41,9 +45,20 @@
               <span class="m-seg-label">{{ seg.label }}</span>
               <span class="m-seg-text {{ seg.leader }}">{{ seg.text }}</span>
             </div>
+            {% if seg.strip %}<div class="cl-strip">{% for cell in seg.strip %}<span class="{{ cell.cls }}">{{ cell.num }}</span>{% endfor %}</div>{% endif %}
+          {% endfor %}
+          {% for pr in c.bottom_presses %}
+            <div class="m-seg"><span class="m-seg-label">{{ pr.label }}</span><span class="m-seg-text {{ pr.leader }}">{{ pr.text }}</span></div>
           {% endfor %}
         </div>
-        {% if c.money_each %}<div class="m-money">Money each: {{ c.money_each }}</div>{% endif %}
+        {% if c.ledger %}
+          <div style="margin-top:14px;">
+            <div class="m-seg-label" style="font-weight:700;">Money each · {{ c.ledger_note }}</div>
+            {% for r in c.ledger %}
+              <div class="m-seg"><span class="m-seg-label">{{ r.name }}</span><span class="m-seg-text cl-{{ r.cls }}">{{ r.text }}</span></div>
+            {% endfor %}
+          </div>
+        {% endif %}
         <p class="teaser" style="margin-top:12px;"><a href="https://halved.golf/games/claremont/">New to Claremont? How it works ›</a></p>
       {% elif c.is_match %}
         {% if c.status %}<div class="m-status {{ c.leader }}">{{ c.status }}</div>{% endif %}

@@ -200,6 +200,13 @@
     .m-seg:first-of-type { border-top: 0; }
     .m-seg-label { color: var(--muted); font-size: 13px; }
     .m-seg-text { font-weight: 700; }
+    .cl-strip { display: grid; grid-template-columns: repeat(9, 1fr); gap: 3px; margin: 2px 0 8px; }
+    .cl-strip span { text-align: center; font-size: 10.5px; font-weight: 700; padding: 4px 0; border-radius: 6px; color: var(--muted); background: transparent; box-shadow: inset 0 0 0 1px var(--border); }
+    .cl-strip span.team1 { background: #1565c0; color: #fff; box-shadow: none; }
+    .cl-strip span.team2 { background: #e65100; color: #fff; box-shadow: none; }
+    .cl-strip span.half { background: #eaf0ea; color: var(--fg); box-shadow: none; }
+    .m-seg-text.cl-up { color: #0f6e56; }
+    .m-seg-text.cl-dn { color: #9a3412; }
     .m-seg-text.team1 { color: #1565c0; }
     .m-seg-text.team2 { color: #e65100; }
     .teaser { text-align: center; color: var(--muted); font-size: 13px; margin: 4px 0 0; }

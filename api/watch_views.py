@@ -1765,6 +1765,7 @@ def _claremont_watch(card: dict, s: dict, t1: str, t2: str, bet: float) -> None:
     and the money. Fills `card` in place; the template branches on
     `claremont`."""
     card['claremont'] = True
+    card['final'] = (s.get('overall') or {}).get('result') is not None
     ov = s.get('overall') or {}
     margin = ov.get('margin') or 0
     who = t1 if margin > 0 else (t2 if margin < 0 else '')
@@ -1796,6 +1797,70 @@ def _claremont_watch(card: dict, s: dict, t1: str, t2: str, bet: float) -> None:
         pts('Back 9', s.get('bottom_back9') or {}),
         pts('Overall', bo),
     ]
+    # Hole strips: a cell a hole, per nine. Top is blue / orange for the side
+    # that won the hole; bottom is blue / orange only where a side took BOTH
+    # points and plain where the points split. A hole not yet played is blank.
+    by_hole = {h['hole']: h for h in (s.get('holes') or [])}
+
+    def strip(nine, bottom):
+        cells = []
+        for n in range(1, 10) if nine == 'front' else range(10, 19):
+            h = by_hole.get(n)
+            cls = ''
+            if h is not None:
+                if bottom:
+                    d = h.get('bottom_delta')
+                    cls = ('team1' if d == 2 else 'team2' if d == -2
+                           else ('half' if d is not None else ''))
+                else:
+                    w = h.get('winner')
+                    cls = (w if w in ('team1', 'team2')
+                           else ('half' if w is not None else ''))
+            cells.append({'num': n, 'cls': cls})
+        return cells
+    for seg, nine in zip(card['segments'], ('front', 'back', None)):
+        if nine:
+            seg['strip'] = strip(nine, False)
+    for seg, nine in zip(card['bottom_segments'], ('front', 'back', None)):
+        if nine:
+            seg['strip'] = strip(nine, True)
+
+    # Presses, as their own rows once called.
+    def press_rows(presses, bottom):
+        rows = []
+        for p in presses:
+            m = p.get('margin') or 0
+            res = p.get('result')
+            kind = 'Auto press' if p.get('press_type') == 'auto' else 'Press'
+            if m == 0:
+                text = 'All square'
+            elif bottom:
+                text = f'{t1 if m > 0 else t2} +{abs(m)} pts'
+            else:
+                text = f'{t1 if m > 0 else t2} {abs(m)} UP'
+            rows.append({'label': f'{kind} {p.get("start_hole")}–{p.get("end_hole")}',
+                         'text': text + (' · final' if res else ''),
+                         'leader': 'team1' if m > 0 else ('team2' if m < 0 else '')})
+        return rows
+    card['top_presses'] = press_rows(s.get('presses') or [], False)
+    card['bottom_presses'] = press_rows(s.get('bottom_presses') or [], True)
+
+    # Money each, one line a golfer.
+    teams = s.get('teams') or {}
+    ledger = []
+    for key, sign in (('team1', 1), ('team2', -1)):
+        for pl in teams.get(key) or []:
+            pay = s.get('payouts') or {}
+            # "If it ended now": the live figure until the round is settled.
+            amt = sign * float((pay.get('total_capped') if card['final']
+                                else pay.get('live_total')) or 0)
+            ledger.append({'name': pl.get('name') or pl.get('short_name') or '',
+                           'text': (('+' if amt > 0 else '−' if amt < 0 else '')
+                                    + f'${abs(amt):,.0f}'),
+                           'cls': 'up' if amt > 0 else ('dn' if amt < 0 else '')})
+    card['ledger'] = ledger
+    card['ledger_note'] = 'final' if card['final'] else 'if it ended now'
+
     # Money each: the settled figure (presses included, loss cap applied) from
     # the winning side's view. Zero is no line at all.
     total = float((s.get('payouts') or {}).get('total_capped') or 0)
