@@ -149,7 +149,7 @@ def _team_palette(colour_name, fallback_fg: str, fallback_bg: str) -> dict:
     """Resolve a cup TournamentTeam.colour string ("Green", "Purple",
     …) to {fg, bg} hex codes for CSS.  Returns the fallback when the
     name is empty or unknown — keeps casual rounds (no cup team) on
-    the page's default orange/blue scheme."""
+    the page's default pine/clay scheme."""
     name = (colour_name or '').strip().lower()
     fg, bg = _TEAM_PALETTE.get(name, (fallback_fg, fallback_bg))
     return {'fg': fg, 'bg': bg}
@@ -703,8 +703,8 @@ def _render_casual_triple_cup(request, round_obj, token: str, tabs: list):
             })
         groups.append({
             'group_number': fs.group_number,
-            't1_name'   : (s.get('team1_name') or 'Blue'),
-            't2_name'   : (s.get('team2_name') or 'Orange'),
+            't1_name'   : (s.get('team1_name') or 'Pine'),
+            't2_name'   : (s.get('team2_name') or 'Clay'),
             't1_points' : overall.get('team1_points', 0),
             't2_points' : overall.get('team2_points', 0),
             'possible'  : overall.get('points_available', 0),
@@ -1797,8 +1797,8 @@ def _claremont_watch(card: dict, s: dict, t1: str, t2: str, bet: float) -> None:
         pts('Back 9', s.get('bottom_back9') or {}),
         pts('Overall', bo),
     ]
-    # Hole strips: a cell a hole, per nine. Top is blue / orange for the side
-    # that won the hole; bottom is blue / orange only where a side took BOTH
+    # Hole strips: a cell a hole, per nine. Top is pine / clay for the side
+    # that won the hole; bottom is pine / clay only where a side took BOTH
     # points and plain where the points split. A hole not yet played is blank.
     by_hole = {h['hole']: h for h in (s.get('holes') or [])}
 
