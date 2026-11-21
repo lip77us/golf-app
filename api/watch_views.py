@@ -1754,7 +1754,53 @@ def _nassau_watch_card(s: dict) -> dict:
         if s.get('play_front'):   card['segments'].append(seg('Front 9', s['front9'], 9))
         if s.get('play_back'):    card['segments'].append(seg('Back 9',  s['back9'],  9))
         if s.get('play_overall'): card['segments'].append(seg('Overall', s['overall'], 18))
+    if (s.get('variant') or '').lower() == 'claremont':
+        _claremont_watch(card, s, t1, t2, bet)
     return card
+
+
+def _claremont_watch(card: dict, s: dict, t1: str, t2: str, bet: float) -> None:
+    """Claremont's watch card: the top overall as the hero with the bottom's
+    points under it, then the two games — top in holes, bottom in points —
+    and the money. Fills `card` in place; the template branches on
+    `claremont`."""
+    card['claremont'] = True
+    ov = s.get('overall') or {}
+    margin = ov.get('margin') or 0
+    who = t1 if margin > 0 else (t2 if margin < 0 else '')
+    card['hero'] = (f'{who} {abs(margin)} UP' if margin else 'All square')
+    card['hero_leader'] = 'team1' if margin > 0 else ('team2' if margin < 0 else '')
+
+    bo = s.get('bottom_overall') or {}
+    bm = bo.get('margin') or 0
+    bwho = t1 if bm > 0 else (t2 if bm < 0 else '')
+    card['hero_sub'] = (f'and {"+" if bm else ""}{abs(bm)} point'
+                        f'{"" if abs(bm) == 1 else "s"} on the bottom'
+                        if bm else 'and all square on the bottom')
+    card['hero_sub_leader'] = 'team1' if bm > 0 else ('team2' if bm < 0 else '')
+
+    def pts(label, d):
+        m = d.get('margin') or 0
+        holes = d.get('holes_played') or 0
+        res = d.get('result')
+        if holes <= 0:
+            text = 'Not started'
+        elif m == 0:
+            text = 'All square' if res is None else 'Halved'
+        else:
+            text = f'{t1 if m > 0 else t2} +{abs(m)} pts'
+        return {'label': label, 'text': text,
+                'leader': 'team1' if m > 0 else ('team2' if m < 0 else '')}
+    card['bottom_segments'] = [
+        pts('Front 9', s.get('bottom_front9') or {}),
+        pts('Back 9', s.get('bottom_back9') or {}),
+        pts('Overall', bo),
+    ]
+    # Money each: the settled figure (presses included, loss cap applied) from
+    # the winning side's view. Zero is no line at all.
+    total = float((s.get('payouts') or {}).get('total_capped') or 0)
+    card['money_each'] = (
+        f'{t1 if total > 0 else t2}  +${abs(total):,.0f} each' if total else '')
 
 
 def _render_casual_nassau(request, round_obj, token: str, tabs: list):
@@ -1781,6 +1827,7 @@ def _render_casual_nassau(request, round_obj, token: str, tabs: list):
         'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'is_match':     _nassau_is_match(round_obj),
+        'game_label':   'Claremont' if _nassau_is_claremont(round_obj) else '',
         'groups':       groups,
         'refresh_secs': 30,
         'tabs':         tabs,

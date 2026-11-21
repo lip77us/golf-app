@@ -22,7 +22,30 @@
         <div class="m-thru">Thru {{ c.thru }}</div>
       {% endif %}
 
-      {% if c.is_match %}
+      {% if c.claremont %}
+        <div class="m-status {{ c.hero_leader }}">{{ c.hero }}</div>
+        <div class="m-thru" style="text-align:center;">{{ c.hero_sub }}</div>
+        <div style="margin-top:14px;">
+          <div class="m-seg-label" style="font-weight:700;">Top · low ball</div>
+          {% for seg in c.segments %}
+            <div class="m-seg">
+              <span class="m-seg-label">{{ seg.label }}</span>
+              <span class="m-seg-text {{ seg.leader }}">{{ seg.text }}</span>
+            </div>
+          {% endfor %}
+        </div>
+        <div style="margin-top:14px;">
+          <div class="m-seg-label" style="font-weight:700;">Bottom · both balls, 2 points a hole</div>
+          {% for seg in c.bottom_segments %}
+            <div class="m-seg">
+              <span class="m-seg-label">{{ seg.label }}</span>
+              <span class="m-seg-text {{ seg.leader }}">{{ seg.text }}</span>
+            </div>
+          {% endfor %}
+        </div>
+        {% if c.money_each %}<div class="m-money">Money each: {{ c.money_each }}</div>{% endif %}
+        <p class="teaser" style="margin-top:12px;"><a href="https://halved.golf/games/claremont/">New to Claremont? How it works ›</a></p>
+      {% elif c.is_match %}
         {% if c.status %}<div class="m-status {{ c.leader }}">{{ c.status }}</div>{% endif %}
         {% if c.money %}<div class="m-money">{{ c.money }}</div>{% endif %}
       {% else %}
