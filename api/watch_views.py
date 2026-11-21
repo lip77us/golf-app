@@ -737,6 +737,14 @@ def _nassau_is_match(round_obj) -> bool:
     real = sum(1 for m in g.foursome.memberships.all() if not m.player.is_phantom)
     return real == 2
 
+def _nassau_is_claremont(round_obj) -> bool:
+    """A saved Nassau whose variant is claremont is named Claremont."""
+    from games.models import NassauGame
+    return NassauGame.objects.filter(foursome__round=round_obj,
+                                     game_type='nassau',
+                                     variant='claremont').exists()
+
+
 def _has_casual_match_play(round_obj) -> bool:
     """A non-cup match-play bracket (single-elim or three-player) on any
     foursome. (Cup match play renders under the cup's Matches/Four Ball tabs.)"""
@@ -961,7 +969,9 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
     if _has_casual_nassau(round_obj):
         tabs.append({
             'key': 'nassau',
-            'label': 'Singles Match' if _nassau_is_match(round_obj) else 'Nassau',
+            'label': ('Singles Match' if _nassau_is_match(round_obj)
+                      else 'Claremont' if _nassau_is_claremont(round_obj)
+                      else 'Nassau'),
             'url': f'{base}?view=nassau',
             'active': current == 'nassau',
         })
