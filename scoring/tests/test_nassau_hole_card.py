@@ -772,3 +772,12 @@ class ClaremontFixtureRegenTests(_CardBase):
         self.assertTrue(card['claremont'])
         self.assertEqual(card['bottom']['points'], 1)
         self._write('nassau_hole7_claremont.json', card)
+
+
+class ClaremontTitleTests(TestCase):
+    """The tray names the game by its variant: Claremont is its own game in
+    the picker and a Nassau with variant='claremont' on the server."""
+
+    def test_the_tray_title_follows_the_variant(self):
+        src = open('services/nassau.py').read()
+        self.assertIn("'Claremont' if summary.get('variant') == 'claremont'", src)

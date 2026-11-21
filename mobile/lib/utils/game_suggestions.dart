@@ -75,6 +75,7 @@ const Map<String, List<String>> kGameOrder = {
     GameIds.wolf,
     GameIds.sequoyaThrees,
     GameIds.vegas,
+    GameIds.claremont,
     GameIds.banker,
     GameIds.tripleCup,
     GameIds.matchPlay,

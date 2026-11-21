@@ -2473,7 +2473,9 @@ def nassau_hole_card(foursome, hole: int, game_type: str = None) -> dict:
         # What the tray calls the game, and which line its Press button
         # sits on — the last one, which is `OVERALL` on a Nassau and the
         # only one on a Nassau Nine.
-        'title'       : 'Nassau Nine' if single else 'Nassau',
+        'title'       : ('Nassau Nine' if single else
+                         'Claremont' if summary.get('variant') == 'claremont'
+                         else 'Nassau'),
         'press_line'  : 'match' if single else 'overall',
         'thru'        : pos + 1,
         'stake'       : bet_unit,

@@ -19,6 +19,11 @@
   "published": "2026-09-13",
   "modified": "2026-11-20"
  },
+ "games/claremont/index.html": {
+  "hash": "f8127c2af4e7bd61",
+  "published": "2026-11-21",
+  "modified": "2026-11-21"
+ },
  "games/dream-round/index.html": {
   "hash": "16c4bb1474bfb026",
   "published": "2026-09-29",
@@ -35,9 +40,9 @@
   "modified": "2026-10-15"
  },
  "games/index.html": {
-  "hash": "d3dbbc5f635ceaaf",
+  "hash": "7ad216c137a8a927",
   "published": "2026-09-13",
-  "modified": "2026-11-03"
+  "modified": "2026-11-21"
  },
  "games/irish-rumble/index.html": {
   "hash": "0e764847c704cd76",
@@ -55,9 +60,9 @@
   "modified": "2026-09-29"
  },
  "games/nassau/index.html": {
-  "hash": "070471ddb0633390",
+  "hash": "09037301a8e6026b",
   "published": "2026-09-13",
-  "modified": "2026-11-20"
+  "modified": "2026-11-21"
  },
  "games/pink-ball/index.html": {
   "hash": "9a1f146aff9f754c",
@@ -130,9 +135,9 @@
   "modified": "2026-10-30"
  },
  "index.html": {
-  "hash": "a1e027f380b6ca5b",
+  "hash": "97cbf6bf262601bb",
   "published": "2026-06-08",
-  "modified": "2026-11-20"
+  "modified": "2026-11-21"
  },
  "privacy.html": {
   "hash": "a669c5ae62b67cf0",

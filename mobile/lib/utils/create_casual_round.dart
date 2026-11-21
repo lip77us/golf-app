@@ -108,6 +108,8 @@ class CasualRoundLaunch {
       return ('/annandale-friday-setup', fsArg());
     case GameIds.nassau:
       return ('/nassau-setup', fsArg());
+    case GameIds.claremont:
+      return ('/claremont-setup', fsArg()); // Nassau with variant='claremont'
     case GameIds.match18:
       return ('/nassau-setup-18', fsArg()); // Overall-only Nassau
     case GameIds.nassauNine:
@@ -151,12 +153,17 @@ Future<CasualRoundLaunch> createCasualRound({
 
   // match_18 (Singles Match) is now its OWN slug + game_type, so it can coexist
   // with a team Nassau in the same round (the "Larry case").
-  final storedPrimary = primaryGame;
+  //
+  // Claremont is its own game in the picker and a Nassau on the server, so the
+  // round is stored as `nassau` (the setup screen posts the variant).
+  String? asStored(String? g) => g == GameIds.claremont ? GameIds.nassau : g;
+  final storedPrimary = asStored(primaryGame);
+  final storedGames = {for (final g in activeGames) asStored(g)!};
 
   final round = await client.createRound(
     courseId: courseId,
     date: dateStr,
-    activeGames: activeGames.toList(),
+    activeGames: storedGames.toList(),
     primaryGame: storedPrimary,
     numHoles: numHoles,
     startingHole: startingHole,

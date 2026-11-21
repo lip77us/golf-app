@@ -16,6 +16,10 @@ class GameIds {
   static const String points531  = 'points_531';
   static const String nassau     = 'nassau';
   static const String nassauNine = 'nassau_nine';
+  /// Claremont — a game of its own in the PICKER, but stored as a Nassau with
+  /// `variant='claremont'` (a round never holds this id: createCasualRound
+  /// translates it to `nassau`, and the setup screen posts the variant).
+  static const String claremont  = 'claremont';
   /// Triple Nassau — three players, three simultaneous 1v1 Nassaus (a
   /// round-robin) from one setup.  Each pair is handicapped on its own two
   /// players; settlement nets each player's two matches.
@@ -423,7 +427,7 @@ const List<GameMeta> kGameCatalog = [
     sizes       : {2, 4},
     // Nassau and Sixes are mutually exclusive AS CO-PRIMARIES (both own the
     // front-9 / back-9 team-bet structure).  Skins can run alongside Nassau.
-    excludes    : {GameIds.sixes, GameIds.points531},
+    excludes    : {GameIds.sixes, GameIds.points531, GameIds.claremont},
     // …but a 2-man Nassau can ride as a SUBSET side bet over 2 of the foursome
     // alongside any primary (e.g. low-stakes Sixes for four + a bigger Nassau
     // between two gamblers).  It owns its own handicap (gross included) and
@@ -492,6 +496,25 @@ const List<GameMeta> kGameCatalog = [
     canBeSubsetSideGame: true,
   ),
   GameMeta(
+    id          : GameIds.claremont,
+    displayName : 'Claremont',
+    summary      : "Two Nassaus at once: low ball on top, both balls for points underneath",
+    casual      : true,
+    hasLiveActivity: true,
+    // Exactly the Nassau engine with variant='claremont': four golfers, two
+    // sides of two, automatic presses, no cap. Needs a full 18 for its
+    // front / back bets.
+    requiresFullRound: true,
+    allowsSideGames: false,
+    hostsOverlaySideGames: true,
+    exactPlayers: 4,
+    sizes       : {4},
+    // The same match on the same four scores as Nassau and Nassau Nine, so
+    // only one of them can be the game. A Singles Match alongside is fine.
+    excludes    : {GameIds.nassau, GameIds.nassauNine,
+                   GameIds.sixes, GameIds.points531},
+  ),
+  GameMeta(
     id          : GameIds.nassauNine,
     displayName : 'Nassau Nine',
     summary      : "One match over nine holes, with presses",
@@ -504,7 +527,7 @@ const List<GameMeta> kGameCatalog = [
     minPlayers  : 2,
     maxPlayers  : 4,
     sizes       : {2, 4},
-    excludes    : {GameIds.nassau, GameIds.match18,
+    excludes    : {GameIds.nassau, GameIds.match18, GameIds.claremont,
                    GameIds.sixes, GameIds.points531},
     hasLiveActivity: true,
   ),

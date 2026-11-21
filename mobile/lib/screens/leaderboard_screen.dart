@@ -858,6 +858,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     // (2-v-2 Overall-only is Fourball, not a Singles Match, so require one
     // player per side.)  Skipped when a real match_18 tab is present, so the
     // two tabs don't both read "Singles Match".
+    // A saved Nassau whose variant is claremont is Claremont: the game has its
+    // own name in the picker, so every board that names it must agree.
+    if (g == 'nassau') {
+      final gs =
+          ((lb?.games['nassau']?.data as Map?)?['by_group'] as List?) ?? const [];
+      final v = gs.isNotEmpty
+          ? (((gs.first as Map?)?['summary'] as Map?)?['variant'])
+          : null;
+      if (v == 'claremont') return 'Claremont';
+    }
     if (g == 'nassau' && !(lb?.games.containsKey('match_18') ?? false)) {
       final groups =
           ((lb?.games['nassau']?.data as Map?)?['by_group'] as List?) ?? const [];

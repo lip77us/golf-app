@@ -3055,7 +3055,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       String label = gameDisplayName(g);
       if (_isNassauFamily(g) && nas != null) {
         final modeStr = _modeLabel(nas.handicapMode, nas.netPercent);
-        final base = nas.isEighteenHoleMatch ? 'Singles Match' : label;
+        final base = nas.isClaremont
+            ? 'Claremont'
+            : nas.isEighteenHoleMatch ? 'Singles Match' : label;
         label = '$base ($modeStr)';
       } else if (g == 'skins' && sk != null) {
         final modeStr = _modeLabel(sk.handicapMode, sk.netPercent);

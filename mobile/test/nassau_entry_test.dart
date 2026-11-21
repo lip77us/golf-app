@@ -287,8 +287,8 @@ void main() {
       expect(find.text('HOLE'), findsOneWidget);
       expect(find.text('TOP'), findsOneWidget);
       expect(find.text('BOTTOM'), findsOneWidget);
-      expect(find.text('low v low · 1 pt · press at 2 down'), findsOneWidget);
-      expect(find.text('low + high · 2 pts · press at 4 down'),
+      expect(find.text('low ball · 1 pt a hole · press at 2 down'), findsOneWidget);
+      expect(find.text('low + high ball · 2 pts a hole · press at 4 down'),
           findsOneWidget);
       // Pine took the high ball, so the hole paid them one point.
       expect(find.text('+1'), findsWidgets);

@@ -151,7 +151,7 @@ class _MatchCard extends StatelessWidget {
         _Header(card: card),
         if (card.claremont) ...[
           const SizedBox(height: 10),
-          const _SubHead('TOP', 'low v low · 1 pt · press at 2 down'),
+          const _SubHead('TOP', 'low ball · 1 pt a hole · press at 2 down'),
         ],
         for (final l in card.lines)
           _Line(line: l, card: card, side: 'top',
@@ -159,7 +159,7 @@ class _MatchCard extends StatelessWidget {
                 onPress: onPress, pressing: pressing),
         if (card.bottom != null) ...[
           const SizedBox(height: 10),
-          const _SubHead('BOTTOM', 'low + high · 2 pts · press at 4 down'),
+          const _SubHead('BOTTOM', 'low + high ball · 2 pts a hole · press at 4 down'),
           const SizedBox(height: 4),
           _Balls(bottom: card.bottom!),
           const SizedBox(height: 2),

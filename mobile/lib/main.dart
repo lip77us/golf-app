@@ -803,6 +803,11 @@ class _GolfAppState extends State<GolfApp> {
               foursomeId: _routeId(settings.arguments),
               overallOnly: true,
               returnToHub: _routeReturnToHub(settings.arguments)));
+      case '/claremont-setup':
+        return page((_) => NassauSetupScreen(
+              foursomeId: _routeId(settings.arguments),
+              claremont: true,
+              returnToHub: _routeReturnToHub(settings.arguments)));
       case '/nassau-nine-setup':
         return page((_) => NassauSetupScreen(
               foursomeId: _routeId(settings.arguments),

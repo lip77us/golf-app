@@ -39,6 +39,12 @@ class NassauSetupScreen extends StatefulWidget {
   /// Posts single_match=true; the UI collapses to one bet like overallOnly.
   final bool singleMatch;
 
+  /// When true, this is "Claremont": a Nassau with variant='claremont', four
+  /// golfers in two pairs, presses always on and automatic (worth the stake),
+  /// no loss cap. A saved game whose variant is claremont reopens in this mode
+  /// whichever route reached it.
+  final bool claremont;
+
   /// When true, this screen was opened from round creation or the launch
   /// page's "Edit Configuration" action: it stays on the form even when the
   /// game is already configured (instead of bouncing to score entry), and
@@ -48,6 +54,7 @@ class NassauSetupScreen extends StatefulWidget {
   const NassauSetupScreen({
     super.key, required this.foursomeId, this.overallOnly = false,
     this.singleMatch = false,
+    this.claremont = false,
     this.returnToHub = false,
   });
 
@@ -77,6 +84,9 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
   /// Tracked in state so re-editing a saved nine keeps the mode.
   late bool _singleMatch = widget.singleMatch;
 
+  /// Claremont mode — from the route, or adopted from a saved game's variant.
+  late bool _claremont = widget.claremont;
+
   final _pressUnitCtrl = TextEditingController();
   final _betCtrl       = TextEditingController();
   bool  _stakeOk = false;
@@ -90,7 +100,8 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
   /// True when presses or Claremont are on — the only way the match can run
   /// past the fixed base bets, so the only case a cap is offered.
-  bool get _canEscalate => _pressMode != 'none' || _variant == 'claremont';
+  bool get _canEscalate =>
+      !_claremont && (_pressMode != 'none' || _variant == 'claremont');
 
   /// True for an "18-Hole Match" — overall-only, no Front/Back legs, no teams,
   /// no presses.  Comes from the widget flag at creation, OR is derived from a
@@ -120,7 +131,9 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           : 'nassau';
 
   /// Display name for this match, driven by its slug (not the bet layout).
-  String get _gameTitle => widget.singleMatch
+  String get _gameTitle => _claremont
+      ? 'Claremont'
+      : widget.singleMatch
       ? 'Nassau Nine'
       : widget.overallOnly
           ? 'Singles Match'
@@ -235,12 +248,18 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           _netPercent = existing.netPercent;
           _pressMode  = existing.pressMode;
           _variant    = existing.variant;
+          if (existing.variant == 'claremont') _claremont = true;
           _playFront   = existing.playFront;
           _playBack    = existing.playBack;
           _playOverall = existing.playOverall;
           _singleMatch = existing.singleMatch || widget.singleMatch;
           _pressUnitCtrl.text = existing.pressUnit.truncate().toString();
           _capEnabled = existing.lossCap != null;
+          if (_claremont) {
+            _variant = 'claremont';
+            _pressMode = 'auto';
+            _capEnabled = false;
+          }
           _advancedOpen = existing.pressMode != 'none' ||
               existing.variant != 'none' || existing.lossCap != null;
           if (existing.lossCap != null) {
@@ -369,7 +388,10 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
         await rp.updateRoundBetUnit(parsed);
       }
 
-      final pressUnit = double.tryParse(_pressUnitCtrl.text.trim()) ?? 0.0;
+      // Claremont's press is worth the stake.
+      final pressUnit = _claremont
+          ? (parsed ?? double.tryParse(_betCtrl.text.trim()) ?? 0.0)
+          : (double.tryParse(_pressUnitCtrl.text.trim()) ?? 0.0);
 
       final ok = await rp.setupNassau(
         widget.foursomeId,
@@ -377,15 +399,17 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
         team2Ids:     _team2Ids,
         handicapMode: _mode,
         netPercent:   _netPercent,
-        pressMode:    _pressMode,
+        pressMode:    _claremont ? 'auto' : _pressMode,
         pressUnit:    pressUnit,
         // 2nd-ball / Claremont require a 2v2; never submit them for a 1-v-1.
-        variant:      _isTwoVsTwo ? _variant : 'none',
+        variant:      _claremont
+            ? 'claremont'
+            : (_isTwoVsTwo ? _variant : 'none'),
         playFront:    _playFront,
         playBack:     _playBack,
         playOverall:  _playOverall,
         singleMatch:  _singleMatch,
-        lossCap: (_canEscalate && _capEnabled)
+        lossCap: (!_claremont && _canEscalate && _capEnabled)
             ? double.tryParse(_capCtrl.text.trim())
             : null,
         gameType:     _gameType,
@@ -664,7 +688,10 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           StakeField(
             controller: _betCtrl,
             label: 'Stake per match',
-            helpText: _overallOnly
+            helpText: _claremont
+                ? 'Each of the six bets is worth this: front, back and overall '
+                  'on top, and the same three on the bottom.'
+                : _overallOnly
                 ? 'What the Singles Match is worth.'
                 : 'Each of the three standard Nassau matches '
                   '(Front 9, Back 9, Overall) is worth this amount.',
@@ -674,14 +701,17 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
           // ── Advanced (Nassau only): presses, game variant, and — once the
           //     match can escalate — the loss cap.  Collapsed by default so the
           //     common case (teams + handicap + stake) stays simple. ──
-          if (!_isMatch18) ...[
+          if (_claremont) ...[
+            const SizedBox(height: 16),
+            _claremontPresses(theme),
+          ] else if (!_isMatch18) ...[
             const SizedBox(height: 16),
             _advancedCard(theme, members),
           ],
 
           // Bounded match (no presses / Claremont) → show the fixed max
           // liability; once it can escalate, the cap lives inside Advanced.
-          if (!_canEscalate) ...[
+          if (!_canEscalate && !_claremont) ...[
             const SizedBox(height: 16),
             MaxLiabilityNote(
               bet: double.tryParse(_betCtrl.text.trim()) ?? 0,
@@ -695,9 +725,13 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
           // ── Rules reminder ────────────────────────────────────────────────
           SectionCard(
-            title: _overallOnly ? 'How the match works' : 'How Nassau works',
+            title: _claremont
+                ? 'How Claremont works'
+                : _overallOnly ? 'How the match works' : 'How Nassau works',
             child: Text(
-              _overallOnly
+              _claremont
+                  ? _kVariantDescriptions['claremont']!
+                  : _overallOnly
                   ? 'A single 18-hole match. Each hole goes to the lower score '
                     '(per the handicap mode above); tied holes are halved. '
                     'Whoever is up after 18 holes wins the match.'
@@ -778,11 +812,32 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
             color: theme.colorScheme.onSurfaceVariant));
   }
 
-  Widget _variantChip(String value, String label, {bool disabled = false}) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: _variant == value,
-      onSelected: disabled ? null : (_) => setState(() => _variant = value),
+  /// Claremont's presses are not a setting: always on, automatic, worth the
+  /// stake. Drawn read-only so the rule is visible where the choice would be.
+  Widget _claremontPresses(ThemeData theme) {
+    TextStyle? hint() => theme.textTheme.bodySmall
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    return SectionCard(
+      title: 'Presses',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: Text('ALWAYS ON',
+              style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: theme.colorScheme.primary)),
+        ),
+        const SizedBox(height: 4),
+        const Text('Top: a press starts when a side is 2 down in a nine.'),
+        const SizedBox(height: 8),
+        const Text(
+            'Bottom: a press starts at 4 points down in a nine.'),
+        Text('Two points a hole, so 4 points is 2 holes’ worth.',
+            style: hint()),
+        const SizedBox(height: 8),
+        Text('Each press runs to the end of its nine and is worth the stake.',
+            style: hint()),
+      ]),
     );
   }
 
@@ -816,7 +871,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
               style: theme.textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary)),
-          subtitle: Text('Presses, game variant, loss cap', style: hint()),
+          subtitle: Text('Presses, 2nd-ball tiebreak, loss cap', style: hint()),
           children: [
             // ── Press stakes ──
             Text('Press stakes', style: sub()),
@@ -854,26 +909,25 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
 
             const Divider(height: 28),
 
-            // ── Game variant ──
-            Text('Game variant', style: sub()),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6, runSpacing: 4,
-              children: [
-                _variantChip('none',         'Standard'),
-                _variantChip('tiebreak_2nd', '2nd Ball Tiebreak',
-                    disabled: !isTwoVsTwo),
-                _variantChip('claremont',    'Claremont',
-                    disabled: !isTwoVsTwo),
-              ],
-            ),
-            if (!isTwoVsTwo && _variant == 'none') ...[
-              const SizedBox(height: 8),
-              Text('Tiebreak and Claremont require two players per side (2v2).',
+            // ── 2nd-ball tiebreak ── (Claremont is its own game now)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: const Text('2nd-ball tiebreak'),
+              subtitle: Text(
+                  'When the best balls tie, the second balls decide the hole. '
+                  'Two against two only.',
                   style: hint()),
-            ],
-            const SizedBox(height: 10),
-            Text(_kVariantDescriptions[_variant] ?? '', style: hint()),
+              value: _variant == 'tiebreak_2nd',
+              onChanged: isTwoVsTwo
+                  ? (v) => setState(() => _variant = v ? 'tiebreak_2nd' : 'none')
+                  : null,
+            ),
+            if (isTwoVsTwo)
+              Text(
+                  'Playing both balls for points? That’s Claremont, its own '
+                  'game in the game list.',
+                  style: hint()),
 
             // ── Loss cap (only once the match can escalate) ──
             if (_canEscalate) ...[
@@ -881,7 +935,7 @@ class _NassauSetupScreenState extends State<NassauSetupScreen> {
               Text('Cap losses', style: sub()),
               const SizedBox(height: 4),
               Text(
-                'Presses and Claremont can run the stakes up with no fixed '
+                'Presses can run the stakes up with no fixed '
                 'ceiling, so you can cap each side’s losses. A side at the cap '
                 'can’t press (it would be free).',
                 style: hint(),
