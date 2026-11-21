@@ -232,6 +232,10 @@ struct SixesActivityAttributes: ActivityAttributes {
             /// floating the count to the top would say the round has presses
             /// without saying which match carries them.
             var chip: String? = nil
+            /// Claremont only: the bottom game's points for the same bet
+            /// (`+3 PTS`), tinted the colour of the side that leads it.
+            var bottom: String? = nil
+            var bottomColour: String? = nil
             /// Points only: what this golfer won on the last closed hole —
             /// `Sam Reid 43  5` — answering *who took that one* without a
             /// sentence. It PERSISTS until the next hole closes: the split is
@@ -258,7 +262,8 @@ struct SixesActivityAttributes: ActivityAttributes {
             var isReader: Bool? = nil
 
             enum CodingKeys: String, CodingKey {
-                case label, text, colour, note, chip, award
+                case label, text, colour, note, chip, award, bottom
+                case bottomColour = "bottom_colour"
                 case awardBest = "award_best"
                 case isReader = "is_reader"
             }

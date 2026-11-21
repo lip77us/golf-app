@@ -114,7 +114,8 @@ def nassau_summary_rows(round_obj, entry, names):
                 nines.append(f'{label} {text}')
         head = f'{side} {head_text}' if head_text else side
         value = head + (' · ' + ', '.join(nines) if nines else '')
-        rows.append(['Nassau', value])
+        rows.append([('Claremont' if (s.get('variant') or '').lower()
+                      == 'claremont' else 'Nassau'), value])
     return rows
 
 
@@ -940,7 +941,9 @@ def nassau_detail(round_obj, entry, names):
                 # The bottom bet is two points a hole — low ball and second
                 # ball — so it settles in points, not holes.
                 rows.append(['Bottom (points)', money(pts, sign=True)])
-        out += _ssec(_label(fs, 'Nassau · the bets', multi), rows)
+        title = ('Claremont' if (s.get('variant') or '').lower() == 'claremont'
+                 else 'Nassau')
+        out += _ssec(_label(fs, f'{title} · the bets', multi), rows)
     return out
 
 

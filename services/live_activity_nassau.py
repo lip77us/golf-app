@@ -132,7 +132,29 @@ def _row(summary, key, label, bet, sign) -> dict:
     presses = _live_press_count(summary, key)
     if presses:
         row['chip'] = f'+{presses} PRESS'
+    bot = _bottom_chip(summary, key)
+    if bot:
+        row['bottom'], row['bottom_colour'] = bot
     return row
+
+
+def _is_claremont(summary) -> bool:
+    return summary.get('variant') == 'claremont'
+
+
+def _bottom_chip(summary, key):
+    """Claremont only: the bottom game's points for the same bet, as a small
+    chip beside the top figure — `+3 PTS`, tinted the side that leads it.
+    Level reads `AS`. None for every other Nassau."""
+    if not _is_claremont(summary):
+        return None
+    bet = summary.get({'front9': 'bottom_front9', 'back9': 'bottom_back9',
+                       'overall': 'bottom_overall'}[key]) or {}
+    margin = bet.get('margin') or 0
+    if not margin:
+        return ('AS', 'neutral')
+    leader = 'team1' if margin > 0 else 'team2'
+    return (f'+{abs(margin)} PTS', _side_colour(summary, leader))
 
 
 def _presses_for(summary, key):
@@ -286,12 +308,14 @@ def nassau_activity_state(foursome, *, player_id=None, thru=None,
     bits = []
     if to_par is not None:
         bits.append('E' if to_par == 0 else f'{to_par:+d}')
-    bits.append(f'${float(summary.get("bet_unit") or 0):,.0f} a match')
+    bits.append(f'${float(summary.get("bet_unit") or 0):,.0f} a '
+                + ('bet' if _is_claremont(summary) else 'match'))
 
     return {
         'ribbon': ribbon,
         'tee'   : tee,
-        'header': {'game': 'NASSAU' + (' · 2v2' if is_team else ''),
+        'header': {'game': ('CLAREMONT' if _is_claremont(summary)
+                            else 'NASSAU' + (' · 2v2' if is_team else '')),
                    'segment': f'HOLE {hole}'},
         # Nothing on this card is 36px, so the single-number slot is unused and
         # the rows carry the numbers instead.
@@ -393,7 +417,9 @@ def nassau_final_state(foursome, *, player_id=None) -> dict:
               if money else 'EVEN')
     return {
         'kind'  : KIND,
-        'header': {'game': 'NASSAU', 'segment': 'ROUND COMPLETE'},
+        'header': {'game': ('CLAREMONT' if _is_claremont(summary)
+                            else 'NASSAU'),
+                   'segment': 'ROUND COMPLETE'},
         'number': {'text': amount, 'colour': 'neutral'},
         'sides' : [],
         'state' : {'word': '', 'to_play': ''},

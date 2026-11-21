@@ -892,6 +892,16 @@ private struct MatchRowView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
+            if let bottom = row.bottom {
+                let c = Sixes.side(row.bottomColour ?? "neutral")
+                Text(bottom)
+                    .font(Sixes.body(8.5, .bold))
+                    .foregroundStyle(c)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(c.opacity(0.20), in: Capsule())
+            }
+
             if let chip = row.chip {
                 Text(chip)
                     .font(Sixes.body(8.5, .bold))

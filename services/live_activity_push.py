@@ -532,6 +532,12 @@ def push_round(round_obj, *, final=False) -> int:
         except Exception:  # pragma: no cover - never blocks a score
             logger.exception('live_activity_push: nassau nine alerts, round %s',
                              round_obj.id)
+        from services.live_activity_claremont_push import claremont_alerts
+        try:
+            per_player = {**per_player, **claremont_alerts(round_obj)}
+        except Exception:  # pragma: no cover - never blocks a score
+            logger.exception('live_activity_push: claremont alerts, round %s',
+                             round_obj.id)
         from services.live_activity_multi_skins_push import multi_skins_alerts
         try:
             per_player = {**per_player, **multi_skins_alerts(round_obj)}
