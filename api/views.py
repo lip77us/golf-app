@@ -4656,6 +4656,7 @@ class CasualRoundListView(APIView):
                 'active_games':         r.active_games,
                 'primary_game':         r.primary_game,
                 'is_eighteen_hole_match': _round_is_eighteen_hole_match(r, chosen_fs),
+                'is_claremont': _round_is_claremont(r),
                 'bet_unit':             r.bet_unit,
                 'current_hole':         max_hole or 0,
                 'created_by_player_id': r.created_by_id,
@@ -4748,6 +4749,18 @@ def _round_current_hole(rnd):
     for fs_id, hole in rows:
         per_group.setdefault(fs_id, set()).add(hole)
     return max((len(h) for h in per_group.values()), default=0)
+
+
+def _round_is_claremont(rnd) -> bool:
+    """A Nassau round whose saved game is Claremont (variant='claremont').
+    Claremont is its own game in the picker and a Nassau with a variant on the
+    server, so every list that names a round's game needs this."""
+    if 'nassau' not in (rnd.active_games or []):
+        return False
+    from games.models import NassauGame
+    return NassauGame.objects.filter(foursome__round=rnd,
+                                     game_type='nassau',
+                                     variant='claremont').exists()
 
 
 def _round_is_eighteen_hole_match(rnd, foursome=None):
@@ -4861,6 +4874,7 @@ class SharedRoundsView(APIView):
                 'status':        r.status,
                 'active_games':  r.active_games,
                 'is_eighteen_hole_match': _round_is_eighteen_hole_match(r),
+                'is_claremont': _round_is_claremont(r),
                 'current_hole':  _round_current_hole(r),
                 'group_label':   (r.created_by.name if r.created_by_id else None)
                                  or r.account.name,
@@ -5015,6 +5029,7 @@ class ScoringForMeView(APIView):
                 'status':           r.status,
                 'active_games':     r.active_games,
                 'is_eighteen_hole_match': _round_is_eighteen_hole_match(r, m.foursome),
+                'is_claremont': _round_is_claremont(r),
                 'current_hole':     _round_current_hole(r),
                 'group_label':      group_label,
                 'is_tournament':    t is not None,
@@ -5319,6 +5334,7 @@ class PlayingRoundsView(APIView):
                 'status':           r.status,
                 'active_games':     r.active_games,
                 'is_eighteen_hole_match': _round_is_eighteen_hole_match(r, m.foursome),
+                'is_claremont': _round_is_claremont(r),
                 'current_hole':     _round_current_hole(r),
                 'group_label':      group_label,
                 'is_tournament':    t is not None,

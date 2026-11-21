@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/game_catalog.dart';
 
 void main() {
+  namesTests();
   group('Claremont is its own game in the picker', () {
     test('four golfers only', () {
       final m = gameMeta(GameIds.claremont)!;
@@ -40,6 +41,21 @@ void main() {
     test('Nassau no longer offers Claremont as a variant', () {
       expect(setup, isNot(contains("_variantChip('claremont'")));
       expect(setup, contains("'2nd-ball tiebreak'"));
+    });
+  });
+}
+
+void namesTests() {
+  group('a Claremont round is named Claremont, not Nassau', () {
+    test('the helper', () {
+      expect(roundGameName('nassau', claremont: true), 'Claremont');
+      expect(roundGameName('nassau'), 'Nassau');
+      expect(roundGameName('skins', claremont: true), 'Skins');
+    });
+    test('the joined label', () {
+      expect(
+          gamesDisplayLabel(['nassau', 'skins'], isClaremont: true),
+          'Claremont • Skins');
     });
   });
 }

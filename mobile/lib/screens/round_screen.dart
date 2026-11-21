@@ -223,7 +223,10 @@ class _RoundScreenState extends State<RoundScreen> {
     if (round.isCupRound) {
       return Text('Round ${round.roundNumber}');
     }
-    final games = round.activeGames.map(gameDisplayName).take(2).join(' + ');
+    final games = round.activeGames
+        .map((g) => roundGameName(g, claremont: round.isClaremont))
+        .take(2)
+        .join(' + ');
     final stake =
         round.betUnit > 0 ? '\$${round.betUnit.formatBet()}' : 'for fun';
     final title = isCasual
@@ -652,6 +655,7 @@ class _RoundScreenState extends State<RoundScreen> {
                   sixesStarted:    fs.configuredGames.contains('sixes') ||
                                    rp.sixesIsStarted(fs.id),
                   roundActiveGames: round.activeGames,
+                  isClaremont:     round.isClaremont,
                   allFoursomes:    round.foursomes,
                   roundId:         widget.roundId,
                   onGamesChanged:  _reloadRound,
@@ -1594,6 +1598,9 @@ class _FoursomeCard extends StatelessWidget {
   final bool         sixesActive;
   final bool         sixesStarted;
   final List<String> roundActiveGames;
+
+  /// The round's Nassau is Claremont — named so on the card.
+  final bool isClaremont;
   /// The round's stored PRIMARY game (null = derive). Makes the config buttons
   /// target the user's actual pick rather than the derived one.
   final String? primaryGame;
@@ -1621,6 +1628,7 @@ class _FoursomeCard extends StatelessWidget {
     required this.sixesActive,
     required this.sixesStarted,
     required this.roundActiveGames,
+    this.isClaremont = false,
     this.primaryGame,
     this.primaryHcap,
     required this.allFoursomes,
@@ -2347,7 +2355,7 @@ class _FoursomeCard extends StatelessWidget {
   /// Your group: the dark card, one big button, the card-typing link.
   Widget _hero(BuildContext context, bool mine, bool canEdit) {
     final games = {...roundActiveGames, ...foursome.activeGames}
-        .map(gameDisplayName)
+        .map((g) => roundGameName(g, claremont: isClaremont))
         .take(3)
         .join(' + ');
     final tees = <String>{
@@ -2465,7 +2473,9 @@ class _FoursomeCard extends StatelessWidget {
     final games = <_SettingsItem>[
       if (canManage && editable && cfgRoute != null)
         _SettingsItem(Icons.tune,
-            primary == null ? 'Game' : gameDisplayName(primary),
+            primary == null
+                ? 'Game'
+                : roundGameName(primary, claremont: isClaremont),
             configured ? 'Edit configuration' : 'Set up configuration',
             () => go(cfgRoute, cfgArgs)),
       if (canManage && editable)

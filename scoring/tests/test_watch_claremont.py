@@ -73,3 +73,19 @@ class StripsPressesAndMoneyTests(WatchClaremontTests):
         self._play(1, 4, 4, 6, 6)
         self._play(2, 4, 4, 6, 6)            # 2 down on top: auto press
         self.assertIn('Auto press 3–', self._page())
+
+
+class RoundIsNamedClaremontTests(WatchClaremontTests):
+    def test_the_flag_follows_the_saved_variant(self):
+        from api.views import _round_is_claremont
+        self.round.active_games = ['nassau']
+        self.round.save(update_fields=['active_games'])
+        self._setup()
+        self.assertTrue(_round_is_claremont(self.round))
+
+    def test_a_plain_nassau_is_not_claremont(self):
+        from api.views import _round_is_claremont
+        self.round.active_games = ['nassau']
+        self.round.save(update_fields=['active_games'])
+        super(WatchClaremontTests, self)._setup()
+        self.assertFalse(_round_is_claremont(self.round))

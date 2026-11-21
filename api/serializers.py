@@ -796,6 +796,7 @@ class RoundSerializer(serializers.ModelSerializer):
     is_final_round = serializers.SerializerMethodField()
     has_day_bet    = serializers.SerializerMethodField()
     has_skins_pool = serializers.SerializerMethodField()
+    is_claremont   = serializers.SerializerMethodField()
     # The game this round is SCORED on and does not say it is playing — an
     # individual-play tournament sets its method once, on the tournament, so
     # the round's own `active_games` carries only its side games.
@@ -900,6 +901,10 @@ class RoundSerializer(serializers.ModelSerializer):
         # `participants.exists()` as well would be a SECOND query per round
         # on a list that serialises many.
         return getattr(obj, 'multi_skins_game', None) is not None
+
+    def get_is_claremont(self, obj) -> bool:
+        from api.views import _round_is_claremont
+        return _round_is_claremont(obj)
 
     def get_is_final_round(self, obj) -> bool:
         """True when this is the last round of a multi-round tournament.
@@ -1104,7 +1109,7 @@ class RoundSerializer(serializers.ModelSerializer):
             'handicap_mode', 'net_percent', 'net_max_double_bogey',
             'num_holes', 'starting_hole',
             'scramble_config', 'notes', 'foursomes',
-            'is_cup_round', 'is_final_round', 'has_day_bet',
+            'is_cup_round', 'is_final_round', 'has_day_bet', 'is_claremont',
             'has_skins_pool',
             # What this round is scored on when its games do not say.
             'scoring_game', 'tournament_name',
@@ -1173,6 +1178,7 @@ class CasualRoundSummarySerializer(serializers.Serializer):
     # True when the round's Nassau is Overall-only — i.e. the "18-Hole Match"
     # shortcut — so the list can label it accordingly rather than "Nassau".
     is_eighteen_hole_match = serializers.BooleanField(default=False)
+    is_claremont = serializers.BooleanField(default=False)
     bet_unit            = serializers.DecimalField(max_digits=6, decimal_places=2)
     current_hole        = serializers.IntegerField()   # 0 = not started
     created_by_player_id = serializers.IntegerField(allow_null=True)

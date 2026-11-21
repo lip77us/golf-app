@@ -25,7 +25,7 @@ class SharedRoundCard extends StatelessWidget {
     final theme = Theme.of(context);
     final games = round.activeGames.isEmpty
         ? ''
-        : '  ·  ${gamesDisplayLabel(round.activeGames, isEighteenHoleMatch: round.isEighteenHoleMatch)}';
+        : '  ·  ${gamesDisplayLabel(round.activeGames, isEighteenHoleMatch: round.isEighteenHoleMatch, isClaremont: round.isClaremont)}';
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: InkWell(

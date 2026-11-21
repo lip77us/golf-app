@@ -506,20 +506,24 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
   /// Split a round's games into the primary (bold) and the side games (muted),
   /// honouring the stored primary and the 18-Hole-Match Nassau relabel.
   (String, String) _gameLabels(
-      List<String> activeGames, String? primaryGame, bool isEighteenHoleMatch) {
+      List<String> activeGames, String? primaryGame, bool isEighteenHoleMatch,
+      {bool isClaremont = false}) {
     final primary = resolvePrimary(primaryGame, activeGames);
     // No resolvable primary (empty / overlay-only round) → fall back to the
     // joined label (which itself defaults to "Stroke Play"), no side split.
     if (primary == null) {
       return (
         gamesDisplayLabel(activeGames,
-            isEighteenHoleMatch: isEighteenHoleMatch),
+            isEighteenHoleMatch: isEighteenHoleMatch,
+            isClaremont: isClaremont),
         '',
       );
     }
-    final primaryLabel = (primary == GameIds.nassau && isEighteenHoleMatch)
-        ? gameDisplayName(GameIds.match18)
-        : gameDisplayName(primary);
+    final primaryLabel = (primary == GameIds.nassau && isClaremont)
+        ? gameDisplayName(GameIds.claremont)
+        : (primary == GameIds.nassau && isEighteenHoleMatch)
+            ? gameDisplayName(GameIds.match18)
+            : gameDisplayName(primary);
     final sides = activeGames.where((g) => g != primary).toList();
     final sideLabel =
         sides.isEmpty ? '' : '+ ${sides.map(gameDisplayName).join(', ')}';
@@ -531,7 +535,8 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
   _RoundItem _ownItem(
       CasualRoundSummary r, int? myId, String Function(String) fmtDate) {
     final (primaryLabel, sideLabel) =
-        _gameLabels(r.activeGames, r.primaryGame, r.isEighteenHoleMatch);
+        _gameLabels(r.activeGames, r.primaryGame, r.isEighteenHoleMatch,
+            isClaremont: r.isClaremont);
 
     // Find "me" so the row lists me first with my gross.
     CasualRoundPlayer? me;
@@ -602,7 +607,8 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
   /// is computed cross-account; the group label gives context.
   _RoundItem _sharedItem(ScoringRound r, String Function(String) fmtDate) {
     final (primaryLabel, sideLabel) =
-        _gameLabels(r.activeGames, null, r.isEighteenHoleMatch);
+        _gameLabels(r.activeGames, null, r.isEighteenHoleMatch,
+            isClaremont: r.isClaremont);
     return _RoundItem(
       sortDate:     DateTime.tryParse(r.date),
       dateLabel:    fmtDate(r.date),
@@ -620,7 +626,8 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
   /// A round I only WATCH (read-only). The eye replaces the money; no delete.
   _RoundItem _watchedItem(SharedRoundSummary r, String Function(String) fmtDate) {
     final (primaryLabel, sideLabel) =
-        _gameLabels(r.activeGames, null, r.isEighteenHoleMatch);
+        _gameLabels(r.activeGames, null, r.isEighteenHoleMatch,
+            isClaremont: r.isClaremont);
     return _RoundItem(
       sortDate:     DateTime.tryParse(r.date),
       dateLabel:    fmtDate(r.date),

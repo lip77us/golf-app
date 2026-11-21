@@ -772,6 +772,8 @@ class CasualRoundSummary {
   /// True when the Nassau is Overall-only — i.e. the "18-Hole Match" shortcut —
   /// so the list shows "18-Hole Match" instead of "Nassau".
   final bool   isEighteenHoleMatch;
+  /// A Nassau whose saved game is Claremont — named Claremont everywhere.
+  final bool   isClaremont;
   final double betUnit;
   /// Highest hole number with any score entered; 0 = not started yet.
   final int    currentHole;
@@ -798,6 +800,7 @@ class CasualRoundSummary {
     required this.status,
     required this.activeGames,
     this.isEighteenHoleMatch = false,
+    this.isClaremont = false,
     required this.betUnit,
     required this.currentHole,
     this.createdByPlayerId,
@@ -817,6 +820,7 @@ class CasualRoundSummary {
         status:              j['status'] as String,
         activeGames:         List<String>.from(j['active_games'] as List? ?? []),
         isEighteenHoleMatch: j['is_eighteen_hole_match'] as bool? ?? false,
+        isClaremont: j['is_claremont'] as bool? ?? false,
         betUnit:             double.parse(j['bet_unit'].toString()),
         currentHole:         j['current_hole'] as int? ?? 0,
         createdByPlayerId:   j['created_by_player_id'] as int?,
@@ -842,6 +846,8 @@ class SharedRoundSummary {
   /// True when this round's Nassau is really the "18-Hole Match" shortcut
   /// (Overall-only, heads-up). Defaults false for tournament follows.
   final bool isEighteenHoleMatch;
+  /// A Nassau whose saved game is Claremont — named Claremont everywhere.
+  final bool isClaremont;
   /// Highest hole a real player has scored; 0 = not started, null = unknown
   /// (e.g. a tournament follow that carries status, not hole progress).
   final int? currentHole;
@@ -894,6 +900,7 @@ class SharedRoundSummary {
     required this.status,
     required this.activeGames,
     this.isEighteenHoleMatch = false,
+    this.isClaremont = false,
     this.currentHole,
     required this.groupLabel,
     required this.yourName,
@@ -912,6 +919,7 @@ class SharedRoundSummary {
         status:       j['status'] as String? ?? '',
         activeGames:  List<String>.from(j['active_games'] as List? ?? []),
         isEighteenHoleMatch: j['is_eighteen_hole_match'] as bool? ?? false,
+        isClaremont: j['is_claremont'] as bool? ?? false,
         currentHole:  j['current_hole'] as int?,
         groupLabel:   j['group_label'] as String? ?? '',
         yourName:     j['your_name'] as String? ?? '',
@@ -936,6 +944,8 @@ class ScoringRound {
   /// True when this round's Nassau is really the "18-Hole Match" shortcut
   /// (Overall-only, heads-up). Defaults false for tournament rounds.
   final bool   isEighteenHoleMatch;
+  /// A Nassau whose saved game is Claremont — named Claremont everywhere.
+  final bool   isClaremont;
   /// Highest hole a real player has scored; 0 = not started, null = unknown.
   final int?   currentHole;
   final String groupLabel;
@@ -950,6 +960,7 @@ class ScoringRound {
     required this.status,
     required this.activeGames,
     this.isEighteenHoleMatch = false,
+    this.isClaremont = false,
     this.currentHole,
     required this.groupLabel,
     required this.isTournament,
@@ -963,6 +974,7 @@ class ScoringRound {
         status:         j['status'] as String? ?? '',
         activeGames:    List<String>.from(j['active_games'] as List? ?? []),
         isEighteenHoleMatch: j['is_eighteen_hole_match'] as bool? ?? false,
+        isClaremont: j['is_claremont'] as bool? ?? false,
         currentHole:    j['current_hole'] as int?,
         groupLabel:     j['group_label'] as String? ?? '',
         isTournament:   j['is_tournament'] as bool? ?? false,
@@ -1303,6 +1315,10 @@ class Round {
   /// button with it instead of leaving a route into a bet nobody is playing.
   final bool hasDayBet;
 
+  /// This round's Nassau is Claremont (variant='claremont'), so it is named
+  /// Claremont rather than Nassau.
+  final bool isClaremont;
+
   /// Whether the round-level skins pool has a roster yet.
   /// `activeGames` contains `multi_skins` says the round is playing one;
   /// this says it is set up, so the hub's button can read *Set up* before
@@ -1395,6 +1411,7 @@ class Round {
     this.isCupRound    = false,
     this.isFinalRound  = false,
     this.hasDayBet     = false,
+    this.isClaremont   = false,
     this.hasSkinsPool  = false,
     this.scoringGame,
     this.isTeamPlayRound = false,
@@ -1431,6 +1448,7 @@ class Round {
         isCupRound:   j['is_cup_round']  as bool?   ?? false,
         isFinalRound: j['is_final_round'] as bool? ?? false,
         hasDayBet:    j['has_day_bet'] as bool? ?? false,
+        isClaremont:  j['is_claremont'] as bool? ?? false,
         hasSkinsPool: j['has_skins_pool'] as bool? ?? false,
         scoringGame: j['scoring_game'] as String?,
         isTeamPlayRound: j['is_team_play_round'] as bool? ?? false,

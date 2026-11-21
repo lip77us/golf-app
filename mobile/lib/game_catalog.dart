@@ -1069,16 +1069,25 @@ String gameDisplayName(String gameId) =>
     ?? _kExtraGameLabels[gameId]
     ?? gameId;
 
+/// A game's name on a round: a Nassau whose saved game is Claremont reads
+/// Claremont (the server stores it as a Nassau with a variant).
+String roundGameName(String g, {bool claremont = false}) =>
+    (g == GameIds.nassau && claremont)
+        ? gameDisplayName(GameIds.claremont)
+        : gameDisplayName(g);
+
 /// Joined display label for a round's [activeGames]. An Overall-only Nassau is
 /// stored as `nassau` but is really the "18-Hole Match" shortcut, so when
 /// [isEighteenHoleMatch] is set we show that name instead of the generic
 /// "Nassau".
 String gamesDisplayLabel(Iterable<String> activeGames,
-    {bool isEighteenHoleMatch = false}) {
+    {bool isEighteenHoleMatch = false, bool isClaremont = false}) {
   final label = activeGames
-      .map((g) => (g == GameIds.nassau && isEighteenHoleMatch)
-          ? gameDisplayName(GameIds.match18)
-          : gameDisplayName(g))
+      .map((g) => (g == GameIds.nassau && isClaremont)
+          ? gameDisplayName(GameIds.claremont)
+          : (g == GameIds.nassau && isEighteenHoleMatch)
+              ? gameDisplayName(GameIds.match18)
+              : gameDisplayName(g))
       .join(' • ');
   // A round with no explicit gambling game is still scored as Stroke Play
   // (the backend always adds a "Stroke Play" low-net tab for every

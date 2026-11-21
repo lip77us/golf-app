@@ -53,13 +53,16 @@ String greeting(DateTime now, String? name) {
   return first.isEmpty ? part : '$part, $first';
 }
 
-String gamesLine(List<String> games, {String? primary, bool match18 = false}) {
+String gamesLine(List<String> games,
+    {String? primary, bool match18 = false, bool claremont = false}) {
   final ids = [
     if (primary != null && games.contains(primary)) primary,
     ...games.where((g) => g != primary),
   ];
   final names = ids
-      .map((g) => g == 'nassau' && match18 ? '18-Hole Match' : gameDisplayName(g))
+      .map((g) => g == 'nassau' && claremont
+          ? 'Claremont'
+          : g == 'nassau' && match18 ? '18-Hole Match' : gameDisplayName(g))
       .toList();
   return names.take(2).join(' + ') +
       (names.length > 2 ? ' +${names.length - 2}' : '');
@@ -104,7 +107,7 @@ Map<String, dynamic> buildHome({
         'date': r.date,
         'title': r.courseName,
         'sub': gamesLine(r.activeGames,
-                primary: r.primaryGame, match18: r.isEighteenHoleMatch) +
+                primary: r.primaryGame, match18: r.isEighteenHoleMatch, claremont: r.isClaremont) +
             (r.betUnit > 0 ? ' · ${_money(r.betUnit)}' : ''),
         'thru': r.currentHole,
         ..._avatars(r.players, r.myPlayerId),
@@ -134,7 +137,7 @@ Map<String, dynamic> buildHome({
       'id': r.id,
       'date': r.date,
       'title': r.courseName,
-      'sub': gamesLine(r.activeGames, match18: r.isEighteenHoleMatch),
+      'sub': gamesLine(r.activeGames, match18: r.isEighteenHoleMatch, claremont: r.isClaremont),
       'thru': r.currentHole ?? 0,
       'avatars': <Map<String, dynamic>>[],
       'names': r.groupLabel,
@@ -237,7 +240,7 @@ Map<String, dynamic> buildHome({
       .take(3)
       .map((w) => {
             'title':
-                '${w.courseName} · ${gamesLine(w.activeGames, match18: w.isEighteenHoleMatch)}',
+                '${w.courseName} · ${gamesLine(w.activeGames, match18: w.isEighteenHoleMatch, claremont: w.isClaremont)}',
             'sub': w.groupLabel,
             'thru': w.currentHole,
             'watchId': w.id,
@@ -257,7 +260,7 @@ Map<String, dynamic> buildHome({
             'date': dayLabel(r.date, now),
             'title': r.courseName,
             'sub': gamesLine(r.activeGames,
-                    primary: r.primaryGame, match18: r.isEighteenHoleMatch) +
+                    primary: r.primaryGame, match18: r.isEighteenHoleMatch, claremont: r.isClaremont) +
                 (r.players.length > 1 ? ' · ${r.players.length} golfers' : ''),
             'gross': r.myGross,
             'money': r.myNet,
@@ -291,9 +294,11 @@ List<Map<String, dynamic>> playAgain(
     if (out.length >= 2) break;
     if (r.players.length < 2 || r.players.length > 6) continue;
     if (r.activeGames.contains('multi_skins')) continue;
-    final game = r.primaryGame ??
+    var game = r.primaryGame ??
         (r.activeGames.isEmpty ? null : r.activeGames.first);
     if (game == null) continue;
+    // Claremont is a Nassau on the server; Play again must pick Claremont.
+    if (game == 'nassau' && r.isClaremont) game = 'claremont';
     final ids = r.players.map((p) => p.id).toList()..sort();
     if (!seen.add('${ids.join(',')}|$game')) continue;
     final others = r.players.where((p) => p.id != r.myPlayerId).toList();
@@ -302,7 +307,7 @@ List<Map<String, dynamic>> playAgain(
       'game': game,
       'label': others.take(3).map((p) => p.shortName).join(', ') +
           (others.length > 3 ? ' +${others.length - 3}' : ''),
-      'sub': gamesLine([game], primary: game, match18: r.isEighteenHoleMatch),
+      'sub': gamesLine([game], primary: game, match18: r.isEighteenHoleMatch, claremont: r.isClaremont),
     });
   }
   return out;
