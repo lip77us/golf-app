@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../api/client.dart' show ApiException;
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
@@ -146,6 +147,41 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
       if (mounted) Navigator.of(context).pop(saved);
     } catch (e) {
       if (mounted) setState(() { _error = friendlyError(e); _saving = false; });
+    }
+  }
+
+  Future<void> _remove() async {
+    final p = widget.player!;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove golfer?'),
+        content: Text('Remove ${p.name} from your golfers?  Rounds they have '
+            'already played stay intact, but new rounds won\'t include them.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(ctx).colorScheme.error,
+                foregroundColor: Theme.of(ctx).colorScheme.onError),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() { _saving = true; _error = null; });
+    try {
+      await context.read<AuthProvider>().client.deletePlayer(p.id);
+      if (!mounted) return;
+      Navigator.of(context).pop(p);
+    } on ApiException catch (e) {
+      if (mounted) setState(() { _saving = false; _error = e.message; });
+    } catch (e) {
+      if (mounted) setState(() { _saving = false; _error = friendlyError(e); });
     }
   }
 
@@ -317,6 +353,20 @@ class _PlayerFormScreenState extends State<PlayerFormScreen> {
                       ? 'Saving…'
                       : _isEdit ? 'Save Changes' : 'Add Player'),
                 ),
+
+              // ---- Remove ----
+              // Deleting a golfer used to live only behind a long-press on
+              // the My Golfers list, which nobody finds.
+              if (_isEdit && !widget.readOnly) ...[
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: _saving ? null : _remove,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Remove from my golfers'),
+                  style: TextButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error),
+                ),
+              ],
             ],
           ),
             ),
