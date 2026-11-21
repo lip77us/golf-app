@@ -492,21 +492,49 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   void _allMoney(List<Map> items) {
+    const titles = {
+      'game': 'All games',
+      'partner': 'All partners',
+      'opponent': 'All opponents',
+      'course': 'All courses',
+    };
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
+      constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85),
       builder: (c) => SafeArea(
-        child: ListView(shrinkWrap: true, children: [
-          for (final e in items)
-            ListTile(
-              title: Text(e['name'] as String),
-              subtitle: Text('${e['rounds']} round${e['rounds'] == 1 ? '' : 's'}'),
-              trailing: Text(_money(e['net'] as num),
-                  style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: (e['net'] as num) < 0 ? Halved.warning : Halved.pine)),
-            ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          // A close button, because a long list that covers the screen with
+          // only a drag handle has no visible way off it.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 8, 4),
+            child: Row(children: [
+              Expanded(child: Text(titles[_moneyView] ?? 'All', style: _head(18))),
+              IconButton(
+                tooltip: 'Close',
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.of(c).pop(),
+              ),
+            ]),
+          ),
+          Flexible(
+            child: ListView(shrinkWrap: true, children: [
+              for (final e in items)
+                ListTile(
+                  title: Text(e['name'] as String),
+                  subtitle: Text(
+                      '${e['rounds']} round${e['rounds'] == 1 ? '' : 's'}'),
+                  trailing: Text(_money(e['net'] as num),
+                      style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: (e['net'] as num) < 0
+                              ? Halved.warning
+                              : Halved.pine)),
+                ),
+            ]),
+          ),
         ]),
       ),
     );
