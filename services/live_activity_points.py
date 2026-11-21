@@ -209,7 +209,7 @@ def points_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         even = total / len(rows) if rows else 0
         context = f'{total:g} is {even:g} even · ${unit:,.0f} a point'
     else:
-        context = f'${unit:,.0f} a point'
+        context = f'{_pts(mine.get("points"))} pts · ${unit:,.0f} a point'
 
     return {
         'kind'  : KIND,
@@ -221,7 +221,11 @@ def points_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         # 21px, not 36 — the size is the client's, but the CHOICE is recorded
         # here: the reader's own total already sits three lines below at full
         # weight, so the headline was the only slot repeating something.
-        'number': {'text': f'{_pts(headline_row.get("points"))} PTS',
+        # The headline is MONEY (Paul, 21 Nov 2026): "51 points on the 14th
+        # hole" means nothing to anybody. The reader sees what he is up or
+        # down; a watcher sees what the leader is ahead. Points stay in the
+        # rows, where they rank the three men.
+        'number': {'text': _cash(headline_row.get('money')) or '$0',
                    'colour': 'mint'},
         'rows'  : out_rows,
         'sides' : [],

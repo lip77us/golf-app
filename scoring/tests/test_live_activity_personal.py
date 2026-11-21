@@ -296,6 +296,16 @@ class PointsTests(_PointsBase):
     grow, and a single number cannot describe the state.
     """
 
+    def test_the_headline_is_money_not_points(self):
+        """51 points on the 14th means nothing to anybody. The reader sees
+        what he is up or down; a watcher sees what the leader is ahead."""
+        self._play(1, 5, 3, 4)
+        for who in ('Tom Hayes', None):
+            s = self._state(1, who=who) if who else self._state(1, who=None)
+            self.assertNotIn('PTS', s['number']['text'])
+            self.assertTrue(s['number']['text'].startswith(('+$', '−$', '$')),
+                            s['number']['text'])
+
     # -- the shape ----------------------------------------------------------
 
     def test_three_rows_stay(self):
