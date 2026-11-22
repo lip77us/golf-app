@@ -759,6 +759,8 @@ def _build_leaderboard(round_obj: Round) -> dict:
         summary = swat_summary(round_obj)
         if summary:
             games['oakmont_swat'] = {'label': 'SWAT', **summary}
+            # The Gross tab reads the same block, so the two cannot disagree.
+            games['oakmont_swat_gross'] = {'label': 'Gross', **summary}
 
     if 'better_ball' in active_games:
         # **The label is the game's own name**, not the slug's — the app titles

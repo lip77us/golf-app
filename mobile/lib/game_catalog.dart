@@ -1053,6 +1053,7 @@ final Map<String, GameMeta> _kGameById = {
 /// picker-eligible games only).  Sourced from the Django GameType enum where
 /// available; cup-specific aliases (cup_singles, cup_singles_18) live here.
 const Map<String, String> _kExtraGameLabels = {
+  'oakmont_swat_gross'     : 'Gross',
   'quota_nassau'           : 'Quota Nassau',
   'cup_singles'            : 'Singles-Nassau',
   'cup_singles_18'         : 'Singles-18',

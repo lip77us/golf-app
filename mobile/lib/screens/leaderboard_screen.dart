@@ -14,6 +14,7 @@ import '../widgets/match_panel.dart';
 import '../widgets/solo_board.dart';
 import '../widgets/forty_balls_board.dart';
 import '../widgets/swat_board.dart';
+import '../widgets/swat_gross_board.dart';
 import '../widgets/sixes_board.dart';
 import '../widgets/banker_board.dart';
 import '../widgets/golf_app_bar.dart';
@@ -1155,6 +1156,8 @@ class _GameView extends StatelessWidget {
         return _IrishRumbleView(data: data);
       case 'oakmont_swat':
         return SwatBoard(data: data);
+      case 'oakmont_swat_gross':
+        return SwatGrossBoard(data: data);
       case 'forty_balls':
         return FortyBallsBoard(data: data);
       case 'better_ball':

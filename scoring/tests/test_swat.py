@@ -368,3 +368,31 @@ class HoleCardTests(_Round):
     def test_a_fivesome_reports_no_phantom(self):
         self.play(self.a, 1, 0, 1, 1, 1)
         self.assertIsNone(self.card(self.a)['phantom'])
+
+
+class GrossBoardTests(_Round):
+    def test_teams_are_ranked_by_best_ball_to_par_with_ties_sharing(self):
+        for h in range(1, 19):
+            self.play(self.a, h, 0, 1, 1, 1)           # A: level par
+            for fs in (self.b, self.c, self.d):
+                self.play(fs, h, 1, 1, 1)               # the rest: +1 a hole
+        s = self.summary()
+        places = {t['id']: (t['gross_place'], t['gross_tied']) for t in s['teams']}
+        self.assertEqual(places[self.a.pk], (1, False))
+        self.assertEqual({places[x.pk] for x in (self.b, self.c, self.d)}, {(2, True)})
+
+    def test_a_team_with_no_holes_is_unranked(self):
+        self.play(self.a, 1, 0, 1, 1, 1)
+        s = self.summary()
+        self.assertIsNone(self.team(s, self.b)['gross_place'])
+
+    def test_the_card_carries_par_and_stroke_index(self):
+        s = self.summary()
+        self.assertEqual(s['par'][1], PAR[1])
+        self.assertIn(1, s['si'])
+
+    def test_the_gross_tab_rides_the_leaderboard_beside_the_swat_tab(self):
+        from api.views import _build_leaderboard
+        games = _build_leaderboard(self.round)
+        self.assertIn('oakmont_swat_gross', games)
+        self.assertEqual(games['oakmont_swat_gross']['label'], 'Gross')

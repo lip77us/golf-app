@@ -264,6 +264,11 @@ def _par_by_hole(tee) -> dict:
     return {int(h['number']): int(h['par']) for h in (tee.holes or [])}
 
 
+def _si_by_hole(tee) -> dict:
+    return {int(h['number']): int(h['stroke_index'])
+            for h in (tee.holes or []) if h.get('stroke_index')}
+
+
 def _load(round_obj):
     cfg = SwatConfig.objects.filter(round=round_obj).first()
     if cfg is None:
@@ -295,6 +300,7 @@ def _load(round_obj):
                     'ch': m.course_handicap or 0,
                     'band': bands.get(m.player_id, ''),
                     'par': _par_by_hole(m.tee) if m.tee else {},
+                    'si': _si_by_hole(m.tee) if m.tee else {},
                     'wd': m.withdrew_after_hole} for m in ms]
         teams.append({'foursome': f, 'golfers': golfers,
                       'name': team_name(golfers), 'size': len(golfers),
@@ -477,9 +483,33 @@ def swat_summary(round_obj, viewer_id=None) -> dict:
             if r['three']:
                 r['phantom_donors'] = donors
 
+    # Gross board: ranked by best ball to par, lowest first. A team with no
+    # holes finished is unranked rather than tied at level par.
+    ranked = sorted((r for r in rows if r['thru']),
+                    key=lambda r: r['best_to_par'])
+    last, place = None, 0
+    for i, r in enumerate(ranked, start=1):
+        if r['best_to_par'] != last:
+            place, last = i, r['best_to_par']
+        r['gross_place'] = place
+        r['gross_tied'] = sum(1 for x in ranked
+                              if x['best_to_par'] == r['best_to_par']) > 1
+    for r in rows:
+        r.setdefault('gross_place', None)
+        r.setdefault('gross_tied', False)
+
+    par_map, si_map = {}, {}
+    for t in teams:
+        for g in t['golfers']:
+            for h, v in g['par'].items():
+                par_map.setdefault(h, v)
+            for h, v in g['si'].items():
+                si_map.setdefault(h, v)
+
     for r in rows:
         del r['_net_c']
     return {
+        'par': par_map, 'si': si_map,
         'configured': True, 'status': round_obj.status,
         'stake': float(cfg.stake), 'team_stake': team_stake_c / 100.0,
         'allow_fivesomes': cfg.allow_fivesomes, 'edited': cfg.edited,
