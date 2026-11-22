@@ -40,9 +40,9 @@
   "modified": "2026-10-15"
  },
  "games/index.html": {
-  "hash": "7ad216c137a8a927",
+  "hash": "34269aaa59e41696",
   "published": "2026-09-13",
-  "modified": "2026-11-21"
+  "modified": "2026-11-22"
  },
  "games/irish-rumble/index.html": {
   "hash": "0e764847c704cd76",
@@ -63,6 +63,11 @@
   "hash": "09037301a8e6026b",
   "published": "2026-09-13",
   "modified": "2026-11-21"
+ },
+ "games/oakmont-swat/index.html": {
+  "hash": "c1d93400e0c07cf3",
+  "published": "2026-11-22",
+  "modified": "2026-11-22"
  },
  "games/pink-ball/index.html": {
   "hash": "9a1f146aff9f754c",

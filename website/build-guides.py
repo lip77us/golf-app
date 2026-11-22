@@ -321,7 +321,9 @@ def convert(src_dir, name, slug):
                   ('BankerGuide', 'banker'), ('RabbitGuide', 'rabbit'),
                   ('VegasGuide', 'las-vegas'), ('TripleCupGuide', 'triple-cup'),
                   ('SequoyaGuide', 'sequoya-threes'),
-                  ('Points531Guide', 'points-5-3-1')):
+                  ('Points531Guide', 'points-5-3-1'),
+                  ('IrishRumbleGuide', 'irish-rumble'),
+                  ('OakmontSwatGuide', 'oakmont-swat')):
         body = body.replace('href="%s.dc.html"' % f, 'href="/games/%s/"' % sl)
     body = body.replace('src="./img/', 'src="/games/img/')
 
