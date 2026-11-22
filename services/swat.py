@@ -490,3 +490,161 @@ def swat_summary(round_obj, viewer_id=None) -> dict:
         'final': all_final,
         'max_loss': (3 * (n_teams - 1) * team_stake_c) / 100.0,
     }
+
+
+# --------------------------------------------------------------------------
+# Score entry: one hole, one team
+# --------------------------------------------------------------------------
+
+def _ordinal(n: int) -> str:
+    if 10 <= n % 100 <= 20:
+        suffix = 'th'
+    else:
+        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+    return f'{n}{suffix}'
+
+
+def swat_hole_card(foursome, hole: int) -> dict:
+    """Everything the SWAT tray draws for this team's *hole*.
+
+    Renders the engine and decides nothing: balls, best ball and the matches
+    come from the same `_team_holes` / `_nassau` the board reads, so the tray
+    and the leaderboard cannot disagree. The phantom is NEVER named here, and
+    its score appears only once the team's own golfers have entered the hole.
+    """
+    rnd = foursome.round
+    loaded = _load(rnd)
+    if loaded is None:
+        return {}
+    cfg, teams, gross = loaded
+    me = next((t for t in teams if t['foursome'].pk == foursome.pk), None)
+    if me is None:
+        return {}
+    for t in teams:
+        t['holes'] = _team_holes(cfg, t, gross)
+    mine = me['holes'][hole]
+
+    # -- the balls -------------------------------------------------------
+    rows = []
+    for g in me['golfers']:
+        rows.append({'player_id': g['id'], 'name': g['name'],
+                     'short': g['short'], 'index': g['index'],
+                     'gross': mine['balls'].get(g['id']),
+                     'par': g['par'].get(hole)})
+    par = next((g['par'].get(hole) for g in me['golfers']
+                if g['par'].get(hole)), None)
+
+    phantom = None
+    if me['three']:
+        if not mine['real_in']:
+            phantom = {'state': 'locked', 'score': None}
+        elif mine['phantom'] is None:
+            phantom = {'state': 'later', 'score': None}
+        else:
+            phantom = {'state': 'open', 'score': mine['phantom']}
+
+    real_scores = [v for v in mine['balls'].values() if v is not None]
+    waiting = bool(phantom and phantom['state'] != 'open')
+    balls = []
+    if mine['real_in']:
+        for g in me['golfers']:
+            balls.append({'label': g['short'], 'gross': mine['balls'][g['id']],
+                          'phantom': False})
+        if phantom and phantom['state'] == 'open':
+            balls.append({'label': 'Phantom', 'gross': phantom['score'],
+                          'phantom': True})
+        balls.sort(key=lambda b: b['gross'])
+        best = balls[0]['gross'] if balls else None
+        for b in balls:
+            b['counts'] = b['gross'] == best
+        tied = sum(1 for b in balls if b['counts']) > 1
+        for b in balls:
+            b['tied'] = b['counts'] and tied
+    else:
+        best = None
+    best_real = min(real_scores) if real_scores else None
+    waiting_note = None
+    if waiting and best_real is not None:
+        waiting_note = ('The phantom has to score %d or better to count.'
+                        % (best_real - 1) if best_real > 1 else
+                        'Waiting on the phantom.')
+
+    # -- this hole against every other team ------------------------------
+    won = lost = halved = 0
+    to_play = []
+    for t in teams:
+        if t is me:
+            continue
+        other = t['holes'][hole]
+        if mine['finished'] and other['finished']:
+            if mine['best'] < other['best']:
+                won += 1
+            elif mine['best'] > other['best']:
+                lost += 1
+            else:
+                halved += 1
+        else:
+            to_play.append(t['name'])
+    try:
+        from services.hole_plan import play_order
+        order = play_order(rnd, foursome)
+        nth = order.index(hole) + 1
+    except Exception:
+        nth = hole
+
+    # -- money to date and where the overall stands -----------------------
+    stake_c = TEAM_STAKE_FACTOR * _cents(cfg.stake)
+    net_c = w = l = p = 0
+    up = level = down = 0
+    settled = 0
+    for t in teams:
+        if t is me:
+            continue
+        m = _nassau(me['holes'], t['holes'])
+        for bet in m['bets']:
+            if bet['done']:
+                settled += 1
+            if bet['result'] == 'W':
+                net_c += stake_c; w += 1
+            elif bet['result'] == 'L':
+                net_c -= stake_c; l += 1
+            elif bet['result'] == 'P':
+                p += 1
+        overall = m['bets'][2]
+        if overall['played']:
+            if overall['margin'] > 0:
+                up += 1
+            elif overall['margin'] < 0:
+                down += 1
+            else:
+                level += 1
+    n_others = len(teams) - 1
+    total = 3 * n_others
+    if me['five']:
+        split = 'a fifth each'
+    elif me['three']:
+        split = 'a third each'
+    else:
+        split = 'a quarter each'
+    return {
+        'hole': hole, 'par': par, 'nth': nth,
+        'ordinal': _ordinal(nth),
+        'team': {'id': foursome.pk, 'name': me['name'], 'size': me['size'],
+                 'three': me['three'], 'five': me['five']},
+        'players': rows,
+        'phantom': phantom,
+        'complete': bool(mine['real_in']),
+        'waiting': waiting,
+        'best': best,
+        'balls': balls,
+        'waiting_note': waiting_note,
+        'versus': {'teams': n_others, 'won': won, 'lost': lost,
+                   'halved': halved,
+                   'to_play': to_play if mine['finished'] else [],
+                   'waiting': waiting,
+                   'still_to_play': len(to_play)},
+        'money': {'team': net_c / 100.0, 'each': _each(net_c, me['size']),
+                  'split': split, 'won': w, 'lost': l, 'pushed': p,
+                  'open': total - settled,
+                  'overall': {'up': up, 'level': level, 'down': down}},
+    }

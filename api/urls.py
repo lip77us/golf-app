@@ -249,6 +249,7 @@ urlpatterns = [
 
     # ---- Irish Rumble setup (round-level) ----
     path('swat/teams/preview/',                views.SwatSnakeView.as_view(),   name='api-swat-preview'),
+    path('foursomes/<int:pk>/swat/hole/<int:hole>/', views.SwatHoleCardView.as_view(), name='api-swat-hole'),
     path('rounds/<int:pk>/swat/setup/',         views.SwatSetupView.as_view(),   name='api-swat-setup'),
     path('rounds/<int:pk>/swat/teams/',         views.SwatTeamsView.as_view(),   name='api-swat-teams'),
     path('rounds/<int:pk>/swat/',               views.SwatResultView.as_view(),  name='api-swat-result'),

@@ -948,6 +948,10 @@ def unstated_scoring_game(round_obj) -> str | None:
     t = getattr(round_obj, 'tournament', None)
     if t is None or not t.is_individual_play:
         return None
+    # Oakmont SWAT is a MAIN game scored on gross best ball; its tournament
+    # carries the individual-play default but its round is not Stroke Play.
+    if 'oakmont_swat' in (round_obj.active_games or []):
+        return None
     if getattr(t, 'is_team_play', False):
         return None
     games = set(round_obj.active_games or [])

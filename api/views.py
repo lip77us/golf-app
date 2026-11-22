@@ -6680,12 +6680,21 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
             or (not rnd.primary_game and not scored_on
                 and list(rnd.active_games or []) == ['multi_skins'])):
         wants = wants | {'multi_skins'}
+    if 'oakmont_swat' in active:
+        wants = wants | {'oakmont_swat'}
     if not wants:
         return {}
     from services.skins import skins_summary
     out = {}
     try:
         with transaction.atomic():
+            # Oakmont SWAT's tray: the team's balls, the phantom card and the
+            # hole against every other team.
+            if 'oakmont_swat' in wants and hole_number:
+                from services.swat import swat_hole_card
+                card = swat_hole_card(foursome, hole_number)
+                if card:
+                    out['swat_hole'] = card
             if 'annandale_friday' in wants:
                 from services.annandale_friday import annandale_friday_summary
                 summary = annandale_friday_summary(foursome)
@@ -9181,6 +9190,14 @@ class FourballHoleCardView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.fourball import fourball_hole_card
         return Response(fourball_hole_card(foursome, int(hole)))
+
+
+class SwatHoleCardView(APIView):
+    """GET /api/foursomes/{id}/swat/hole/{hole}/ — the SWAT tray's card."""
+    def get(self, request, pk, hole):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.swat import swat_hole_card
+        return Response(swat_hole_card(foursome, int(hole)))
 
 
 class StablefordHoleCardView(APIView):

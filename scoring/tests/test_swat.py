@@ -305,3 +305,66 @@ class SetupTests(TestCase):
                for i in range(1, 11)]
         out = swat.preview_teams(ids)
         self.assertIn('at least 12', out['problem'])
+
+
+class HoleCardTests(_Round):
+    def card(self, fs, hole=1):
+        return swat.swat_hole_card(fs, hole)
+
+    def test_a_threesomes_phantom_is_locked_until_its_golfers_are_in(self):
+        self.play(self.a, 1, 0, 1, 1, 1)
+        c = self.card(self.b)
+        self.assertEqual(c['phantom']['state'], 'locked')
+        self.assertIsNone(c['phantom']['score'])
+        self.assertFalse(c['complete'])
+
+    def test_it_opens_on_the_score_alone_and_never_names_the_donor(self):
+        self.play(self.a, 1, 0, 1, 1, 1)
+        self.play(self.b, 1, 1, 1, 1)
+        c = self.card(self.b)
+        self.assertEqual(c['phantom'], {'state': 'open', 'score': PAR[1] + 1})
+        self.assertNotIn('Dunn', repr(c))
+        self.assertNotIn(str(self.bottom), repr(c['phantom']))
+
+    def test_it_reads_later_when_the_donor_has_not_played_the_hole(self):
+        self.play(self.b, 1, 1, 1, 1)
+        c = self.card(self.b)
+        self.assertEqual(c['phantom']['state'], 'later')
+        self.assertTrue(c['waiting'])
+        self.assertIn('phantom', c['waiting_note'])
+
+    def test_the_balls_come_best_first_with_the_counting_one_marked(self):
+        self.play(self.a, 1, 0, 1, 1, 1)
+        self.play(self.b, 1, 0, 1, 1)
+        c = self.card(self.b)
+        self.assertEqual(c['best'], PAR[1])
+        self.assertTrue(c['balls'][0]['counts'])
+        self.assertEqual(c['balls'][-1]['gross'], PAR[1] + 1)
+
+    def test_the_hole_against_every_other_team(self):
+        for fs, d in ((self.a, (0, 1, 1, 1)), (self.b, (1, 1, 1)),
+                      (self.c, (1, 1, 1))):
+            self.play(fs, 1, *d)
+        c = self.card(self.b)
+        v = c['versus']
+        self.assertEqual((v['won'], v['lost'], v['halved']), (0, 1, 1))
+        self.assertEqual(v['to_play'], ['Team Kerr'])     # D has not played it
+
+    def test_money_to_date_uses_the_team_stake_split_by_size(self):
+        for h in range(1, 19):
+            self.play(self.a, h, 0, 1, 1, 1)
+            for fs in (self.b, self.c, self.d):
+                self.play(fs, h, 1, 1, 1)
+        c = self.card(self.b, 18)
+        self.assertEqual(c['money']['team'], -72.0)
+        self.assertEqual(c['money']['each'], -24.0)
+        self.assertEqual(c['money']['split'], 'a third each')
+        self.assertEqual((c['money']['won'], c['money']['lost'],
+                          c['money']['pushed']), (0, 3, 6))
+        self.assertEqual(c['money']['overall'],
+                         {'up': 0, 'level': 2, 'down': 1})
+        self.assertEqual(c['money']['open'], 0)
+
+    def test_a_fivesome_reports_no_phantom(self):
+        self.play(self.a, 1, 0, 1, 1, 1)
+        self.assertIsNone(self.card(self.a)['phantom'])
