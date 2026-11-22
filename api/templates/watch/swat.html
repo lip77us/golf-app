@@ -1,0 +1,70 @@
+{% extends "watch/base.html" %}
+
+{% block title %}{% if tournament %}{{ tournament.name }} · {% endif %}Oakmont SWAT{% endblock %}
+
+{% block body %}
+  <h1>{% if tournament %}{{ tournament.name }}{% else %}Oakmont SWAT{% endif %}</h1>
+  <p class="sub">{{ round.date|date:"D, M j, Y" }} · {{ course_name }}{% if round.status == 'complete' or final %} · Final{% elif thru %} · Thru hole {{ thru }}{% endif %}</p>
+
+  {% if not has_teams %}
+    <div class="card">The teams have not been drawn yet.</div>
+  {% else %}
+    <div class="card" style="text-align:center;">
+      <div class="m-seg-label">{{ hero.name }}</div>
+      <div class="m-status {{ hero.cls }}" style="font-size:34px;font-weight:800;">{{ hero.each }} <span style="font-size:14px;font-weight:600;">each</span></div>
+      <div class="m-thru" style="text-align:center;">{% if hero.leader %}{{ hero.leader }}{% else %}Leading the field{% endif %}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:10px;">
+        {% for c in chips %}
+          <span class="chip {% if c.mine %}chip-t1{% else %}chip-halved{% endif %}">{{ c.name }} {{ c.each }}</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="m-seg-label" style="font-weight:700;">Teams{% if not final %} · {{ swat.bets_open }} of {{ swat.bets_total }} bets still open{% endif %}</div>
+      {% for r in rows %}
+        <div class="m-seg" style="align-items:center;{% if r.mine %}background:#eef6f1;{% endif %}">
+          <span><b>{% if r.tied %}T{% endif %}{{ r.place }}</b> {{ r.name }}{% if r.three %} <small>3</small>{% endif %}{% if r.five %} <small>5</small>{% endif %}{% if r.mine %} <small>You</small>{% endif %}
+            <br><span class="m-seg-label">thru {{ r.thru }} · {{ r.record }}</span></span>
+          <span class="m-seg-text cl-{{ r.cls }}" style="text-align:right;">{{ r.money }}<br><span class="m-seg-label">{{ r.each }} each</span></span>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="card">
+      <div class="m-seg-label" style="font-weight:700;">{{ mine.name }} v the field</div>
+      {% for f in field %}
+        <div class="m-seg" style="align-items:center;gap:6px;">
+          <span class="m-seg-label" style="flex:1;">v {{ f.name }}<br>thru {{ f.thru }}</span>
+          {% for c in f.cells %}
+            <span class="swat-cell swat-{{ c.cls }}"><b>{{ c.text }}</b><br><small>{{ c.key|slice:":5" }}{% if c.sub %} · {{ c.sub }}{% endif %}</small></span>
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+
+    {% if final %}
+      <div class="card" style="background:#0b1f1a;color:#fff;">
+        <div class="m-seg-label" style="color:#b9ccc3;font-weight:700;">MONEY BY TEAM</div>
+        {% for r in rows %}
+          <div class="m-seg" style="border-color:#1d3a31;"><span>{{ r.name }}</span><span><b>{{ r.money }}</b> · {{ r.each }} each</span></div>
+        {% endfor %}
+        <p class="teaser" style="color:#b9ccc3;">Who pays whom is on Settle up in the app.</p>
+      </div>
+    {% endif %}
+  {% endif %}
+
+  <p class="teaser">The phantom’s score is never tied to a name until the round is over. <a href="https://halved.golf/games/oakmont-swat/">New to SWAT? How it works ›</a></p>
+
+  <style>
+    .swat-cell { min-width:58px; text-align:center; padding:5px 4px; border-radius:8px; border:1px solid var(--border); font-size:12px; }
+    .swat-cell small { font-size:9px; opacity:.8; }
+    .swat-won { background:#0f6e56; color:#fff; border-color:#0f6e56; }
+    .swat-lost { background:#b45309; color:#fff; border-color:#b45309; }
+    .swat-push { background:#e5e7eb; }
+    .swat-up { color:#0f6e56; border-color:#0f6e56; }
+    .swat-dn { color:#b45309; border-color:#b45309; }
+    .swat-as, .swat-none { color:var(--muted); }
+    .cl-up { color:#0f6e56; } .cl-dn { color:#b45309; }
+  </style>
+{% endblock %}

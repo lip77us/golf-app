@@ -1,0 +1,48 @@
+{% extends "watch/base.html" %}
+
+{% block title %}{% if tournament %}{{ tournament.name }} · {% endif %}Oakmont SWAT scorecard{% endblock %}
+
+{% block body %}
+  <h1>{% if mine %}{{ mine.name }}{% else %}Oakmont SWAT{% endif %}</h1>
+  <p class="sub">{{ round.date|date:"D, M j, Y" }} · {{ course_name }}{% if final %} · Final{% elif thru %} · Thru hole {{ thru }}{% endif %}</p>
+
+  {% if not card %}
+    <div class="card">The teams have not been drawn yet.</div>
+  {% else %}
+    {% for h in card.halves %}
+      <div class="card" style="padding:8px;overflow:hidden;">
+        <table class="swat-sc">
+          <tr class="hd"><td>Hole</td>{% for n in h.holes %}<td>{{ n }}</td>{% endfor %}<td>{{ h.label }}</td></tr>
+          <tr class="mu"><td>Par</td>{% for v in h.par %}<td>{{ v }}</td>{% endfor %}<td></td></tr>
+          <tr class="mu"><td>Index</td>{% for v in h.si %}<td>{{ v }}</td>{% endfor %}<td></td></tr>
+          {% for p in h.players %}
+            <tr><td>{{ p.name }}</td>{% for c in p.cells %}<td class="{% if c.tint %}cnt{% endif %}">{{ c.v }}</td>{% endfor %}<td><b>{{ p.total }}</b></td></tr>
+          {% endfor %}
+          {% if h.phantom %}
+            <tr class="ph"><td>Phantom</td>{% for c in h.phantom.cells %}<td class="{% if c.tint %}cnt{% endif %}">{{ c.v }}</td>{% endfor %}<td><b>{{ h.phantom.total }}</b></td></tr>
+            {% if h.phantom.donors %}<tr class="don"><td></td>{% for d in h.phantom.donors %}<td>{{ d }}</td>{% endfor %}<td></td></tr>{% endif %}
+          {% endif %}
+          <tr class="best"><td>Best</td>{% for c in h.best.cells %}<td>{% if c.v != '' %}<span class="mk {{ c.mark }}">{{ c.v }}</span>{% endif %}</td>{% endfor %}<td><b>{{ h.best.total }}</b></td></tr>
+        </table>
+      </div>
+    {% endfor %}
+    <p class="teaser">{% if card.final %}Initials under each phantom score are the golfer whose ball it was.{% else %}The phantom is a bottom golfer from another team. Whose score it was shows here once every group has finished.{% endif %}</p>
+  {% endif %}
+
+  <style>
+    .swat-sc { width:100%; border-collapse:collapse; table-layout:fixed; font-size:11.5px; }
+    .swat-sc td { text-align:center; padding:4px 0; }
+    .swat-sc td:first-child { text-align:left; width:15%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+    .swat-sc .mu td { color:var(--muted); }
+    .swat-sc .hd td { font-weight:800; border-bottom:1px solid var(--border); }
+    .swat-sc .cnt { background:rgba(59,216,154,.28); font-weight:800; }
+    .swat-sc .ph td:first-child { color:var(--muted); font-style:italic; }
+    .swat-sc .don td { font-size:8.5px; color:var(--muted); padding-top:0; }
+    .swat-sc .best { border-top:1px solid var(--border); }
+    .mk { display:inline-block; min-width:20px; line-height:20px; font-weight:800; }
+    .mk.birdie { border:1.5px solid #0f6e56; border-radius:50%; }
+    .mk.eagle { border:1.5px solid #0b1f1a; border-radius:50%; box-shadow:0 0 0 2px #fff, 0 0 0 3.5px #0b1f1a; }
+    .mk.bogey { border:1.5px solid #b45309; }
+    .mk.double { border:1.5px solid #9a3412; box-shadow:0 0 0 2px #fff, 0 0 0 3.5px #9a3412; }
+  </style>
+{% endblock %}

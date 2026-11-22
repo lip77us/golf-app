@@ -942,6 +942,16 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
             'url': f'{base}?view=four_ball',
             'active': current == 'four_ball',
         })
+    if _has_swat(round_obj):
+        tabs.append({
+            'key': 'swat', 'label': 'SWAT',
+            'url': f'{base}?view=swat', 'active': current == 'swat',
+        })
+        tabs.append({
+            'key': 'swat_card', 'label': 'Scorecard',
+            'url': f'{base}?view=swat_card',
+            'active': current == 'swat_card',
+        })
     if _has_casual_multi_skins(round_obj):
         tabs.append({
             'key': 'multi_skins', 'label': 'Multi-Skins',
@@ -2536,6 +2546,180 @@ def _has_team_play(round_obj) -> bool:
     return bool(t and getattr(t, 'team_play_config', None))
 
 
+# ---------------------------------------------------------------------------
+# Oakmont SWAT
+# ---------------------------------------------------------------------------
+
+def _has_swat(round_obj) -> bool:
+    return 'oakmont_swat' in (round_obj.active_games or [])
+
+
+def _swat_each(v: float) -> str:
+    """`+$16`, `−$8`, `$0` — the sign in front, U+2212."""
+    if v > 0:
+        return f'+${v:g}'
+    if v < 0:
+        return f'−${abs(v):g}'
+    return '$0'
+
+
+def _swat_sharer_team(round_obj, teams: list):
+    """The team the link is ABOUT: the sharer's own, else the leader. The
+    page shows the whole field, but one team is read against it."""
+    owner = getattr(round_obj, 'created_by', None)   # a Player
+    if owner is not None:
+        for t in teams:
+            if owner.pk in {p['id'] for p in t['players']}:
+                return t
+    return teams[0] if teams else None
+
+
+def _swat_cell(bet: dict, flip: bool) -> dict:
+    """One Front / Back / Overall cell, from the sharer's side."""
+    margin = -bet['margin'] if flip else bet['margin']
+    result = bet['result']
+    if result and flip:
+        result = {'W': 'L', 'L': 'W'}.get(result, result)
+    if bet['played'] == 0:
+        return {'key': bet['key'], 'text': '–', 'cls': 'none', 'sub': ''}
+    if bet['done']:
+        if result == 'P':
+            return {'key': bet['key'], 'text': 'Push', 'cls': 'push',
+                    'sub': 'final'}
+        text = f'{result} {abs(margin)}'
+        sub = 'final'
+        if bet['closed']:
+            text = f'{result} {abs(margin)}&{bet["left"]}'
+            sub = 'closed'
+        return {'key': bet['key'], 'text': text, 'sub': sub,
+                'cls': 'won' if result == 'W' else 'lost'}
+    if margin == 0:
+        return {'key': bet['key'], 'text': 'AS', 'cls': 'as',
+                'sub': f'thru {bet["played"]}'}
+    return {'key': bet['key'],
+            'text': f'{abs(margin)} {"UP" if margin > 0 else "DN"}',
+            'cls': 'up' if margin > 0 else 'dn',
+            'sub': f'thru {bet["played"]}'}
+
+
+def _swat_marks(score, par) -> str:
+    """The Best row's mark: birdie circle, eagle double circle, bogey box,
+    double box — the shared scorecard vocabulary."""
+    if score is None or not par:
+        return ''
+    d = score - par
+    return {-2: 'eagle', -1: 'birdie', 1: 'bogey'}.get(
+        d, 'eagle' if d < -2 else ('double' if d >= 2 else ''))
+
+
+def _swat_scorecard(s: dict, team: dict) -> dict:
+    par = {int(k): v for k, v in (s.get('par') or {}).items()}
+    si = {int(k): v for k, v in (s.get('si') or {}).items()}
+    best = {int(k): v for k, v in (team.get('best') or {}).items()}
+    phantom = {int(k): v for k, v in (team.get('phantom') or {}).items()
+               if v is not None} if team.get('phantom') else None
+    donors = ({int(k): v for k, v in team['phantom_donors'].items()}
+              if team.get('phantom_donors') else None)
+    by_id = {p['id']: p for p in s.get('players', [])}
+
+    def cells(holes, values, marks=False, tint=False):
+        out = []
+        for h in holes:
+            v = values.get(h)
+            out.append({
+                'hole': h, 'v': '' if v is None else v,
+                'mark': _swat_marks(v, par.get(h)) if marks else '',
+                'tint': bool(tint and v is not None and best.get(h) == v),
+            })
+        return out
+
+    def total(holes, values):
+        vals = [values.get(h) for h in holes]
+        return '' if any(v is None for v in vals) else sum(vals)
+
+    halves = []
+    for label, holes in (('OUT', list(range(1, 10))),
+                         ('IN', list(range(10, 19)))):
+        rows = []
+        for p in team['players']:
+            g = {int(k): v for k, v in
+                 (by_id.get(p['id'], {}).get('holes') or {}).items()}
+            rows.append({'name': p.get('short') or p['name'],
+                         'cells': cells(holes, g, tint=True),
+                         'total': total(holes, g)})
+        phantom_row = None
+        if phantom is not None:
+            phantom_row = {
+                'cells': cells(holes, phantom, tint=True),
+                'total': total(holes, phantom),
+                'donors': ([donors.get(h, '') for h in holes]
+                           if donors else None)}
+        halves.append({
+            'label': label, 'holes': holes,
+            'par': [par.get(h, '') for h in holes],
+            'si': [si.get(h, '') for h in holes],
+            'players': rows, 'phantom': phantom_row,
+            'best': {'cells': cells(holes, best, marks=True),
+                     'total': total(holes, best)}})
+    return {'halves': halves, 'final': bool(donors)}
+
+
+def _render_swat(request, round_obj, token: str, tabs: list, card: bool = False):
+    from services.swat import swat_summary
+    s = swat_summary(round_obj)
+    teams = s.get('teams') or []
+    mine = _swat_sharer_team(round_obj, teams)
+    ctx = {
+        'thru': _round_thru(round_obj),
+        'round': round_obj,
+        'course_name': normalize_course_name(round_obj.course.name),
+        'tournament': round_obj.tournament,
+        'refresh_secs': 30,
+        'tabs': tabs,
+        'swat': s,
+        'mine': mine,
+        'has_teams': bool(teams),
+        'final': bool(s.get('final')),
+    }
+    if mine:
+        ranked = sorted(teams, key=lambda t: t['place'])
+        leader = ranked[0] if ranked else None
+        ctx['hero'] = {
+            'name': mine['name'], 'each': _swat_each(mine['each']),
+            'cls': 'up' if mine['each'] > 0 else 'dn' if mine['each'] < 0 else 'as',
+            'leader': (None if leader is mine else
+                       f'{leader["name"]} leads at {_swat_each(leader["each"])} each'),
+            'place': mine['place'],
+        }
+        ctx['chips'] = [{'name': t['name'].replace('Team ', '', 1),
+                         'each': _swat_each(t['each']),
+                         'cls': 'up' if t['each'] > 0 else 'dn' if t['each'] < 0 else 'as',
+                         'mine': t is mine} for t in ranked]
+        ctx['rows'] = [{
+            'name': t['name'], 'place': t['place'], 'tied': t['tied'],
+            'thru': 'F' if t['finished'] else t['thru'],
+            'record': f'{t["wins"]}–{t["losses"]}–{t["pushes"]}',
+            'money': _swat_each(t['money']), 'each': _swat_each(t['each']),
+            'three': t['three'], 'five': t['five'], 'mine': t is mine,
+            'cls': 'up' if t['money'] > 0 else 'dn' if t['money'] < 0 else 'as',
+        } for t in ranked]
+        field = []
+        for opp in teams:
+            if opp is mine:
+                continue
+            for m in s['matches']:
+                if {m['a'], m['b']} == {mine['id'], opp['id']}:
+                    flip = m['a'] != mine['id']
+                    field.append({'name': opp['name'], 'thru': m['thru'],
+                                  'cells': [_swat_cell(b, flip) for b in m['bets']]})
+        ctx['field'] = field
+        if card:
+            ctx['card'] = _swat_scorecard(s, mine)
+    return render(request,
+                  'watch/swat_scorecard.html' if card else 'watch/swat.html',
+                  ctx)
+
+
 _VIEW_DISPATCH = {
     'matches':      _render_matches,
     'low_net':      _render_low_net,
@@ -2562,6 +2746,8 @@ _VIEW_DISPATCH = {
     'banker':         _render_casual_banker,
     'quota_nassau':   _render_casual_quota_nassau,
     'team_play':      _render_team_play,
+    'swat':           lambda req, r, t, tabs: _render_swat(req, r, t, tabs),
+    'swat_card':      lambda req, r, t, tabs: _render_swat(req, r, t, tabs, card=True),
     # The per-player money games share one renderer; the key names which.
     **{k: (lambda req, r, t, tabs, _k=k: _render_simple_game(req, r, t, tabs, _k))
        for k in _SIMPLE_GAME_SPECS},
