@@ -35,7 +35,43 @@ CasualRoundSummary _g(int id, String date, List<int> ids,
       myPlayerId: 1,
     );
 
+Map<String, dynamic> _tHome(String date, {String status = 'in_progress'}) =>
+    buildHome(
+      now: DateTime(2026, 11, 22, 9),
+      playerName: 'Paul Lipkin',
+      active: const [], pending: const [], recent: const [],
+      playing: const [], watching: const [],
+      tournaments: [
+        Tournament(
+          id: 1, name: 'Android Test Round', startDate: date,
+          totalRounds: 1, activeGames: const [],
+          rounds: [
+            RoundSummary(
+              id: 9, courseId: 1, roundNumber: 1, date: date,
+              courseName: 'Tilden', status: status,
+              activeGames: const [], betUnit: 0,
+            )
+          ],
+        )
+      ],
+      stats: const {'enough': false, 'rounds': []},
+    );
+
 void main() {
+  test('an unfinished tournament round a few days late still takes the hero', () {
+    final h = _tHome('2026-11-20');
+    expect(h['hero']['rule'], 2);
+    expect(h['hero']['tag'], 'In progress · Round 1');
+  });
+
+  test('a tournament round over a week late, or complete, does not', () {
+    expect(_tHome('2026-11-10')['hero'], isNull);
+    expect(_tHome('2026-11-20', status: 'complete')['hero'], isNull);
+  });
+
+  test('a round dated today still reads Today', () {
+    expect(_tHome('2026-11-22')['hero']['tag'], 'Today · Round 1');
+  });
   test('play it again: two most recent distinct groups, newest first', () {
     final a = playAgain([
       _g(5, '2026-11-10', [1, 2, 3, 4]),

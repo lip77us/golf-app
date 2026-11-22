@@ -100,6 +100,8 @@ Map<String, dynamic> buildHome({
 }) {
   final today = ymd(now);
   final weekOut = ymd(now.add(const Duration(days: 7)));
+  // An unfinished tournament round up to a week past its date is still on.
+  final weekAgo = ymd(now.subtract(const Duration(days: 7)));
 
   Map<String, dynamic> casual(CasualRoundSummary r, {required bool started}) => {
         'kind': started ? 'playing' : 'notStarted',
@@ -171,6 +173,8 @@ Map<String, dynamic> buildHome({
       final d = r.date.length >= 10 ? r.date.substring(0, 10) : r.date;
       if (d == today) {
         tToday.add(entry);
+      } else if (d.compareTo(today) < 0 && d.compareTo(weekAgo) >= 0) {
+        tToday.add({...entry, 'overdue': true});
       } else if (d.compareTo(today) > 0 && d.compareTo(weekOut) <= 0) {
         upcoming.add(entry);
       }
@@ -197,7 +201,9 @@ Map<String, dynamic> buildHome({
     hero = {
       ...t,
       'rule': 2,
-      'tag': 'Today · ${t['tag']}',
+      'tag': t['overdue'] == true
+          ? 'In progress · ${t['tag']}'
+          : 'Today · ${t['tag']}',
       'dot': 'soon',
       'button': 'Open ${t['title']} ›',
     };
