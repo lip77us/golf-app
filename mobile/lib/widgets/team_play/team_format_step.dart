@@ -67,6 +67,7 @@ class TeamFormatStep extends StatelessWidget {
   });
 
   bool get _isShamble => format == 'shamble';
+  bool get _isSwat    => format == 'swat';
   bool get _isPairs   => teamSize == 2;
 
   Map<int, int> get _counts => resolveBallCounts(
@@ -194,6 +195,15 @@ class TeamFormatStep extends StatelessWidget {
             enabled : !locked,
             onTap   : () => onFormat('shamble'),
           ),
+          const SizedBox(height: 10),
+          TeamRadioCard(
+            title   : 'Oakmont SWAT',
+            body    : 'Teams of four, one group each. Every team plays every '
+                      'other a best-ball Nassau on gross. 12 or more golfers.',
+            selected: _isSwat,
+            enabled : !locked,
+            onTap   : () => onFormat('swat'),
+          ),
         ],
 
         // Expanded in place, under the radio — never a second rules screen.
@@ -235,7 +245,13 @@ class TeamFormatStep extends StatelessWidget {
         ],
 
         const SizedBox(height: 16),
-        if (!_isPairs)
+        if (!_isPairs && _isSwat)
+          const TeamNote(
+            'No handicap strokes: a team scores its best gross ball, and the '
+            'index only sets the starting teams. A team of three plays a '
+            'phantom fourth ball. The stake and the teams are set next.',
+          )
+        else if (!_isPairs)
           TeamNote(
             _isShamble
                 ? 'Allowance follows the average. Set on the handicap step, '

@@ -87,6 +87,9 @@ class GameIds {
   /// foursome gets 40 balls for the round and spends 0..4 a hole, picked AFTER
   /// the scores are in; the best n nets count against n × par.
   static const String fortyBalls     = 'forty_balls';
+  /// Oakmont SWAT — a MAIN tournament game (field of 12+, teams of four),
+  /// chosen on the Team format step. Never offered as a side game.
+  static const String swat           = 'oakmont_swat';
   // Better Ball — the same competition as Irish Rumble with the ball
   // count FIXED for all eighteen. Rumble's count moves and the movement
   // is the game; a count that never moves is a different game a golfer
@@ -901,6 +904,14 @@ const List<GameMeta> kGameCatalog = [
     // the catalog with nothing behind it, which is how Banker played a round
     // with a card that was ready and never started.
     hasLiveActivity      : false,
+  ),
+  GameMeta(
+    id                   : GameIds.swat,
+    blurb     : "Teams of four play every other team a best-ball Nassau on gross. Three-man teams borrow a phantom ball.",
+    moneyNote : "The stake is set on the Team format step.",
+    displayName          : 'Oakmont SWAT',
+    // A main game on the Team format step: in no side-game or casual picker.
+    minPlayers           : 12,
   ),
   GameMeta(
     id                   : GameIds.fortyBalls,

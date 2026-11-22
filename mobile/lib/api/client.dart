@@ -982,6 +982,49 @@ class ApiClient {
     return Map<String, dynamic>.from(data as Map);
   }
 
+  // ---- Oakmont SWAT (main tournament game) ----
+
+  /// The Teams screen's deal. With [teams] it is the TD's own arrangement,
+  /// checked and named; without, the snake order. Never writes.
+  Future<Map<String, dynamic>> swatPreview(
+    List<int> playerIds, {
+    bool allowFivesomes = false,
+    List<List<int>>? teams,
+  }) async {
+    final data = await _post('/swat/teams/preview/', {
+      'player_ids'      : playerIds,
+      'allow_fivesomes' : allowFivesomes,
+      if (teams != null) 'teams': teams,
+    });
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<Map<String, dynamic>> postSwatSetup(
+    int roundId, {required double stake, required bool allowFivesomes}) async {
+    final data = await _post('/rounds/$roundId/swat/setup/', {
+      'stake': stake, 'allow_fivesomes': allowFivesomes});
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  /// Writes the teams as the round's groups and draws the phantom order.
+  /// Refused once a score is posted.
+  Future<Map<String, dynamic>> postSwatTeams(
+    int roundId, {
+    required List<List<int>> teams,
+    required Map<int, int>   tees,
+  }) async {
+    final data = await _post('/rounds/$roundId/swat/teams/', {
+      'teams': teams,
+      'tees' : {for (final e in tees.entries) '${e.key}': e.value},
+    });
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<Map<String, dynamic>> getSwat(int roundId) async {
+    final data = await _get('/rounds/$roundId/swat/');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   // ---- 40 Balls (tournament group game) ----
 
   /// The TD's settings plus each group's derived budget. There is no ball plan

@@ -3112,7 +3112,7 @@ class RoundFieldGamesView(APIView):
     #: A group's own games (Skins, Nassau, Wolf) are not here: the group sets
     #: them on its own screen and settles them itself.
     FIELD_GAMES = ('low_net_round', 'better_ball', 'irish_rumble',
-                   'hot_spot', 'forty_balls', 'oakmont_swat')
+                   'hot_spot', 'forty_balls')
 
     #: Four of those five rank the same groups into the SAME pool, so a round
     #: runs one of them.  Stroke Play is not here: it is an overlay the board

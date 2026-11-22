@@ -13,6 +13,7 @@ import '../widgets/triple_cup_board.dart';
 import '../widgets/match_panel.dart';
 import '../widgets/solo_board.dart';
 import '../widgets/forty_balls_board.dart';
+import '../widgets/swat_board.dart';
 import '../widgets/sixes_board.dart';
 import '../widgets/banker_board.dart';
 import '../widgets/golf_app_bar.dart';
@@ -1152,6 +1153,8 @@ class _GameView extends StatelessWidget {
         // Standard mode: show segment ranking table.
         if (data['is_cup'] == true) return _CupIrishRumbleView(data: data);
         return _IrishRumbleView(data: data);
+      case 'oakmont_swat':
+        return SwatBoard(data: data);
       case 'forty_balls':
         return FortyBallsBoard(data: data);
       case 'better_ball':

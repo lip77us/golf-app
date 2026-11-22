@@ -57,7 +57,7 @@ const int kBestBallPct = 85;
 /// The formats each team size may play. `scramble` is the only one both run,
 /// and its table is NOT shared — four golfers take 25/20/15/10 and two take 35/15.
 const Map<int, List<String>> kFormatsBySize = {
-  4: ['scramble', 'shamble'],
+  4: ['scramble', 'shamble', 'swat'],
   2: ['scramble', 'best_ball', 'alternate_shot', 'scotch', 'chapman'],
 };
 
@@ -65,6 +65,7 @@ const Map<int, List<String>> kFormatsBySize = {
 const Map<String, String> kTeamFormatNames = {
   'scramble'      : 'Scramble',
   'shamble'       : 'Shamble',
+  'swat'          : 'Oakmont SWAT',
   'best_ball'     : 'Best ball',
   'alternate_shot': 'Alternate shot',
   'scotch'        : 'Scotch',
@@ -94,7 +95,9 @@ bool playsOneBall(String format) =>
 /// Alternating pairs stays a FOURS rule: two golfers have no pairs to alternate,
 /// and their alternate-shot rota is the `alternate_shot` format's own schedule.
 List<String> driveRulesFor(int teamSize, String format) {
-  if (format == 'best_ball' || format == 'chapman') return const ['none'];
+  if (format == 'best_ball' || format == 'chapman' || format == 'swat') {
+    return const ['none'];
+  }
   if (format == 'alternate_shot') return const ['alternating'];
   if (teamSize == 2) return const ['none', 'per_nine', 'per_eighteen'];
   return const ['none', 'per_nine', 'per_eighteen', 'alternating'];

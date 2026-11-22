@@ -18,6 +18,7 @@ import '../utils/grouping.dart' as gr;
 import '../utils/course_handicap.dart';
 import '../widgets/team_play/team_drive_step.dart';
 import '../widgets/team_play/team_format_step.dart';
+import '../widgets/swat_step.dart';
 import '../widgets/team_play/team_handicap_step.dart';
 import '../widgets/team_play/team_payout_step.dart';
 import '../utils/team_allowance.dart';
@@ -80,6 +81,7 @@ enum _StepKind {
   teamDrives,   // The four drive rules — three quotas and one schedule
   teamHandicap, // The allowance the format prescribes, worked on their own teams
   teamPayout,   // Fee, places and split — after teams, because it needs both
+  swat,         // Oakmont SWAT: the stake, and the teams dealt in snake order
   review,       // Review → create
 }
 
@@ -127,6 +129,21 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       _createNewTournament &&
       _tournamentActiveGames.contains(GameIds.teamPlay);
 
+  /// Oakmont SWAT — a MAIN game, chosen as the format of a foursome Team Play
+  /// event. The tournament it creates is NOT a team-play one (no drives, no
+  /// allowance table): the round plays `oakmont_swat` and its teams are the
+  /// round's groups. See `services/swat.py`.
+  bool get _isSwat => _isTeamPlay && _tpTeamSize == 4 && _tpFormat == 'swat';
+  double _swatStake = 6;
+  bool _swatFive = false;
+  List<List<int>>? _swatTeams;         // the TD's arrangement; null = snake
+  Map<String, dynamic>? _swatPreview;  // the last deal the server returned
+
+  List<List<int>> get _swatResolvedTeams => [
+        for (final t in (_swatPreview?['teams'] as List? ?? const []))
+          [for (final p in (t as Map)['players'] as List) (p as Map)['id'] as int]
+      ];
+
   /// The ordered steps for the current configuration.  Cup and non-cup share
   /// the front (tournament, details) then diverge; team assignment and round
   /// setup happen later from the tournament card, so the cup flow ends at
@@ -165,9 +182,13 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         _StepKind.players,
         _StepKind.groups,          // the existing Set tees screen, unchanged
         _StepKind.teamFormat,
-        if (_tpHasDriveStep) _StepKind.teamDrives,
-        _StepKind.teamHandicap,
-        _StepKind.teamPayout,
+        // **SWAT replaces the three team-play money steps** — its stake and
+        // its teams are one step, and it has no drives or allowance.
+        if (_isSwat) _StepKind.swat else ...[
+          if (_tpHasDriveStep) _StepKind.teamDrives,
+          _StepKind.teamHandicap,
+          _StepKind.teamPayout,
+        ],
         _StepKind.review,
       ];
     }
@@ -938,6 +959,11 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       case _StepKind.sideGame:
         // None is a valid (default) answer, so this step never blocks.
         return true;
+      case _StepKind.swat:
+        // The server's own verdict on the deal: 12 or more, every team 3–4
+        // (3–5 with fivesomes), and a team of four to draw a phantom from.
+        return _swatPreview != null && _swatPreview!['problem'] == null &&
+            _swatStake >= 0;
       case _StepKind.teamFormat:
       case _StepKind.teamDrives:
         // Every answer on these is valid — there is always a live format, a
@@ -1086,7 +1112,9 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       case _EventType.pair:
         return 'Pairs Play · ${kTeamFormatNames[_tpFormat] ?? 'Scramble'}';
       case _EventType.quad:
-        return 'Foursome Play · ${kTeamFormatNames[_tpFormat] ?? 'Scramble'}';
+        return _tpFormat == 'swat'
+            ? 'Oakmont SWAT'
+            : 'Foursome Play · ${kTeamFormatNames[_tpFormat] ?? 'Scramble'}';
     }
   }
 
@@ -1188,6 +1216,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
                    ? 'How the pair scores'
                    : 'Scramble or shamble',
                perRound: false),
+            _StepKind.swat =>
+              (label: 'Oakmont SWAT', sub: 'Stake and teams', perRound: false),
             _StepKind.teamDrives =>
               (label: 'Drives', sub: 'Whose tee shots have to be used', perRound: false),
             _StepKind.teamHandicap =>
@@ -1425,9 +1455,10 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     // The server's repair stays: rounds created before this still carry it,
     // and the tournament board reads the ROUNDS' lists as a fallback so a TD
     // who said it in the wrong place does not lose the game.
-    final games   = _activeGames
-        .where((g) => g != GameIds.dreamRound)
-        .toList();
+    final games   = [
+      ..._activeGames.where((g) => g != GameIds.dreamRound),
+      if (_isSwat) GameIds.swat,
+    ];
 
     // 1. Resolve or create tournament
     int? tournamentId;
@@ -1450,7 +1481,10 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         // entry and pool, its config is a OneToOne on the ROUND, and the round
         // flag is exactly right for it.
         activeGames: [
-          ..._tournamentActiveGames,
+          // SWAT is a team-play-LOOKING wizard flow but an ordinary round game:
+          // the marker would make the server build a Foursome Play board.
+          ..._tournamentActiveGames
+              .where((g) => !(_isSwat && g == GameIds.teamPlay)),
           if (_activeGames.contains(GameIds.dreamRound)) GameIds.dreamRound,
         ],
         totalRounds: _numRounds,
@@ -1608,7 +1642,14 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     // just reads that back so the group numbers reach the backend even when
     // the TD accepted the auto-balance.
     final Map<int, int> teamPlayGroupOf = {};
-    if (_isTeamPlay) {
+    if (_isSwat) {
+      final rosters = _swatResolvedTeams;
+      for (var i = 0; i < rosters.length; i++) {
+        for (final id in rosters[i]) {
+          teamPlayGroupOf[id] = i + 1;
+        }
+      }
+    } else if (_isTeamPlay) {
       final rosters = _tpRosters;
       for (var i = 0; i < rosters.length; i++) {
         for (final id in rosters[i]) {
@@ -1663,7 +1704,19 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     // Team Play — the config, then the names. It posts AFTER setup because
     // sync_teams needs the foursomes to exist: it provisions the phantom for
     // any team that came out at three and works every team's allowance.
-    if (_isTeamPlay && tournamentId != null) {
+    if (_isSwat) {
+      // The game, then the teams: the second rewrites the groups from the
+      // dealt teams and draws the phantom order, which is why it runs last.
+      await client.postSwatSetup(round.id,
+          stake: _swatStake, allowFivesomes: _swatFive);
+      await client.postSwatTeams(round.id,
+          teams: _swatResolvedTeams,
+          tees: {
+            for (final e in _playerTees.entries)
+              if (e.value != null) e.key: e.value!.id
+          });
+    }
+    if (_isTeamPlay && !_isSwat && tournamentId != null) {
       await client.postTeamPlaySetup(
         tournamentId,
         teamSize      : _tpTeamSize,
@@ -1963,6 +2016,20 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           onFixed  : (n) => setState(() => _tpBallFixed = n),
           onPerHole: (hole, count) =>
               setState(() => _tpPerHoleCounts[hole] = count),
+        );
+      case _StepKind.swat:
+        return SwatStep(
+          playerIds       : _orderedPlayerIds,
+          stake           : _swatStake,
+          allowFivesomes  : _swatFive,
+          teams           : _swatTeams,
+          onStake         : (v) => setState(() => _swatStake = v),
+          onAllowFivesomes: (v) => setState(() {
+            _swatFive = v;
+            _swatTeams = null;
+          }),
+          onTeams         : (t) => setState(() => _swatTeams = t),
+          onPreview       : (p) => setState(() => _swatPreview = p),
         );
       case _StepKind.teamDrives:
         return TeamDriveStep(
