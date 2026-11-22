@@ -153,6 +153,8 @@ class RoundProvider extends ChangeNotifier {
   final Map<int, SurvivorHoleCard> _survivorHoles = {};
   final Map<int, StrokePlayHoleCard> _strokePlayHoles = {};
   final Map<int, StrokePlayHoleCard> _stablefordHoles = {};
+  /// Oakmont SWAT's tray card, by hole (the server's `swat_hole`, raw).
+  final Map<int, Map<String, dynamic>> _swatHoles = {};
   Points531Summary? _points531Summary;
   VegasSummary?    _vegasSummary;
   FourballSummary? _fourballSummary;
@@ -242,6 +244,7 @@ class RoundProvider extends ChangeNotifier {
   SurvivorHoleCard? survivorHole(int hole)  => _survivorHoles[hole];
   StrokePlayHoleCard? strokePlayHole(int hole) => _strokePlayHoles[hole];
   StrokePlayHoleCard? stablefordHole(int hole) => _stablefordHoles[hole];
+  Map<String, dynamic>? swatHole(int hole) => _swatHoles[hole];
   Points531Summary? get points531Summary   => _points531Summary;
   VegasSummary?     get vegasSummary        => _vegasSummary;
   FourballSummary?  get fourballSummary     => _fourballSummary;
@@ -318,6 +321,7 @@ class RoundProvider extends ChangeNotifier {
     _sixesHoles.clear();
     _strokePlayHoles.clear();
     _stablefordHoles.clear();
+    _swatHoles.clear();
     _rabbitHoles.clear();
     _tripleNassauHoles.clear();
     _pointsHoles.clear();
@@ -473,6 +477,7 @@ class RoundProvider extends ChangeNotifier {
       _sixesHoles.clear();
       _strokePlayHoles.clear();
       _stablefordHoles.clear();
+      _swatHoles.clear();
       _rabbitHoles.clear();
       _tripleNassauHoles.clear();
       _pointsHoles.clear();
@@ -898,6 +903,21 @@ class RoundProvider extends ChangeNotifier {
       // Offline — keep whatever is on screen.
     } catch (e) {
       debugPrint('loadSixesHole error: $e');
+    }
+  }
+
+  /// Fetch one hole's SWAT card. Silent on failure, like the others.
+  Future<void> loadSwatHole(int foursomeId, int hole) async {
+    try {
+      final card = await _client.getSwatHoleCard(foursomeId, hole);
+      if (card.isNotEmpty) {
+        _swatHoles[hole] = card;
+        notifyListeners();
+      }
+    } on NetworkException {
+      // Offline — keep whatever is on screen.
+    } catch (e) {
+      debugPrint('loadSwatHole error: $e');
     }
   }
 
@@ -1944,6 +1964,15 @@ class RoundProvider extends ChangeNotifier {
       _pointsHoles.clear();
       _pointsHoles[holeNumber] = PointsHoleCard.fromJson(pts);
       _annandaleResults.answer(holeNumber);
+      notifyListeners();
+    }
+
+    final swt = response['swat_hole'];
+    if (swt is Map<String, dynamic>) {
+      // Other teams' scores move this team's hole result and money, so every
+      // held card is stale once one posts.
+      _swatHoles.clear();
+      _swatHoles[holeNumber] = swt;
       notifyListeners();
     }
 

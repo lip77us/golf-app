@@ -1020,6 +1020,12 @@ class ApiClient {
     return Map<String, dynamic>.from(data as Map);
   }
 
+  /// The SWAT tray's card for one hole of this team's group.
+  Future<Map<String, dynamic>> getSwatHoleCard(int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/swat/hole/$hole/');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   Future<Map<String, dynamic>> getSwat(int roundId) async {
     final data = await _get('/rounds/$roundId/swat/');
     return Map<String, dynamic>.from(data as Map);

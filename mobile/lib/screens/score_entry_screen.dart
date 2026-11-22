@@ -38,6 +38,7 @@ import '../utils/stableford_standing.dart';
 import '../utils/vegas_standing.dart';
 import '../utils/auto_post.dart';
 import '../widgets/generic_entry.dart';
+import '../widgets/swat_entry.dart';
 import '../utils/generic_tray.dart';
 import '../widgets/score_box.dart';
 import '../widgets/score_entry_title.dart';
@@ -1899,6 +1900,33 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       _bankerHoleOpen(rp) ||
       _strokePlayCard(rp) != null ||
       _genericTrayRound(rp);
+
+  /// Oakmont SWAT is this round's game — gross rows, the phantom card and its
+  /// own tray.
+  bool _swatRound(RoundProvider rp) =>
+      _activeGames(rp.round).contains(GameIds.swat);
+
+  int? _swatCardAsked;
+
+  /// The SWAT card for the hole on screen, fetched when the save did not
+  /// bring one (a hole opened without posting, or a card a save dropped).
+  SwatHoleCard? _swatCard(RoundProvider rp) {
+    if (!_swatRound(rp)) return null;
+    final raw = rp.swatHole(_selectedHole);
+    if (raw == null) {
+      if (_swatCardAsked != _selectedHole) {
+        _swatCardAsked = _selectedHole;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          context.read<RoundProvider>()
+              .loadSwatHole(widget.foursomeId, _selectedHole);
+        });
+      }
+      return null;
+    }
+    _swatCardAsked = null;
+    return SwatHoleCard.fromJson(raw);
+  }
 
   /// The hole we have asked the server for; see `_ensureSixesCard`.
   int? _sixesCardAsked;
@@ -4181,7 +4209,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // **Every other game.** The generic tray: this hole's scores and each
     // golfer's gross against par. It needs no server card, so it rises the
     // moment the scores are in.
-    final genTray = _genericTrayRound(rp) &&
+    final swatCard = _swatCard(rp);
+    final swatTray =
+        swatCard != null && fbActive && allDone && _editHotPid == null;
+    final genTray = _genericTrayRound(rp) && !_swatRound(rp) &&
         fbActive && allDone && _editHotPid == null;
 
     // Every hole that ends in a tray saves itself once it is complete.
@@ -4535,6 +4566,27 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 _editHotPid = null;
               }),
               onPress  : (m, start) => _afPress(rp, m, start),
+            )
+          else if (swatTray)
+            SwatHoleTray(
+              card: swatCard,
+              hole: _selectedHole,
+              picking: _trayEditing,
+              onEdit: () => setState(() {
+                _trayEditing = !_trayEditing;
+                _editHotPid = null;
+              }),
+              onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
+              nextLabel: _nextHoleInOrder(rp) == null
+                  ? 'Finish round'
+                  : 'Hole ${_nextHoleInOrder(rp)}',
+              onNext: rp.submitting
+                  ? null
+                  : (_nextHoleInOrder(rp) == null
+                      ? () => _completeRound(ctx, players, par)
+                      : _advance),
+              onLeaderboard: () => Navigator.of(context)
+                  .pushNamed('/leaderboard', arguments: rp.round!.id),
             )
           else if (genTray)
             GenericHoleTray(
@@ -5071,7 +5123,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 // turn, so without this the only way to find your match was
                 // the leaderboard (Paul, 11 Nov 2026). Banker can never be
                 // on the same round — it is one of the tray owners.
-                aboveRows: _soloCard(rp) != null
+                grossOnly: _swatRound(rp),
+                aboveRows: _swatCard(rp) != null && _swatCard(rp)!.three
+                    ? SwatPhantomCard(card: _swatCard(rp)!)
+                    : _soloCard(rp) != null
                     ? SoloHeader(card: _soloCard(rp)!)
                     : _miniSinglesCard(rp) != null
                     ? MiniSinglesMatches(card: _miniSinglesCard(rp)!)
@@ -5552,6 +5607,9 @@ class _HoleScoreCard extends StatelessWidget {
   /// the one thing on this screen that has to be done BEFORE a score.
   final Widget? aboveRows;
 
+  /// Oakmont SWAT: rows show gross and the index, no net.
+  final bool grossOnly;
+
   /// Las Vegas' hole card, for the side headers — the live half of that
   /// game, because what a golfer watches is the number forming. Null on
   /// every other round, which is what keeps the headers absent rather than
@@ -5590,6 +5648,7 @@ class _HoleScoreCard extends StatelessWidget {
     this.ball,
     this.rumble,
     this.aboveRows,
+    this.grossOnly = false,
     this.vegasHole,
     this.fourballHole,
     this.nassauCard,
@@ -6373,6 +6432,7 @@ class _HoleScoreCard extends StatelessWidget {
                 deemphasized:        hotSpotIdx != -1 && !isHot,
                 withdrawn:           withdrawn,
                 pickedUp:            pickedUp,
+                grossOnly:           grossOnly,
                 // Under a team header, or first on the card, the band is the
                 // rule and the row adds none.
                 flushTop:            idx == 0 || teamHead.isNotEmpty,
@@ -7205,6 +7265,10 @@ class _PlayerRow extends StatelessWidget {
   /// Points 5-3-1: cumulative points total for this player (null = not a P531 round).
   final double?       p531CumulativePoints;
 
+  /// Oakmont SWAT: gross only — no net pill, and `Index 3.2` where the
+  /// course handicap goes (the index is what sets the teams).
+  final bool          grossOnly;
+
   const _PlayerRow({
     required this.member,
     required this.gross,
@@ -7230,6 +7294,7 @@ class _PlayerRow extends StatelessWidget {
     this.deemphasized = false,
     this.withdrawn = false,
     this.pickedUp = false,
+    this.grossOnly = false,
     this.flushTop = false,
     this.p531HolePoints,
     this.p531CumulativePoints,
@@ -7315,7 +7380,9 @@ class _PlayerRow extends StatelessWidget {
                 ),
                 // `CH 12` — the course handicap, muted, right after the name.
                 const SizedBox(width: 6),
-                Text('CH ${member.courseHandicap}',
+                Text(grossOnly
+                        ? 'Index ${member.player.handicapIndex}'
+                        : 'CH ${member.courseHandicap}',
                     style: Halved.body(
                             color: Halved.muted, weight: FontWeight.w600)
                         .copyWith(fontSize: 11.5)),
@@ -7458,8 +7525,8 @@ class _PlayerRow extends StatelessWidget {
         const SizedBox(width: 8),
 
         // The net pill: `net 4`, the figure in the display face. A dash until
-        // there is a score to be net of.
-        Container(
+        // there is a score to be net of. **Hidden in SWAT**, which is gross.
+        if (!grossOnly) Container(
           width: 52,
           height: 26,
           alignment: Alignment.center,
@@ -7482,7 +7549,7 @@ class _PlayerRow extends StatelessWidget {
             ],
           )),
         ),
-        const SizedBox(width: 10),
+        if (!grossOnly) const SizedBox(width: 10),
 
         // Withdrawn players have no score box on holes they're out for —
         // just a muted "Out" marker.  Earlier holes still render normally
