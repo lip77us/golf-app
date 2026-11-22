@@ -248,8 +248,12 @@ def field_pool(round_obj, entry_fee) -> float:
 #: pools COULD have been collected and paid separately; each config carries
 #: its own entry fee and payout table. The call is that a group plays one
 #: group game, so there is one board to read and one pot to settle.
-ONE_POOL_GAMES = ('irish_rumble', 'better_ball', 'hot_spot', 'forty_balls',
-                  'oakmont_swat')
+ONE_POOL_GAMES = ('irish_rumble', 'better_ball', 'hot_spot', 'forty_balls')
+
+#: The pool family plus Oakmont SWAT, which scores the same group balls but
+#: settles by team stake rather than a pool, so it is exclusive with them
+#: without being one of them.
+EXCLUSIVE_GROUP_GAMES = ONE_POOL_GAMES + ('oakmont_swat',)
 
 
 class GroupGameExcluded(Exception):
@@ -283,7 +287,7 @@ def refuse_if_another_one_pool_game(round_obj, this_game) -> None:
     answering a different question.
     """
     active = set(round_obj.active_games or [])
-    others = [g for g in ONE_POOL_GAMES if g != this_game and g in active]
+    others = [g for g in EXCLUSIVE_GROUP_GAMES if g != this_game and g in active]
     if not others:
         return
     from core.models import GameType

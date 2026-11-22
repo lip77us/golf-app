@@ -288,8 +288,8 @@ class PhantomTests(_Round):
 
 class SetupTests(TestCase):
     def test_the_game_is_exclusive_with_the_other_group_games(self):
-        from services.group_field import ONE_POOL_GAMES
-        self.assertIn('oakmont_swat', ONE_POOL_GAMES)
+        from services.group_field import EXCLUSIVE_GROUP_GAMES
+        self.assertIn('oakmont_swat', EXCLUSIVE_GROUP_GAMES)
 
     def test_a_round_of_swat_groups_may_hold_five(self):
         from services.round_setup import max_group_size
