@@ -70,6 +70,11 @@ def max_group_size(round_obj) -> int:
     if 'annandale_friday' in games:
         from services.annandale_friday import GROUP_SIZES
         return max(GROUP_SIZES)
+    if 'oakmont_swat' in games:
+        # A team is a group, and a fivesome is legal when the TD allows it.
+        # SWAT's own setup enforces 3-4 (or 3-5), so this only keeps the
+        # round from refusing the card first.
+        return 5
     return FOURSOME
 
 

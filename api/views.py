@@ -754,6 +754,12 @@ def _build_leaderboard(round_obj: Round) -> dict:
         if summary:
             games['forty_balls'] = {'label': '40 Balls', **summary}
 
+    if 'oakmont_swat' in active_games:
+        from services.swat import swat_summary
+        summary = swat_summary(round_obj)
+        if summary:
+            games['oakmont_swat'] = {'label': 'SWAT', **summary}
+
     if 'better_ball' in active_games:
         # **The label is the game's own name**, not the slug's — the app titles
         # it from the ball count (`Best 2 of 4`) and a TD may have renamed it,
@@ -3106,7 +3112,7 @@ class RoundFieldGamesView(APIView):
     #: A group's own games (Skins, Nassau, Wolf) are not here: the group sets
     #: them on its own screen and settles them itself.
     FIELD_GAMES = ('low_net_round', 'better_ball', 'irish_rumble',
-                   'hot_spot', 'forty_balls')
+                   'hot_spot', 'forty_balls', 'oakmont_swat')
 
     #: Four of those five rank the same groups into the SAME pool, so a round
     #: runs one of them.  Stroke Play is not here: it is an overlay the board
@@ -3119,7 +3125,8 @@ class RoundFieldGamesView(APIView):
     #: (`refuse_if_better_ball` / `_refuse_if_rumble`); Hot Seat and 40 Balls
     #: guard nothing.  This gate is what keeps the pair out of
     #: `active_games` in the first place, by this route.
-    ONE_OF_THESE = ('better_ball', 'irish_rumble', 'hot_spot', 'forty_balls')
+    ONE_OF_THESE = ('better_ball', 'irish_rumble', 'hot_spot', 'forty_balls',
+                    'oakmont_swat')
 
     def post(self, request, pk):
         round_obj = account_get_or_404(Round, request.user.account, pk=pk)
@@ -15461,3 +15468,94 @@ class TeamPlaySettlementView(APIView):
         if body is None:
             return Response({'configured': False})
         return Response(body)
+
+
+# ---------------------------------------------------------------------------
+# Oakmont SWAT
+# ---------------------------------------------------------------------------
+
+class SwatSnakeView(APIView):
+    """POST /api/swat/teams/preview/ — the Teams screen's deal.
+
+    Body: ``{"player_ids": [...], "allow_fivesomes": false,
+    "teams": [[id, ...], ...]?}``. With no ``teams`` it is the snake deal;
+    with them it is the TD's arrangement, checked and named. Never writes, and
+    runs before any round exists (the wizard asks while it is still drawing).
+    """
+    def post(self, request):
+        from services.swat import SwatError, preview_teams
+        ids = request.data.get('player_ids') or []
+        owned = set(Player.objects.filter(
+            account=request.user.account, pk__in=ids).values_list('pk', flat=True))
+        if len(owned) != len(set(ids)):
+            return Response({'detail': 'Unknown golfer.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        try:
+            data = preview_teams(
+                list(ids), allow_fivesomes=bool(request.data.get('allow_fivesomes')),
+                teams=request.data.get('teams'))
+        except SwatError as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return Response(data)
+
+
+class SwatSetupView(APIView):
+    """GET/POST /api/rounds/{id}/swat/setup/ — the stake and the fivesome switch."""
+    def get(self, request, pk):
+        round_obj = round_for_reader(request.user, pk)
+        from games.models import SwatConfig
+        cfg = SwatConfig.objects.filter(round=round_obj).first()
+        return Response({
+            'configured': cfg is not None,
+            'stake': float(cfg.stake) if cfg else 6.0,
+            'allow_fivesomes': bool(cfg and cfg.allow_fivesomes),
+            'edited': bool(cfg and cfg.edited)})
+
+    @transaction.atomic
+    def post(self, request, pk):
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+        from services.group_field import GroupGameExcluded
+        from services.swat import SwatError, setup_swat
+        try:
+            cfg = setup_swat(
+                round_obj, stake=request.data.get('stake', 6),
+                allow_fivesomes=bool(request.data.get('allow_fivesomes')))
+        except (SwatError, GroupGameExcluded, ArithmeticError) as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return Response({'configured': True, 'stake': float(cfg.stake),
+                         'allow_fivesomes': cfg.allow_fivesomes},
+                        status=status.HTTP_201_CREATED)
+
+
+class SwatTeamsView(APIView):
+    """POST /api/rounds/{id}/swat/teams/ — write the teams as the groups.
+
+    Body: ``{"teams": [[player_id, ...], ...], "tees": {player_id: tee_id},
+    "handicap_allowance": 1.0}``. Refused once a score is posted. Also draws
+    the phantom order, so it is the moment the round "starts" for SWAT.
+    """
+    @transaction.atomic
+    def post(self, request, pk):
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+        from services.round_setup import RoundRegroupLocked
+        from services.swat import SwatError, apply_teams
+        teams = request.data.get('teams') or []
+        tees = {int(k): int(v) for k, v in (request.data.get('tees') or {}).items()}
+        try:
+            apply_teams(round_obj, teams, tees,
+                        allowance=float(request.data.get('handicap_allowance', 1.0)))
+        except (SwatError, RoundRegroupLocked, ValueError) as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        from services.swat import swat_summary
+        return Response(swat_summary(round_obj), status=status.HTTP_201_CREATED)
+
+
+class SwatResultView(APIView):
+    """GET /api/rounds/{id}/swat/ — the SWAT board."""
+    def get(self, request, pk):
+        round_obj = round_for_reader(request.user, pk)
+        from services.swat import swat_summary
+        return Response(swat_summary(round_obj))

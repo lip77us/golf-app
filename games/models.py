@@ -4519,3 +4519,43 @@ class SoloGame(models.Model):
 
     def __str__(self):
         return f'Solo {self.get_variant_display()} — round {self.round_id}'
+
+
+class SwatConfig(models.Model):
+    """
+    Oakmont SWAT — a field-wide team game for 12 or more golfers.
+
+    The field is split into teams of four (snake order by Handicap Index); each
+    team is one group, scores its best GROSS ball on a hole, and plays every
+    other team a match-play Nassau on those balls. A three-man team's fourth
+    ball is a PHANTOM: on each hole, the gross of one "bottom golfer" from a
+    team of four, in an order drawn at random when the round starts and never
+    shown until the round is over.
+
+    Round-scoped, like 40 Balls. The teams themselves are the round's
+    foursomes; this row holds only what is not derivable from them: the stake,
+    the fivesome switch, the frozen bands (the snake order, which does not
+    follow the TD's later moves) and the phantom's hole-by-hole donor list.
+
+    See docs/design-review/handoff-oakmont-swat/HANDOFF.md.
+    """
+    round           = models.OneToOneField(
+                        Round, on_delete=models.CASCADE,
+                        related_name='swat_config')
+    #: A FOURSOME golfer's stake per bet. The team stake is 4 x this.
+    stake           = models.DecimalField(
+                        max_digits=8, decimal_places=2, default=6.00)
+    allow_fivesomes = models.BooleanField(default=False)
+    #: {player_id: 'A'..'E'} — a golfer's row in the snake order. Frozen when
+    #: the teams are dealt, so a TD's later move does not re-band anybody.
+    bands           = models.JSONField(default=dict, blank=True)
+    #: The phantom's donor for each hole, hole 1 first: 18 player ids, the
+    #: bottom golfers shuffled and reshuffled each time the list runs out.
+    #: SERVER-SIDE ONLY until the round is complete — a name, or a pattern,
+    #: would let a threesome look the score up before it plays the hole.
+    phantom_order   = models.JSONField(default=list, blank=True)
+    #: True once the TD has moved anybody away from the snake order.
+    edited          = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f'SWAT · round {self.round_id}'

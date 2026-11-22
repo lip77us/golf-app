@@ -77,6 +77,7 @@ class GameType(models.TextChoices):
     # 0..k of them a hole; the best n nets count against n × par. A round runs
     # one of 40 Balls, Irish Rumble or Better Ball, never two.
     FORTY_BALLS     = 'forty_balls',     '40 Balls'
+    SWAT            = 'oakmont_swat',    'Oakmont SWAT'
     SCRAMBLE        = 'scramble',        'Scramble'
     # Team-ball cup formats — one ball a side, entered as a single team score
     # per hole (no per-golfer score).  All route through TeamHoleScore + the

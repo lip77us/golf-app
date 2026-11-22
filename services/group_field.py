@@ -248,7 +248,8 @@ def field_pool(round_obj, entry_fee) -> float:
 #: pools COULD have been collected and paid separately; each config carries
 #: its own entry fee and payout table. The call is that a group plays one
 #: group game, so there is one board to read and one pot to settle.
-ONE_POOL_GAMES = ('irish_rumble', 'better_ball', 'hot_spot', 'forty_balls')
+ONE_POOL_GAMES = ('irish_rumble', 'better_ball', 'hot_spot', 'forty_balls',
+                  'oakmont_swat')
 
 
 class GroupGameExcluded(Exception):

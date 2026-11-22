@@ -248,6 +248,10 @@ urlpatterns = [
     path('foursomes/<int:pk>/three-person-match/setup/',  views.ThreePersonMatchSetupView.as_view(),  name='api-three-person-match-setup'),
 
     # ---- Irish Rumble setup (round-level) ----
+    path('swat/teams/preview/',                views.SwatSnakeView.as_view(),   name='api-swat-preview'),
+    path('rounds/<int:pk>/swat/setup/',         views.SwatSetupView.as_view(),   name='api-swat-setup'),
+    path('rounds/<int:pk>/swat/teams/',         views.SwatTeamsView.as_view(),   name='api-swat-teams'),
+    path('rounds/<int:pk>/swat/',               views.SwatResultView.as_view(),  name='api-swat-result'),
     path('rounds/<int:pk>/forty-balls/setup/', views.FortyBallsSetupView.as_view(), name='api-forty-balls-setup'),
     path('rounds/<int:pk>/forty-balls/',       views.FortyBallsResultView.as_view(), name='api-forty-balls-result'),
     path('foursomes/<int:pk>/forty-balls/count/', views.FortyBallsCountView.as_view(), name='api-forty-balls-count'),
