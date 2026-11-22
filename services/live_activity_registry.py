@@ -672,6 +672,15 @@ def _mini_singles(foursome, player_id, *, final):
                                        thru=holes_played(foursome))
 
 
+def _swat(foursome, player_id, *, final):
+    from services.live_activity_swat import (swat_activity_state,
+                                             swat_final_state)
+    if final:
+        return swat_final_state(foursome, player_id=player_id)
+    return swat_activity_state(foursome, player_id=player_id,
+                               thru=holes_played(foursome))
+
+
 def _nassau_nine(foursome, player_id, *, final):
     from services.live_activity_nassau_nine import (
         nassau_nine_activity_state, nassau_nine_final_state)
@@ -764,6 +773,9 @@ BUILDERS = {
     # so it is held in UNSHIPPED_KINDS until the build carrying the layout.
     'multi_skins' : _multi_skins,
     'nassau_nine' : _nassau_nine,
+    # Oakmont SWAT: Nassau's card with a row per opposing team, so it
+    # declares `kind = 'nassau'` and needs no layout of its own.
+    'oakmont_swat': _swat,
     'solo_stroke' : _solo,
     'solo_nassau' : _solo,
     'solo_match'  : _solo,
@@ -796,6 +808,7 @@ _SLUG_AWARE = {'match_18', 'fourball',
 # slug -> the card `kind` its builder declares, where that differs from the
 # slug. Only needed for a builder serving several games.
 CARD_KIND = {'match_18': 'match', 'fourball': 'match',
+             'oakmont_swat': 'nassau',
              'match_play': 'match',
              'nassau_nine': 'match',
              'solo_stroke': 'stroke_play', 'solo_nassau': 'nassau',

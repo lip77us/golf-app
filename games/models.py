@@ -4556,6 +4556,10 @@ class SwatConfig(models.Model):
     phantom_order   = models.JSONField(default=list, blank=True)
     #: True once the TD has moved anybody away from the snake order.
     edited          = models.BooleanField(default=False)
+    #: Teams whose turn push has gone out (foursome ids). NULL until the first
+    #: score is pushed, which records a baseline WITHOUT announcing it — the
+    #: Annandale mechanism, so a round under way never rings for its history.
+    announced       = models.JSONField(null=True, blank=True, default=None)
 
     def __str__(self):
         return f'SWAT · round {self.round_id}'

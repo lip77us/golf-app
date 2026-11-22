@@ -910,6 +910,8 @@ const List<GameMeta> kGameCatalog = [
     blurb     : "Teams of four play every other team a best-ball Nassau on gross. Three-man teams borrow a phantom ball.",
     moneyNote : "The stake is set on the Team format step.",
     displayName          : 'Oakmont SWAT',
+    // Nassau's card, a row per opposing team (services/live_activity_swat.py).
+    hasLiveActivity      : true,
     // A main game on the Team format step: in no side-game or casual picker.
     minPlayers           : 12,
   ),
