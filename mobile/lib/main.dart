@@ -21,6 +21,7 @@ import 'providers/message_provider.dart';
 import 'providers/settings_provider.dart';
 import 'services/push_service.dart';
 import 'screens/forty_balls_setup_screen.dart';
+import 'screens/swat_teams_screen.dart';
 import 'screens/stableford_setup_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/otp_verify_screen.dart';
@@ -852,6 +853,9 @@ class _GolfAppState extends State<GolfApp> {
         return page((_) => StablefordSetupScreen(
               roundId: _routeId(settings.arguments),
               returnToHub: _routeReturnToHub(settings.arguments)));
+      case '/swat-teams':
+        final roundId = settings.arguments as int;
+        return page((_) => SwatTeamsScreen(roundId: roundId));
       case '/forty-balls-setup':
         final roundId = settings.arguments as int;
         return page((_) => FortyBallsSetupScreen(roundId: roundId));

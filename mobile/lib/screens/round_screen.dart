@@ -356,6 +356,10 @@ class _RoundScreenState extends State<RoundScreen> {
     final hasHotSpot     = round.activeGames.contains('hot_spot');
     final hasPinkBall    = round.activeGames.contains('pink_ball');
     final hasFortyBalls  = round.activeGames.contains('forty_balls');
+    // Oakmont SWAT's teams and stake — only until the first score, because
+    // saving rewrites the groups and redraws the phantom order.
+    final hasSwat = round.activeGames.contains('oakmont_swat') &&
+        !round.foursomes.any((f) => f.hasAnyScore);
     final hasMatchPlay   = round.activeGames.contains('match_play');
     final hasMultiSkins  = round.activeGames.contains('multi_skins');
     // The round-level Mini Singles Bracket list is only useful for a
@@ -399,7 +403,7 @@ class _RoundScreenState extends State<RoundScreen> {
     final showDayBetSetup = round.isFinalRound && round.hasDayBet;
     final hasSetupGames  = isTournamentRound ||
         hasIrishRumble || hasBetterBall || hasHotSpot ||
-        showLowNet || hasPinkBall || hasFortyBalls ||
+        showLowNet || hasPinkBall || hasFortyBalls || hasSwat ||
         showMatchPlaySetup || showStableford;
 
     final hub = RefreshIndicator(
@@ -544,6 +548,7 @@ class _RoundScreenState extends State<RoundScreen> {
               showLowNet:     showLowNet,
               hasPinkBall:    hasPinkBall,
               hasFortyBalls:  hasFortyBalls,
+              hasSwat:        hasSwat,
               hasMatchPlay:   showMatchPlaySetup,
               showStableford: showStableford,
               foursomes:      round.foursomes,
@@ -1044,6 +1049,7 @@ class _GameSetupCard extends StatelessWidget {
   final bool           showLowNet;
   final bool           hasPinkBall;
   final bool           hasFortyBalls;
+  final bool           hasSwat;
   final bool           hasMatchPlay;
   final bool           showStableford;
   final List<Foursome> foursomes;
@@ -1059,6 +1065,7 @@ class _GameSetupCard extends StatelessWidget {
     required this.showLowNet,
     required this.hasPinkBall,
     required this.hasFortyBalls,
+    required this.hasSwat,
     required this.hasMatchPlay,
     required this.showStableford,
     required this.foursomes,
@@ -1168,6 +1175,18 @@ class _GameSetupCard extends StatelessWidget {
                     arguments: {'id': roundId, 'returnToHub': true}),
                 icon: const Icon(Icons.tune, size: 18),
                 label: const Text('Edit Stableford'),
+              ),
+            ],
+            if (hasSwat) ...[
+              if (beforeFortyBalls) const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final saved = await Navigator.of(context)
+                      .pushNamed('/swat-teams', arguments: roundId);
+                  if (saved == true) onGamesChanged?.call();
+                },
+                icon: const Icon(Icons.groups_outlined, size: 18),
+                label: const Text('Edit SWAT teams'),
               ),
             ],
             if (hasFortyBalls) ...[

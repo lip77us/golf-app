@@ -999,6 +999,11 @@ class ApiClient {
     return Map<String, dynamic>.from(data as Map);
   }
 
+  Future<Map<String, dynamic>> getSwatSetup(int roundId) async {
+    final data = await _get('/rounds/$roundId/swat/setup/');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   Future<Map<String, dynamic>> postSwatSetup(
     int roundId, {required double stake, required bool allowFivesomes}) async {
     final data = await _post('/rounds/$roundId/swat/setup/', {
