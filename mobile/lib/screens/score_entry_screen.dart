@@ -189,6 +189,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// `_HoleScoreCard._strokesForHole`, which is that widget's own and takes
   /// its handicap mode from fields the screen does not hold.
   int _keypadStrokes(Membership m, Scorecard sc) {
+    // SWAT is gross: no strokes on the keypad either.
+    if (_swatRound(context.read<RoundProvider>())) return 0;
     final entry = sc.holeData(_selectedHole)?.scoreFor(m.player.id);
     final rp = context.read<RoundProvider>();
 
@@ -4755,7 +4757,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // has the tray overlaying this row, so this is the half that goes
           // (Paul, 30 Oct 2026).
           if (!sixTray && !spTray && !vgTray && !fourTray && !nasTray
-              && !skTray && !bkTray && !tcTray && !msTray && !m3Tray && !ptsTray && !soloTray
+              && !skTray && !bkTray && !tcTray && !msTray && !m3Tray && !ptsTray && !soloTray && !swatTray
               && !genTray)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
@@ -5921,6 +5923,8 @@ class _HoleScoreCard extends StatelessWidget {
       : bankerStrokesOnHole(bankerSummary, m.player.id, h.holeNumber);
 
   int _strokesForHole(Membership m, ScorecardHole? h) {
+    // SWAT is gross: nobody gets a stroke, whatever the round's handicap says.
+    if (grossOnly) return 0;
     // **A skins POOL states the strokes for this hole outright.** Strokes-
     // off there is off the low man in the POOL, who is usually in another
     // group, so the allocation below — which anchors on this foursome's

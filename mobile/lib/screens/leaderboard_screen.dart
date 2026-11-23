@@ -794,6 +794,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
                   gameKey: gameKey,
                   game: game,
                   roundId: widget.roundId,
+                  fieldProgress: lb.games['field_progress']?.data,
                   tournamentId: lb.tournamentId,
                   cupName: lb.cupName ?? lb.tournamentName ?? 'Cup',
                   // Score-entry (membership) order, when the round is loaded.
@@ -810,7 +811,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
         ),
         // At the BOTTOM, not the top: most of a live round it reads "N of N
         // still out", which is true and not worth the first line of the board.
-        FieldProgressBar(data: lb.games['field_progress']?.data),
+        // SWAT draws it itself, under its own card.
+        if (!lb.activeGames.contains(GameIds.swat))
+          FieldProgressBar(data: lb.games['field_progress']?.data),
 
       ],
     );
@@ -997,10 +1000,13 @@ class _GameView extends StatelessWidget {
   // has to be threaded in as a field — there is no `widget` to read it off.
   // The settlement tab needs it to open the casual receipt.
   final int     roundId;
+  // The "N still out" block, for the boards that draw it themselves (SWAT).
+  final Object? fieldProgress;
 
   const _GameView(
       {required this.gameKey, required this.game, required this.roundId,
-       this.playerOrder = const [], this.tournamentId, this.cupName});
+       this.playerOrder = const [], this.tournamentId, this.cupName,
+       this.fieldProgress});
 
   @override
   Widget build(BuildContext context) {
@@ -1159,7 +1165,7 @@ class _GameView extends StatelessWidget {
         if (data['is_cup'] == true) return _CupIrishRumbleView(data: data);
         return _IrishRumbleView(data: data);
       case 'oakmont_swat':
-        return SwatBoard(data: data);
+        return SwatBoard(data: data, progress: fieldProgress);
       case 'oakmont_swat_gross':
         return SwatGrossBoard(data: data);
       case 'forty_balls':

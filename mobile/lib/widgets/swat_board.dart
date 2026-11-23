@@ -18,10 +18,13 @@ import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
 import '../theme/halved_brand.dart';
+import 'field_progress_bar.dart';
 
 class SwatBoard extends StatefulWidget {
   final Map<String, dynamic> data;
-  const SwatBoard({super.key, required this.data});
+  /// The leaderboard's "N still out" block; drawn under the versus card.
+  final Object? progress;
+  const SwatBoard({super.key, required this.data, this.progress});
 
   @override
   State<SwatBoard> createState() => _SwatBoardState();
@@ -76,6 +79,7 @@ class _SwatBoardState extends State<SwatBoard> {
           title: 'One team against the field',
           child: _versus(teams, me),
         ),
+        FieldProgressBar(data: widget.progress),
         if (fin) ...[
           const SizedBox(height: 14),
           _moneyCard(teams),

@@ -115,6 +115,10 @@ class TrayFrame extends StatelessWidget {
                         .copyWith(fontSize: 12)),
               ),
             const SizedBox(height: 2),
+            // While choosing a score to change the blocks step aside: they
+            // report the hole as it stands, a change is about to move them,
+            // and with them up the golfers to tap are behind the tray.
+            if (!picking)
             Flexible(
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
