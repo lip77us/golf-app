@@ -659,13 +659,16 @@ def _build_leaderboard(round_obj: Round) -> dict:
             **red_ball_summary(round_obj),
         }
 
-    if 'low_net_round' in active_games:
+    # SWAT is scored by teams and has its own detail tab, so it gets no
+    # per-golfer Stroke Play tab even when stroke play is among its games.
+    _swat = 'oakmont_swat' in active_games
+    if 'low_net_round' in active_games and not _swat:
         from services.low_net_round import low_net_round_summary
         games['low_net_round'] = {
             'label': 'Stroke Play',
             **low_net_round_summary(round_obj),
         }
-    elif not ({'triple_cup', 'scramble'} & set(active_games)) \
+    elif not _swat and not ({'triple_cup', 'scramble'} & set(active_games)) \
             and not _SOLO_GAMES & set(active_games) \
             and not _is_team_play_round(round_obj):
         # Every individual-ball round (casual OR tournament) gets a Low Net
@@ -760,7 +763,7 @@ def _build_leaderboard(round_obj: Round) -> dict:
         if summary:
             games['oakmont_swat'] = {'label': 'SWAT', **summary}
             # The Gross tab reads the same block, so the two cannot disagree.
-            games['oakmont_swat_gross'] = {'label': 'Gross', **summary}
+            games['oakmont_swat_gross'] = {'label': 'SWAT Detail', **summary}
 
     if 'better_ball' in active_games:
         # **The label is the game's own name**, not the slug's — the app titles

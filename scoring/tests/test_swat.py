@@ -395,4 +395,5 @@ class GrossBoardTests(_Round):
         from api.views import _build_leaderboard
         games = _build_leaderboard(self.round)
         self.assertIn('oakmont_swat_gross', games)
-        self.assertEqual(games['oakmont_swat_gross']['label'], 'Gross')
+        self.assertEqual(games['oakmont_swat_gross']['label'], 'SWAT Detail')
+        self.assertNotIn('low_net_round', games)

@@ -851,7 +851,7 @@ def _has_low_net_championship(round_obj) -> bool:
     """Tournament-wide Low Net (a.k.a. Stroke Play in the in-app
     leaderboard) — aggregates across every round in the tournament."""
     t = round_obj.tournament
-    if not t:
+    if not t or _has_swat(round_obj):
         return False
     if 'low_net' in (t.active_games or []):
         return True
@@ -867,6 +867,9 @@ def _has_low_net_round(round_obj) -> bool:
     competition) intentionally don't show this tab; the Stroke Play
     tab covers that case and the spectator would otherwise see two
     near-identical leaderboards."""
+    # SWAT is scored by teams and has its own detail tab.
+    if _has_swat(round_obj):
+        return False
     if 'low_net_round' in (round_obj.active_games or []):
         return True
     if hasattr(round_obj, 'low_net_config'):
@@ -948,7 +951,7 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
             'url': f'{base}?view=swat', 'active': current == 'swat',
         })
         tabs.append({
-            'key': 'swat_card', 'label': 'Scorecard',
+            'key': 'swat_card', 'label': 'SWAT Detail',
             'url': f'{base}?view=swat_card',
             'active': current == 'swat_card',
         })

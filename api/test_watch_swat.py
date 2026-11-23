@@ -61,3 +61,9 @@ class WatchSwatTests(_Round):
         main = self.get('?view=swat').content.decode()
         self.assertIn('MONEY BY TEAM', main)
         self.assertIn('+$54', main)
+
+    def test_the_tabs_are_swat_and_swat_detail_with_no_stroke_play(self):
+        self.play(self.a, 1, 0, 1, 1, 1)
+        body = self.get().content.decode()
+        self.assertIn('SWAT Detail', body)
+        self.assertNotIn('Stroke Play', body)
