@@ -667,14 +667,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
         // **Where does my group get strokes** — one tap, from any board. The
         // answer lives in the grid's own stroke plan (the dots), so this opens
         // that, in its strokes-only mode.
-        _strokesRow(context, rp),
+        // A SWAT round is scored gross, so there are no strokes to look up.
+        if (!lb.activeGames.contains(GameIds.swat)) _strokesRow(context, rp),
 
         // **What the board is MISSING.** Reported of a 60-player Ryder Cup
         // run on paper: a third of the field was not using the app, so the
         // board was not wrong, it was INCOMPLETE — and nothing on it said
         // so, which is worse than a gap you can see, because a golfer reads
         // a position he is not actually in.
-        FieldProgressBar(data: lb.games['field_progress']?.data),
 
         // Settlement is TOURNAMENT-scoped, so a tournament round's board has
         // no settlement tab and never will. Without this line the screen just
@@ -808,6 +808,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
             }).toList(),
           ),
         ),
+        // At the BOTTOM, not the top: most of a live round it reads "N of N
+        // still out", which is true and not worth the first line of the board.
+        FieldProgressBar(data: lb.games['field_progress']?.data),
+
       ],
     );
   }
