@@ -259,14 +259,15 @@ class _SwatGrossBoardState extends State<SwatGrossBoard> {
                         fontSize: 11.5,
                         fontWeight: bold ? FontWeight.w800 : FontWeight.w600))));
 
-        Widget numRow(String label, int? Function(int) val,
-                {Color? labelColor}) =>
-            Row(children: [
+        final cs = Theme.of(ctx).colorScheme;
+        Widget numRow(String label, int? Function(int) val) => Container(
+            color: cs.surfaceContainerLow,
+            child: Row(children: [
               labelCell(label),
               for (final h in holes)
                 cell(txt(val(h)?.toString() ?? '', color: Halved.muted)),
               cell(txt('')),
-            ]);
+            ]));
 
         int? sum(int? Function(int) v) {
           var s = 0;
@@ -328,11 +329,13 @@ class _SwatGrossBoardState extends State<SwatGrossBoard> {
         }
 
         return Column(children: [
-          Row(children: [
-            labelCell('Hole', bold: true),
-            for (final h in holes) cell(txt('$h', bold: true)),
-            cell(txt(sumLabel, bold: true)),
-          ]),
+          Container(
+              color: cs.surfaceContainerHighest,
+              child: Row(children: [
+                labelCell('Hole', bold: true),
+                for (final h in holes) cell(txt('$h', bold: true)),
+                cell(txt(sumLabel, bold: true)),
+              ])),
           numRow('Par', (h) => _at(par, h)),
           numRow('Index', (h) => _at(si, h)),
           for (final p in players)
