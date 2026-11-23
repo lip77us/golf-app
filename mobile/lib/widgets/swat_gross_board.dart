@@ -14,6 +14,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../theme/halved_brand.dart';
+import 'forty_balls_keypad.dart' show ScoreNotation, ScoreShape, shapeForScore;
 
 class SwatGrossBoard extends StatefulWidget {
   final Map<String, dynamic> data;
@@ -289,7 +290,17 @@ class _SwatGrossBoardState extends State<SwatGrossBoard> {
             if (g == null) {
               inner = const SizedBox();
             } else if (isBest) {
-              inner = txt('$g', bold: true, size: 13);
+              // Birdie and bogey keep their shapes; par is just the number.
+              final par = _at(widget.data['par'] as Map?, h) ?? 4;
+              inner = shapeForScore(g, par) == ScoreShape.par
+                  ? txt('$g', bold: true, size: 13)
+                  : ScoreNotation(
+                      score: g,
+                      par: par,
+                      width: cellW - 4,
+                      height: 22,
+                      fontSize: 11,
+                      cornerRadius: 4);
             } else {
               inner = txt('$g', bold: counted);
             }
@@ -303,11 +314,9 @@ class _SwatGrossBoardState extends State<SwatGrossBoard> {
             cell(txt(s?.toString() ?? '', bold: true)),
           ]);
           if (isBest) {
-            // The team's score stands apart without a shape: a rule above it
-            // and a tint behind it.
+            // The team's score stands apart without a shape: a rule above it.
             row = Container(
                 decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest,
                     border: Border(
                         top: BorderSide(color: cs.outline, width: 1.5))),
                 child: row);
