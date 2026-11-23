@@ -88,12 +88,24 @@ def snake_deal(golfers: list) -> dict:
     return {'teams': teams, 'bands': bands}
 
 
-def team_name(members: list) -> str:
-    """"Team" plus the lowest-index golfer's surname; follows any move."""
+def team_name(members: list, initial: bool = False) -> str:
+    """"Team" plus the lowest-index golfer's surname; follows any move.
+    *initial* adds his first initial ("Team P. Lipkin")."""
     if not members:
         return 'Team'
     low = sorted(members, key=_sort_key)[0]
-    return f'Team {surname(low["name"])}'.strip()
+    first = (low['name'] or '').split()
+    pre = f'{first[0][0]}. ' if initial and len(first) > 1 else ''
+    return f'Team {pre}{surname(low["name"])}'.strip()
+
+
+def auto_names(member_lists: list) -> list:
+    """Default names for every team at once: two teams that would share a
+    surname each get their golfer's first initial, so they read differently
+    without anybody renaming one."""
+    plain = [team_name(m) for m in member_lists]
+    return [team_name(m, initial=plain.count(n) > 1 and len(m) > 0)
+            for m, n in zip(member_lists, plain)]
 
 
 def shape_problem(sizes: list, allow_fivesomes: bool = False):
@@ -190,10 +202,11 @@ def preview_teams(player_ids: list, *, allow_fivesomes=False,
     problem = shape_problem([len(t) for t in arrangement], allow_fivesomes)
     edited = [sorted(t) for t in arrangement] != [sorted(t) for t in dealt['teams']]
     out_teams = []
-    for t in arrangement:
-        members = [by_id[pid] for pid in t]
+    member_lists = [[by_id[pid] for pid in t] for t in arrangement]
+    names = auto_names(member_lists)
+    for t, members, auto in zip(arrangement, member_lists, names):
         out_teams.append({
-            'name': team_name(members),
+            'name': auto,
             'size': len(t),
             'three': len(t) == 3,
             'five': len(t) == 5,
@@ -303,8 +316,12 @@ def _load(round_obj):
                     'si': _si_by_hole(m.tee) if m.tee else {},
                     'wd': m.withdrew_after_hole} for m in ms]
         teams.append({'foursome': f, 'golfers': golfers,
-                      'name': team_name(golfers), 'size': len(golfers),
+                      'custom': (f.name or '').strip(),
+                      'size': len(golfers),
                       'three': len(golfers) == 3, 'five': len(golfers) == 5})
+    autos = auto_names([t['golfers'] for t in teams])
+    for t, auto in zip(teams, autos):
+        t['name'] = t.pop('custom') or auto
     return cfg, teams, gross
 
 

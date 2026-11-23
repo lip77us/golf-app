@@ -156,3 +156,28 @@ class SetupTests(_Base):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(len(r.data['teams']), 4)
         self.assertNotIn('phantom_order', repr(r.data))
+
+    def test_a_renamed_group_names_the_team_on_the_board(self):
+        self.setup_game()
+        deal = self.client.post('/api/swat/teams/preview/',
+                                {'player_ids': self.ids()}, format='json').data
+        teams = [[p['id'] for p in t['players']] for t in deal['teams']]
+        self.client.post(
+            f'/api/rounds/{self.round.id}/swat/teams/',
+            {'teams': teams, 'tees': {str(i): self.tee.pk for i in self.ids()}},
+            format='json')
+        fs = Foursome.objects.filter(round=self.round).first()
+        fs.name = 'The Eagles'
+        fs.save()
+        r = self.client.get(f'/api/rounds/{self.round.id}/swat/')
+        names = [t['name'] for t in r.data['teams']]
+        self.assertIn('The Eagles', names)
+        self.assertEqual(len([n for n in names if n.startswith('Team ')]), 3)
+
+    def test_two_teams_that_share_a_surname_get_first_initials(self):
+        from services.swat import auto_names
+        g = lambda i, n, ix: {'id': i, 'name': n, 'index': ix, 'ch': 0}
+        names = auto_names([[g(1, 'Paul Lipkin', 2), g(2, 'Al Roe', 9)],
+                            [g(3, 'Jan Lipkin', 3), g(4, 'Bo Poe', 8)],
+                            [g(5, 'Cy Doe', 4), g(6, 'Di Fox', 7)]])
+        self.assertEqual(names, ['Team P. Lipkin', 'Team J. Lipkin', 'Team Doe'])
