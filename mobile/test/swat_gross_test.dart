@@ -97,4 +97,22 @@ void main() {
     await t.pumpAndSettle();
     expect(t.takeException(), isNull);
   });
+
+  testWidgets('sorting by name goes by last name', (t) async {
+    final d = _data();
+    d['players'] = [
+      for (final (i, n) in ['Zed Adams', 'Amy Zimmer', 'Bob Brown'].indexed)
+        {'id': 20 + i, 'name': n, 'short': n[0], 'team': 'Team Brandt',
+         'team_id': 1, 'band': 'A', 'index': 5.0, 'thru': 1, 'gross': 4,
+         'par': 4, 'holes': {'1': 4}},
+    ];
+    await t.pumpWidget(_wrap(d));
+    await t.tap(find.text('By player'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Name'));
+    await t.pumpAndSettle();
+    double y(String n) => t.getTopLeft(find.text(n)).dy;
+    expect(y('Zed Adams') < y('Bob Brown'), isTrue);
+    expect(y('Bob Brown') < y('Amy Zimmer'), isTrue);
+  });
 }

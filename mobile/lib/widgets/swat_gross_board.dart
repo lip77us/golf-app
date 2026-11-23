@@ -383,7 +383,15 @@ class _SwatGrossBoardState extends State<SwatGrossBoard> {
   List<Widget> _playerView() {
     final players = [..._players];
     if (_sortByName) {
-      players.sort((a, b) => '${a['name']}'.compareTo('${b['name']}'));
+      // By last name, then first: the order a list of golfers is read in.
+      String key(Map p) {
+        final parts = '${p['name']}'.trim().split(RegExp(r'\s+'));
+        final last = parts.last.toLowerCase();
+        final first = parts.length > 1 ? parts.first.toLowerCase() : '';
+        return '$last\u0000$first';
+      }
+
+      players.sort((a, b) => key(a).compareTo(key(b)));
     } else {
       players.sort((a, b) {
         final ta = (a['thru'] as int) == 0, tb = (b['thru'] as int) == 0;
