@@ -14,7 +14,6 @@ library;
 import 'package:flutter/material.dart';
 
 import '../theme/halved_brand.dart';
-import 'forty_balls_keypad.dart' show ScoreNotation;
 
 class SwatGrossBoard extends StatefulWidget {
   final Map<String, dynamic> data;
@@ -290,13 +289,7 @@ class _SwatGrossBoardState extends State<SwatGrossBoard> {
             if (g == null) {
               inner = const SizedBox();
             } else if (isBest) {
-              inner = ScoreNotation(
-                  score: g,
-                  par: _at(par, h) ?? 4,
-                  width: cellW - 4,
-                  height: 22,
-                  fontSize: 11,
-                  cornerRadius: 4);
+              inner = txt('$g', bold: true, size: 13);
             } else {
               inner = txt('$g', bold: counted);
             }
@@ -304,11 +297,21 @@ class _SwatGrossBoardState extends State<SwatGrossBoard> {
                 fill: counted ? Halved.brightMint.withValues(alpha: 0.28) : null));
           }
           final s = sum(val);
-          final row = Row(children: [
+          Widget row = Row(children: [
             labelCell(label, bold: isBest),
             ...cells,
             cell(txt(s?.toString() ?? '', bold: true)),
           ]);
+          if (isBest) {
+            // The team's score stands apart without a shape: a rule above it
+            // and a tint behind it.
+            row = Container(
+                decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest,
+                    border: Border(
+                        top: BorderSide(color: cs.outline, width: 1.5))),
+                child: row);
+          }
           if (isPhantom && donors != null) {
             return [
               row,
