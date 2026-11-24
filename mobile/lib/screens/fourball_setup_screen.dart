@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
+import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
@@ -44,6 +45,27 @@ class _FourballSetupScreenState extends State<FourballSetupScreen> {
   final  _betCtrl    = TextEditingController();
   bool   _stakeOk    = false;
 
+  /// `best_ball` (Fourball), `scramble` or `alternate_shot` — read off the
+  /// round's games, so the three share this screen and the route.
+  String _format = 'best_ball';
+  bool get _oneBall => _format != 'best_ball';
+  bool get _isAlt   => _format == 'alternate_shot';
+  String get _title => _isAlt
+      ? 'Alternate Shot'
+      : _format == 'scramble' ? 'Two-man Scramble' : 'Fourball';
+
+  /// A flat allowance for every golfer in place of the pairs table. Null =
+  /// the table (35% low + 15% high for a scramble, 50% of combined for
+  /// alternate shot).
+  int? _allowancePct;
+  /// Alternate shot: who tees off the first hole played, per side.
+  int? _firstTee1;
+  int? _firstTee2;
+  /// Scramble match: `none` | `per_nine` | `per_eighteen`, and how many
+  /// drives each golfer owes per window.
+  String _driveRule = 'none';
+  int    _drivesEach = 1;
+
   List<Membership> _ordered = const [];   // [0,1] = team 1, [2,3] = team 2
   bool    _loading  = true;
   bool    _starting = false;
@@ -76,6 +98,19 @@ class _FourballSetupScreenState extends State<FourballSetupScreen> {
     try {
       final client = context.read<AuthProvider>().client;
       final rp = context.read<RoundProvider>();
+      final games = {
+        ...?rp.round?.activeGames,
+        ...?rp.round?.foursomes
+            .where((f) => f.id == widget.foursomeId)
+            .firstOrNull
+            ?.activeGames,
+      };
+      _format = games.contains(GameIds.alternateShotMatch)
+          ? 'alternate_shot'
+          : games.contains(GameIds.scrambleMatch) ? 'scramble' : 'best_ball';
+      // A pair match has no strokes-off-the-low-golfer: the allowance is the
+      // PAIR's, and the difference between pairs is what is played off.
+      if (_oneBall) _mode = 'net';
       // Only prefill a real, previously-set stake — a fresh round (bet 0)
       // starts empty so the stake gate forces a conscious stake / "Play for
       // fun" choice before Start enables.
@@ -105,8 +140,14 @@ class _FourballSetupScreenState extends State<FourballSetupScreen> {
           return;
         }
         if (configured) _editing = true;
-        _mode       = existing.handicapMode;
+        _mode       = _oneBall && existing.handicapMode == 'strokes_off'
+            ? 'net' : existing.handicapMode;
         _netPercent = existing.netPercent;
+        _allowancePct = existing.allowancePct;
+        _driveRule    = existing.driveRule;
+        _drivesEach   = existing.drivesRequired;
+        _firstTee1 = existing.firstTee[1];
+        _firstTee2 = existing.firstTee[2];
         if (existing.betAmount > 0) {
           _betCtrl.text = existing.betAmount
               .toStringAsFixed(existing.betAmount % 1 == 0 ? 0 : 2);
@@ -154,6 +195,12 @@ class _FourballSetupScreenState extends State<FourballSetupScreen> {
         handicapMode: _mode,
         netPercent: _netPercent,
         betAmount: parsed,
+        ballFormat: _format,
+        allowancePct: _oneBall ? _allowancePct : null,
+        driveRule: _format == 'scramble' ? _driveRule : 'none',
+        drivesRequired: _drivesEach,
+        team1FirstTee: _isAlt ? (_firstTee1 ?? _ordered[0].player.id) : null,
+        team2FirstTee: _isAlt ? (_firstTee2 ?? _ordered[2].player.id) : null,
       );
 
       if (widget.returnToHub) {
@@ -176,7 +223,7 @@ class _FourballSetupScreenState extends State<FourballSetupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-          title: Text(_editing ? 'Edit Fourball' : 'Fourball — Setup')),
+          title: Text(_editing ? 'Edit $_title' : '$_title — Setup')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -202,7 +249,7 @@ class _FourballSetupScreenState extends State<FourballSetupScreen> {
                                       strokeWidth: 2, color: Colors.white))
                               : Text(_editing
                                   ? 'Save Configuration'
-                                  : 'Start Fourball'),
+                                  : 'Start $_title'),
                         ),
                       ),
                     ),
@@ -213,10 +260,10 @@ class _FourballSetupScreenState extends State<FourballSetupScreen> {
 
   Widget _buildBody() {
     if (_realMembers.length != 4) {
-      return const Padding(
-        padding: EdgeInsets.all(24),
+      return Padding(
+        padding: const EdgeInsets.all(24),
         child: Center(child: Text(
-          'Fourball needs exactly four players (two teams of two).',
+          '$_title needs exactly four players (two teams of two).',
           textAlign: TextAlign.center)),
       );
     }
@@ -227,8 +274,15 @@ class _FourballSetupScreenState extends State<FourballSetupScreen> {
         SectionCard(
           title: 'Teams',
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Drag to set the two teams — partners share a color. The '
-                'better of each team’s two balls counts on every hole.',
+            Text(_isAlt
+                ? 'Drag to set the two pairs — partners share a color. Each '
+                  'pair plays one ball, hit in turn.'
+                : _oneBall
+                    ? 'Drag to set the two pairs — partners share a color. '
+                      'Both hit, the pair plays the better ball, one score '
+                      'a hole.'
+                    : 'Drag to set the two teams — partners share a color. The '
+                      'better of each team’s two balls counts on every hole.',
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
             const SizedBox(height: 8),
@@ -239,7 +293,8 @@ class _FourballSetupScreenState extends State<FourballSetupScreen> {
           ]),
         ),
         const SizedBox(height: 12),
-        HandicapModeSelector(
+        if (_oneBall) ..._pairOptions(theme)
+        else HandicapModeSelector(
           mode: _mode,
           netPercent: _netPercent,
           onModeChanged: (m) => setState(() => _mode = m),
@@ -263,6 +318,170 @@ class _FourballSetupScreenState extends State<FourballSetupScreen> {
           ]),
         ),
       ],
+    );
+  }
+
+  // ── The pair formats ──────────────────────────────────────────────────────
+  //
+  // The same options the Team Play pairs offer: the format's own allowance
+  // table, one flat percentage in its place if the group has its own, and —
+  // in alternate shot — who tees the first hole (the rota is fixed for the
+  // round, like the pairs' rota is).
+
+  String get _tableText => _isAlt
+      ? '50% of the pair’s combined handicap'
+      : '35% of the low handicap + 15% of the high';
+
+  String _name(int i) => _ordered[i].player.shortName.isNotEmpty
+      ? _ordered[i].player.shortName : _ordered[i].player.name;
+
+  List<Widget> _pairOptions(ThemeData theme) {
+    final muted = theme.textTheme.bodySmall
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    return [
+      SectionCard(
+        title: 'Handicap',
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Each pair plays off $_tableText. The pair with the higher '
+              'allowance gets the difference in strokes, spread by stroke '
+              'index; the other plays to scratch.', style: muted),
+          const SizedBox(height: 10),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'net', label: Text('Net')),
+              ButtonSegment(value: 'gross', label: Text('Gross')),
+            ],
+            selected: {_mode},
+            onSelectionChanged: (v) => setState(() => _mode = v.first),
+          ),
+          if (_mode == 'net') ...[
+            const SizedBox(height: 10),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Use one percentage for everyone'),
+              subtitle: Text(
+                  'Your group’s own number instead of the table.',
+                  style: muted),
+              value: _allowancePct != null,
+              onChanged: (on) =>
+                  setState(() => _allowancePct = on ? 50 : null),
+            ),
+            if (_allowancePct != null)
+              Row(children: [
+                Expanded(
+                  child: Slider(
+                    value: _allowancePct!.toDouble(),
+                    min: 10, max: 100, divisions: 18,
+                    label: '$_allowancePct%',
+                    onChanged: (v) =>
+                        setState(() => _allowancePct = v.round()),
+                  ),
+                ),
+                SizedBox(width: 44, child: Text('$_allowancePct%')),
+              ]),
+          ],
+        ]),
+      ),
+      if (_format == 'scramble') ...[
+        const SizedBox(height: 12),
+        _driveSection(theme, muted),
+      ],
+      if (_isAlt) ...[
+        const SizedBox(height: 12),
+        SectionCard(
+          title: 'Who tees off the first hole',
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Partners alternate tee shots from there, hole after hole. '
+                'It is fixed for the round — a pair that loses track plays a '
+                'hole out of order.', style: muted),
+            const SizedBox(height: 10),
+            for (final side in const [0, 2]) ...[
+              Text(side == 0 ? 'Pair 1' : 'Pair 2',
+                  style: theme.textTheme.labelMedium),
+              const SizedBox(height: 4),
+              SegmentedButton<int>(
+                segments: [
+                  for (final i in [side, side + 1])
+                    ButtonSegment(
+                        value: _ordered[i].player.id, label: Text(_name(i))),
+                ],
+                selected: {
+                  (side == 0 ? _firstTee1 : _firstTee2) ??
+                      _ordered[side].player.id
+                },
+                onSelectionChanged: (v) => setState(() {
+                  if (side == 0) { _firstTee1 = v.first; }
+                  else { _firstTee2 = v.first; }
+                }),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ]),
+        ),
+      ],
+    ];
+  }
+
+  // Drive requirement — the same rule the Team Play pairs offer. Optional; it
+  // adds one tap a hole (whose drive the pair took) and costs nothing if a
+  // pair falls short: it is a record, and the match is decided on the score.
+  Widget _driveSection(ThemeData theme, TextStyle? muted) {
+    final perNine = _driveRule == 'per_nine';
+    final window  = perNine ? 9 : 18;
+    final owed    = _drivesEach * 2;
+    final free    = (window - owed).clamp(0, 18);
+    final maxEach = window ~/ 2;
+    return SectionCard(
+      title: 'Drive requirement',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Optional. Adds one tap per hole to say whose drive the pair '
+            'took. Falling short costs nothing.', style: muted),
+        const SizedBox(height: 8),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'none', label: Text('None')),
+            ButtonSegment(value: 'per_nine', label: Text('Per nine')),
+            ButtonSegment(value: 'per_eighteen', label: Text('Per 18')),
+          ],
+          selected: {_driveRule},
+          onSelectionChanged: (v) => setState(() {
+            _driveRule = v.first;
+            final cap = (_driveRule == 'per_nine' ? 9 : 18) ~/ 2;
+            if (_drivesEach > cap) _drivesEach = cap;
+          }),
+        ),
+        if (_driveRule != 'none') ...[
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(child: Text(
+                perNine ? 'Drives each, per nine' : 'Drives each, across 18',
+                style: theme.textTheme.bodyMedium)),
+            IconButton(
+              key: const ValueKey('drives-minus'),
+              onPressed: _drivesEach > 1
+                  ? () => setState(() => _drivesEach--) : null,
+              icon: const Icon(Icons.remove_circle_outline)),
+            Text('$_drivesEach', key: const ValueKey('drives-each'),
+                style: theme.textTheme.titleMedium),
+            IconButton(
+              key: const ValueKey('drives-plus'),
+              onPressed: _drivesEach < maxEach
+                  ? () => setState(() => _drivesEach++) : null,
+              icon: const Icon(Icons.add_circle_outline)),
+          ]),
+          Text(free > 0
+              ? 'Two golfers owe $owed of $window holes — $free '
+                'hole${free == 1 ? '' : 's'} free either way.'
+              : 'No slack at all — every hole has to go to a golfer who owes '
+                'one.', style: muted),
+          if (perNine)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text('The front nine does not carry to the back.',
+                  style: muted),
+            ),
+        ],
+      ]),
     );
   }
 }

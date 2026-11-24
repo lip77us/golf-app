@@ -160,7 +160,8 @@ void main() {
         'low_net_round', 'stableford']);
       expect(kGameOrder['4'], ['skins', 'nassau', 'fourball', 'sixes', 'wolf',
         'sequoya_threes', 'vegas', 'claremont', 'banker', 'triple_cup', 'match_play',
-        'low_net_round', 'stableford', 'match_18', 'nassau_nine']);
+        'low_net_round', 'stableford', 'match_18', 'nassau_nine',
+        'scramble_match', 'alternate_shot_match']);
       expect(kGameOrder['solo'], ['solo_stroke', 'solo_nassau', 'solo_match']);
       expect(kGameOrder[kFiveOrSix], ['annandale_friday']);
       expect(kGameOrder['groups'], ['multi_skins']);

@@ -1127,6 +1127,8 @@ class _GameView extends StatelessWidget {
       case 'vegas':
         return _ByGroupView(data: data, builder: _VegasGroupCard.new);
       case 'fourball':
+      case 'scramble_match':
+      case 'alternate_shot_match':
         return _ByGroupView(data: data, builder: _FourballGroupCard.new);
       case 'wolf':
         return _ByGroupView(data: data, builder: _WolfGroupCard.new);
@@ -9805,6 +9807,8 @@ class _MyFoursomeTabView extends StatelessWidget {
     'skins'      : _SkinsGroupCard.new,
     'sixes'      : _SixesGroupCard.new,
     'fourball'   : _FourballGroupCard.new,
+    'scramble_match'       : _FourballGroupCard.new,
+    'alternate_shot_match' : _FourballGroupCard.new,
   };
 
   @override

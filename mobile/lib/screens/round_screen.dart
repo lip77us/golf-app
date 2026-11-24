@@ -797,6 +797,12 @@ class _RoundScreenState extends State<RoundScreen> {
                       // Annandale Friday needs its teams before a score can
                       // mean anything; once set it scores on the shared screen.
                       route = '/annandale-friday-setup';
+                    } else if ((fsGames.contains('scramble_match') &&
+                            !fs.configuredGames.contains('scramble_match')) ||
+                        (fsGames.contains('alternate_shot_match') &&
+                            !fs.configuredGames
+                                .contains('alternate_shot_match'))) {
+                      route = '/fourball-setup';
                     } else if (fsGames.contains('fourball') &&
                         !fs.configuredGames.contains('fourball')) {
                       // Fourball needs team assignment + handicap + stake.
@@ -1539,6 +1545,8 @@ Future<void> _showAddSideGameSheet(
     'points_531': '/points-531-setup',
     'vegas':      '/vegas-setup',
     'fourball':   '/fourball-setup',
+    'scramble_match':       '/fourball-setup',
+    'alternate_shot_match': '/fourball-setup',
     'annandale_friday': '/annandale-friday-setup',
     'wolf':       '/wolf-setup',
     'rabbit':     '/rabbit-setup',

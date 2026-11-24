@@ -2781,8 +2781,20 @@ class ApiClient {
     String  handicapMode = 'net',
     int     netPercent   = 100,
     double? betAmount,
+    String  ballFormat = 'best_ball',
+    int?    allowancePct,
+    int?    team1FirstTee,
+    int?    team2FirstTee,
+    String  driveRule = 'none',
+    int     drivesRequired = 1,
   }) async {
     final data = await _post('/foursomes/$foursomeId/fourball/setup/', {
+      'drive_rule'      : driveRule,
+      'drives_required' : drivesRequired,
+      'ball_format'     : ballFormat,
+      if (allowancePct != null) 'allowance_pct': allowancePct,
+      if (team1FirstTee != null) 'team1_first_tee': team1FirstTee,
+      if (team2FirstTee != null) 'team2_first_tee': team2FirstTee,
       'team1_player_ids': team1PlayerIds,
       'team2_player_ids': team2PlayerIds,
       'handicap_mode'   : handicapMode,
@@ -2895,6 +2907,19 @@ class ApiClient {
   ///
   /// Only for a hole the screen opens WITHOUT posting — a save returns the
   /// same shape under `fourball_hole`.
+  /// POST /api/foursomes/{id}/fourball/drive/ — whose tee shot [team] used on
+  /// [hole] (null clears). Returns that hole's card with the updated tracker.
+  Future<FourballHoleCard?> postFourballDrive(
+      int foursomeId, {required int team, required int hole,
+      required int? playerId}) async {
+    final data = await _post('/foursomes/$foursomeId/fourball/drive/', {
+      'team': team, 'hole': hole, 'player_id': playerId,
+    });
+    final card = (data as Map)['fourball_hole'];
+    if (card is! Map || card.isEmpty) return null;
+    return FourballHoleCard.fromJson(card.cast<String, dynamic>());
+  }
+
   Future<FourballHoleCard?> getFourballHoleCard(int foursomeId, int hole) async {
     final data = await _get('/foursomes/$foursomeId/fourball/hole/$hole/');
     final map = (data as Map).cast<String, dynamic>();

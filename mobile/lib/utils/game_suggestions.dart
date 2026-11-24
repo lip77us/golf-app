@@ -83,6 +83,8 @@ const Map<String, List<String>> kGameOrder = {
     GameIds.stableford,
     GameIds.match18,
     GameIds.nassauNine,
+    GameIds.scrambleMatch,
+    GameIds.alternateShotMatch,
   ],
   kFiveOrSix: [
     GameIds.annandaleFriday,

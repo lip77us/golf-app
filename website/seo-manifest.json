@@ -9,6 +9,11 @@
   "published": "2026-09-26",
   "modified": "2026-10-07"
  },
+ "games/alternate-shot/index.html": {
+  "hash": "0aa9fbe3b8d18913",
+  "published": "2026-11-24",
+  "modified": "2026-11-24"
+ },
  "games/annandale-friday/index.html": {
   "hash": "028ea2fadd6624b5",
   "published": "2026-11-03",
@@ -19,6 +24,21 @@
   "published": "2026-09-13",
   "modified": "2026-11-20"
  },
+ "games/best-ball-pairs/index.html": {
+  "hash": "c971fe2852779b0c",
+  "published": "2026-11-24",
+  "modified": "2026-11-24"
+ },
+ "games/better-ball/index.html": {
+  "hash": "d7accbeba9dcc7bd",
+  "published": "2026-11-24",
+  "modified": "2026-11-24"
+ },
+ "games/chapman/index.html": {
+  "hash": "11f3266d4ff7767b",
+  "published": "2026-11-24",
+  "modified": "2026-11-24"
+ },
  "games/claremont/index.html": {
   "hash": "f8127c2af4e7bd61",
   "published": "2026-11-21",
@@ -28,6 +48,16 @@
   "hash": "16c4bb1474bfb026",
   "published": "2026-09-29",
   "modified": "2026-10-07"
+ },
+ "games/find-a-game/index.html": {
+  "hash": "3260c8235b9740a9",
+  "published": "2026-11-24",
+  "modified": "2026-11-24"
+ },
+ "games/fourball/index.html": {
+  "hash": "457cb888a32cf389",
+  "published": "2026-11-24",
+  "modified": "2026-11-24"
  },
  "games/honors/index.html": {
   "hash": "0f2ab92722d935a7",
@@ -40,9 +70,9 @@
   "modified": "2026-10-15"
  },
  "games/index.html": {
-  "hash": "34269aaa59e41696",
+  "hash": "b3ae630122c859c3",
   "published": "2026-09-13",
-  "modified": "2026-11-22"
+  "modified": "2026-11-24"
  },
  "games/irish-rumble/index.html": {
   "hash": "0e764847c704cd76",
@@ -53,6 +83,11 @@
   "hash": "61a74f1050fc6b49",
   "published": "2026-09-13",
   "modified": "2026-11-20"
+ },
+ "games/match-play/index.html": {
+  "hash": "63ff8e00816cc2b5",
+  "published": "2026-11-24",
+  "modified": "2026-11-24"
  },
  "games/mini-singles-bracket/index.html": {
   "hash": "2ed1854ba863a384",
@@ -89,10 +124,25 @@
   "published": "2026-10-09",
   "modified": "2026-10-09"
  },
+ "games/scotch/index.html": {
+  "hash": "0d55c08c7442bde0",
+  "published": "2026-11-24",
+  "modified": "2026-11-24"
+ },
+ "games/scramble/index.html": {
+  "hash": "997ff6a65a4f5990",
+  "published": "2026-11-24",
+  "modified": "2026-11-24"
+ },
  "games/sequoya-threes/index.html": {
   "hash": "786844e2a3a06657",
   "published": "2026-09-13",
   "modified": "2026-11-20"
+ },
+ "games/shamble/index.html": {
+  "hash": "76422ca2cbeec479",
+  "published": "2026-11-24",
+  "modified": "2026-11-24"
  },
  "games/sixes/index.html": {
   "hash": "292fdc1b20551ff5",
@@ -113,6 +163,11 @@
   "hash": "bbcbe57da1f6b776",
   "published": "2026-10-09",
   "modified": "2026-10-09"
+ },
+ "games/stroke-play/index.html": {
+  "hash": "166543c1d093aee4",
+  "published": "2026-11-24",
+  "modified": "2026-11-24"
  },
  "games/survivor/index.html": {
   "hash": "2e1d1ea30e489af8",

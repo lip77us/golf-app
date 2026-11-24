@@ -2130,6 +2130,21 @@ class FourballSummary {
   final List<Map<String, dynamic>> scorecardPlayers;
   final List<int> scorecardHolesInPlay;
 
+  /// `best_ball` (Fourball) | `scramble` | `alternate_shot` — the two-man
+  /// formats score ONE ball a side as a match.
+  final String ballFormat;
+  final int?   allowancePct;
+  /// `{hole: [side1 scorer id, side2 scorer id]}` — who holds each side's one
+  /// score on each hole (the teeing golfer in alternate shot). Empty for
+  /// best ball.
+  final Map<int, List<int?>> scorersByHole;
+  /// Alternate shot: who tees the first hole played, per side (1 / 2).
+  final Map<int, int?> firstTee;
+  /// Scramble match: `none` | `per_nine` | `per_eighteen`, and the drives
+  /// each golfer owes per window.
+  final String driveRule;
+  final int    drivesRequired;
+
   const FourballSummary({
     required this.status,
     this.result,
@@ -2150,7 +2165,27 @@ class FourballSummary {
     this.scorecardHoles = const [],
     this.scorecardPlayers = const [],
     this.scorecardHolesInPlay = const [],
+    this.ballFormat = 'best_ball',
+    this.allowancePct,
+    this.scorersByHole = const {},
+    this.firstTee = const {},
+    this.driveRule = 'none',
+    this.drivesRequired = 1,
   });
+
+  bool get isOneBall => ballFormat != 'best_ball';
+
+  /// True when [playerId] holds NO score on [hole] because his partner holds
+  /// the side's one number (the dimmed partner).
+  bool isPartnerOnHole(int playerId, int hole) {
+    if (!isOneBall) return false;
+    final side = teamOf(playerId);
+    if (side == null) return false;
+    final who = scorersByHole[hole];
+    if (who == null || who.length < 2) return false;
+    final scorer = who[side - 1];
+    return scorer != null && scorer != playerId;
+  }
 
   bool get isNet        => handicapMode == 'net';
   bool get isGross      => handicapMode == 'gross';
@@ -2205,6 +2240,20 @@ class FourballSummary {
       scorecardHolesInPlay: (j['holes_in_play'] as List? ?? const [])
           .map((e) => (e as num).toInt())
           .toList(),
+      ballFormat:   j['ball_format'] as String? ?? 'best_ball',
+      allowancePct: (j['allowance_pct'] as num?)?.toInt(),
+      scorersByHole: {
+        for (final e in ((j['scorers_by_hole'] as Map?) ?? const {}).entries)
+          int.parse('${e.key}'): [
+            for (final v in (e.value as List)) (v as num?)?.toInt(),
+          ],
+      },
+      firstTee: {
+        for (final e in ((j['first_tee'] as Map?) ?? const {}).entries)
+          int.parse('${e.key}'): (e.value as num?)?.toInt(),
+      },
+      driveRule:      j['drive_rule'] as String? ?? 'none',
+      drivesRequired: (j['drives_required'] as num?)?.toInt() ?? 1,
     );
   }
 }
@@ -11880,6 +11929,12 @@ class FourballHoleCard {
   final bool roundOver;
   final int? nextHole;
 
+  /// `best_ball` | `scramble` | `alternate_shot`.
+  final String ballFormat;
+
+  /// A two-man scramble's drive quota for this hole — empty without one.
+  final FourballDriveCard? drive;
+
   const FourballHoleCard({
     required this.hole,
     required this.par,
@@ -11901,6 +11956,8 @@ class FourballHoleCard {
     required this.money,
     required this.roundOver,
     required this.nextHole,
+    this.ballFormat = 'best_ball',
+    this.drive,
   });
 
   factory FourballHoleCard.fromJson(Map<String, dynamic> j) =>
@@ -11938,6 +11995,11 @@ class FourballHoleCard {
             .toList(),
         roundOver: j['round_over'] as bool? ?? false,
         nextHole: (j['next_hole'] as num?)?.toInt(),
+        ballFormat: j['ball_format'] as String? ?? 'best_ball',
+        drive: (j['drive'] is Map && (j['drive'] as Map).isNotEmpty)
+            ? FourballDriveCard.fromJson(
+                (j['drive'] as Map).cast<String, dynamic>())
+            : null,
       );
 
   bool get staked => stake > 0;
@@ -11961,6 +12023,46 @@ class FourballHoleCard {
     }
     return null;
   }
+}
+
+/// Whose tee shot each side used on a hole, and where its drive quota stands.
+class FourballDriveCard {
+  final String rule;                       // per_nine | per_eighteen
+  final List<FourballDriveSide> sides;
+  const FourballDriveCard({required this.rule, required this.sides});
+
+  factory FourballDriveCard.fromJson(Map<String, dynamic> j) =>
+      FourballDriveCard(
+        rule: j['rule'] as String? ?? 'none',
+        sides: ((j['sides'] as List?) ?? const [])
+            .map((e) => FourballDriveSide.fromJson(
+                (e as Map).cast<String, dynamic>()))
+            .toList(),
+      );
+}
+
+class FourballDriveSide {
+  final int side;
+  final int? picked;
+  /// `Paul 1 · Sam 0 — 1 owed, 8 free` — the server's own sentence.
+  final String line;
+  final bool warn;
+  final List<int> playerIds;
+  const FourballDriveSide({
+    required this.side, this.picked, required this.line,
+    required this.warn, required this.playerIds,
+  });
+
+  factory FourballDriveSide.fromJson(Map<String, dynamic> j) =>
+      FourballDriveSide(
+        side: (j['side'] as num?)?.toInt() ?? 0,
+        picked: (j['picked'] as num?)?.toInt(),
+        line: j['line'] as String? ?? '',
+        warn: j['warn'] as bool? ?? false,
+        playerIds: ((j['player_ids'] as List?) ?? const [])
+            .map((e) => (e as num).toInt())
+            .toList(),
+      );
 }
 
 class FourballHolePlayer {

@@ -44,6 +44,7 @@ import '../widgets/score_box.dart';
 import '../widgets/score_entry_title.dart';
 import '../widgets/vegas_entry.dart';
 import '../widgets/fourball_entry.dart';
+import '../widgets/pair_drive_card.dart';
 import '../widgets/nassau_entry.dart';
 import '../widgets/skins_entry.dart';
 import '../utils/banker_strokes.dart';
@@ -152,6 +153,15 @@ bool _nassauActive(Iterable<String> games) =>
 /// 1-v-1 Singles Match — all backed by the Nassau engine).
 bool _isNassauFamily(String? g) =>
     g == 'nassau' || g == 'nassau_nine' || g == 'match_18';
+
+/// `resolvePrimary`, with the two pair-match games read as the Fourball match
+/// they are — every gate on this screen asks about Fourball.
+String? _resolvePrimaryFamily(String? stored, Iterable<String> active) {
+  final p = resolvePrimary(stored, active.toSet());
+  return (p == GameIds.scrambleMatch || p == GameIds.alternateShotMatch)
+      ? GameIds.fourball
+      : p;
+}
 
 String _fmtPoints(double v) =>
     v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
@@ -467,7 +477,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // hub's Configure buttons and the pickers are about games somebody
     // CHOSE, which is a different question.
     final scored = round.scoringGame;
-    return {...rdGames, ...fsGames, if (scored != null) scored}.toList();
+    final all = {...rdGames, ...fsGames, if (scored != null) scored};
+    // The two-man Scramble and Alternate Shot matches ARE a Fourball match
+    // (same engine, same tray, same board) with one score a side, so every
+    // Fourball gate on this screen answers for them too.
+    if (all.contains(GameIds.scrambleMatch) ||
+        all.contains(GameIds.alternateShotMatch)) {
+      all.add(GameIds.fourball);
+    }
+    return all.toList();
   }
 
   /// Games already configured for this foursome (bracket / game-model row exists).
@@ -703,7 +721,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // The stroke-dot display follows the PRIMARY game's handicap. Side games
     // (skins / stableford / stroke play) only drive it when they ARE the
     // primary; otherwise they compute their own net server-side.
-    final primary = resolvePrimary(rp.round?.primaryGame, games);
+    final primary = _resolvePrimaryFamily(rp.round?.primaryGame, games);
     // **Solo first**, because it is always Net at its own allowance and that
     // allowance may be ABOVE 100% — the only game in the app where it can.
     // Falling through to the round default (net 100%) drew a stroke a 90%
@@ -1257,6 +1275,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// hot-spot check and the initial "jump to first unplayed" so the
   /// inactive partner never blocks a hole from counting as complete.
   bool _isInactiveAltShotPlayerAt(int playerId, int hole) {
+    // A pair-match (scramble / alternate shot): the partner who does not hold
+    // the side's one score on this hole is dimmed and never waited for.
+    final fb = context.read<RoundProvider>().fourballSummary;
+    if (fb != null && fb.isPartnerOnHole(playerId, hole)) return true;
     final tc = context.read<RoundProvider>().tripleCupSummary;
     if (tc == null) return false;
     for (final m in tc.matches) {
@@ -1384,6 +1406,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// hole of a Triple Cup foursomes (alt-shot) match.  Used to skip
   /// them in hot-spot and all-scored computations.
   bool _isInactiveAltShotPlayer(int playerId) {
+    final fb = context.read<RoundProvider>().fourballSummary;
+    if (fb != null && fb.isPartnerOnHole(playerId, _selectedHole)) return true;
     final tc = context.read<RoundProvider>().tripleCupSummary;
     if (tc == null) return false;
     final hole = _selectedHole;
@@ -1663,7 +1687,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// `_keypadRound`).
   bool _hasSpecificTray(RoundProvider rp) {
     final games = _activeGames(rp.round);
-    final primary = resolvePrimary(rp.round?.primaryGame, games);
+    final primary = _resolvePrimaryFamily(rp.round?.primaryGame, games);
     return _fortyBallsRound(rp) ||
         primary == GameIds.annandaleFriday ||
         // Sixes enters on the keypad as of `handoff-sixes-score-entry`. It
@@ -1743,7 +1767,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       GameIds.fourball, GameIds.match18, GameIds.nassau, GameIds.nassauNine,
       GameIds.skins, GameIds.multiSkins, GameIds.banker, GameIds.tripleCup,
     };
-    final primary = resolvePrimary(rp.round?.primaryGame, games);
+    final primary = _resolvePrimaryFamily(rp.round?.primaryGame, games);
     return primary == null || !owners.contains(primary);
   }
 
@@ -1766,7 +1790,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       GameIds.skins, GameIds.multiSkins, GameIds.banker, GameIds.tripleCup,
       GameIds.points531, GameIds.wolf, GameIds.rabbit, GameIds.survivor,
     };
-    final primary = resolvePrimary(rp.round?.primaryGame, games);
+    final primary = _resolvePrimaryFamily(rp.round?.primaryGame, games);
     return primary == null || !owners.contains(primary);
   }
 
@@ -1777,7 +1801,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   bool _pointsRound(RoundProvider rp) {
     final games = _activeGames(rp.round);
     if (!games.contains(GameIds.points531)) return false;
-    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.points531) {
+    if (_resolvePrimaryFamily(rp.round?.primaryGame, games) != GameIds.points531) {
       return false;
     }
     final fs = rp.round?.foursomes
@@ -1956,7 +1980,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// The Sixes card for the hole on screen, when this round is playing it.
   SixesHoleCard? _sixesCard(RoundProvider rp) {
     final games = _activeGames(rp.round);
-    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.sixes) {
+    if (_resolvePrimaryFamily(rp.round?.primaryGame, games) != GameIds.sixes) {
       return null;
     }
     return rp.sixesHole(_selectedHole);
@@ -2001,7 +2025,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   }
 
   bool _stablefordPrimary(RoundProvider rp) =>
-      resolvePrimary(rp.round?.primaryGame, _activeGames(rp.round)) ==
+      _resolvePrimaryFamily(rp.round?.primaryGame, _activeGames(rp.round)) ==
       GameIds.stableford;
 
   /// The Stroke Play card for the hole on screen, when it is the primary —
@@ -2014,7 +2038,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       return rp.stablefordHole(_selectedHole);
     }
     final games = _activeGames(rp.round);
-    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.strokePlay) {
+    if (_resolvePrimaryFamily(rp.round?.primaryGame, games) != GameIds.strokePlay) {
       return null;
     }
     // A group playing a Mini Singles bracket gets THAT tray: two cannot
@@ -2048,7 +2072,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// The Las Vegas card for the hole on screen, when it is the primary.
   VegasHoleCard? _vegasCard(RoundProvider rp) {
     final games = _activeGames(rp.round);
-    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.vegas) {
+    if (_resolvePrimaryFamily(rp.round?.primaryGame, games) != GameIds.vegas) {
       return null;
     }
     return rp.vegasHole(_selectedHole);
@@ -2101,16 +2125,24 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// The Triple Cup card for the hole on screen, when it is the primary.
   TripleCupHoleCard? _tripleCupCard(RoundProvider rp) {
     final games = _activeGames(rp.round);
-    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.tripleCup) {
+    if (_resolvePrimaryFamily(rp.round?.primaryGame, games) != GameIds.tripleCup) {
       return null;
     }
     return rp.tripleCupHole(_selectedHole);
   }
 
   /// The Fourball card for the hole on screen, when it is the primary.
+  /// The scramble match's drive picker for the hole on screen, or null when
+  /// this round plays no drive quota.
+  FourballHoleCard? _pairDriveCard(RoundProvider rp) {
+    final c = rp.fourballHole(_selectedHole);
+    return (c != null && c.ballFormat == 'scramble' && c.drive != null)
+        ? c : null;
+  }
+
   FourballHoleCard? _fourballCard(RoundProvider rp) {
     final games = _activeGames(rp.round);
-    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.fourball) {
+    if (_resolvePrimaryFamily(rp.round?.primaryGame, games) != GameIds.fourball) {
       return null;
     }
     return rp.fourballHole(_selectedHole);
@@ -2145,7 +2177,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// the screen's entry.
   FourballHoleCard? _singlesCard(RoundProvider rp) {
     final games = _activeGames(rp.round);
-    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.match18) {
+    if (_resolvePrimaryFamily(rp.round?.primaryGame, games) != GameIds.match18) {
       return null;
     }
     return rp.singlesHole(_selectedHole);
@@ -2302,7 +2334,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// owns this screen. On a tournament it rides beside the round's own game
   /// and stays a leaderboard tab.
   bool _poolIsPrimary(RoundProvider rp) =>
-      resolvePrimary(rp.round?.primaryGame, _activeGames(rp.round)) ==
+      _resolvePrimaryFamily(rp.round?.primaryGame, _activeGames(rp.round)) ==
       GameIds.multiSkins;
 
   /// The Skins card for the hole on screen, when Skins is the PRIMARY.
@@ -2316,7 +2348,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// the tray below all follow without knowing which they were handed.
   SkinsHoleCard? _skinsCard(RoundProvider rp) {
     final games = _activeGames(rp.round);
-    final primary = resolvePrimary(rp.round?.primaryGame, games);
+    final primary = _resolvePrimaryFamily(rp.round?.primaryGame, games);
     if (primary == GameIds.multiSkins) return rp.poolHole(_selectedHole);
     if (primary != GameIds.skins) return null;
     return rp.skinsHole(_selectedHole);
@@ -2360,7 +2392,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // (`~/Downloads/handoff-nassau-nine-score-entry`), so it is the same
     // gate. It had been asked for `nassau` by name and got the old inline
     // picker with no tray at all.
-    final primary = resolvePrimary(rp.round?.primaryGame, games);
+    final primary = _resolvePrimaryFamily(rp.round?.primaryGame, games);
     if (primary != GameIds.nassau && primary != GameIds.nassauNine) {
       return null;
     }
@@ -2715,7 +2747,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   }
 
   bool _bankerRound(RoundProvider rp) =>
-      resolvePrimary(rp.round?.primaryGame, rp.round?.activeGames.toSet() ?? {})
+      _resolvePrimaryFamily(rp.round?.primaryGame, rp.round?.activeGames.toSet() ?? {})
           == GameIds.banker;
 
 
@@ -3081,7 +3113,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
   String _appBarTitle(List<String> games, NassauSummary? nas, SkinsSummary? sk) {
     final parts = <String>[];
+    final pairMatch = games.contains(GameIds.scrambleMatch) ||
+        games.contains(GameIds.alternateShotMatch);
     for (final g in games) {
+      // The Fourball gates are answered for a pair match too; it is not a
+      // second game, so it is not named twice.
+      if (g == GameIds.fourball && pairMatch) continue;
       String label = gameDisplayName(g);
       if (_isNassauFamily(g) && nas != null) {
         final modeStr = _modeLabel(nas.handicapMode, nas.netPercent);
@@ -3144,7 +3181,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // 23 Sep 2026 — on a cup round the row did not draw at all, so there was
     // no leaderboard link, the icon stayed, and neither score showed.
     final isTripleCup =
-        resolvePrimary(round.primaryGame, games) == GameIds.tripleCup;
+        _resolvePrimaryFamily(round.primaryGame, games) == GameIds.tripleCup;
     final me = context.read<AuthProvider>().player?.id;
     final leaderboard = () => Navigator.of(context)
         .pushNamed('/leaderboard', arguments: round.id);
@@ -3196,7 +3233,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
     if (!round.isCasual && !isTripleCup) return null;
 
-    switch (resolvePrimary(round.primaryGame, games)) {
+    switch (_resolvePrimaryFamily(round.primaryGame, games)) {
       case GameIds.sixes:
         return _sixesRibbon(rp, me, leaderboard);
       case GameIds.nassau:
@@ -3510,7 +3547,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     //
     // Keyed on the PRIMARY rather than on the card, which is fetched: a gate
     // that waited for a load would pop before it landed.
-    if (resolvePrimary(rp.round?.primaryGame, games) == GameIds.sixes) return;
+    if (_resolvePrimaryFamily(rp.round?.primaryGame, games) == GameIds.sixes) return;
     if (!shouldOpenSixesTeamPicker(rp.sixesSummary)) return;
     final number = sixesMatchNeedingTeams(rp.sixesSummary);
     if (number == null || _sixesPickerOpened.contains(number)) return;
@@ -3632,7 +3669,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // SIDE game it's leaderboard-tab-only (docs/parallel-games.md) — same rule
     // as the Stableford strip.
     final nassauIsPrimary = () {
-      final p = resolvePrimary(rp.round?.primaryGame, games);
+      final p = _resolvePrimaryFamily(rp.round?.primaryGame, games);
       return _isNassauFamily(p);
     }();
     final nas        = nassauIsPrimary ? rp.nassauSummary : null;
@@ -4593,7 +4630,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           else if (genTray)
             GenericHoleTray(
               label: 'Hole $_selectedHole · ${gameDisplayName(
-                  resolvePrimary(rp.round?.primaryGame, games) ?? 'Score entry')}',
+                  _resolvePrimaryFamily(rp.round?.primaryGame, games) ?? 'Score entry')}',
               rows: genericTrayRows(
                 players: players,
                 scorecard: sc,
@@ -4994,7 +5031,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final (hMode, hPct) = _handicapParams(rp, games);
     // Junk is a score-entry modifier, so it's only available when Skins is the
     // PRIMARY. As a side game, Skins computes from gross/net only (no junk).
-    final allowJunk = resolvePrimary(rp.round?.primaryGame, games) == 'skins' &&
+    final allowJunk = _resolvePrimaryFamily(rp.round?.primaryGame, games) == 'skins' &&
         (skins?.allowJunk ?? false);
 
     // Sixes extra-match team gating: auto-open the picker the first time the
@@ -5101,7 +5138,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     ? _fbState?.net
                     : null,
                 solo: soloVariantOf(games) != null,
-                bankerSummary: resolvePrimary(
+                bankerSummary: _resolvePrimaryFamily(
                         rp.round?.primaryGame, games) == GameIds.banker
                     ? rp.bankerSummary
                     : null,
@@ -5130,6 +5167,17 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     ? SwatPhantomCard(card: _swatCard(rp)!)
                     : _soloCard(rp) != null
                     ? SoloHeader(card: _soloCard(rp)!)
+                    : _pairDriveCard(rp) != null
+                    ? PairDriveCard(
+                        card: _pairDriveCard(rp)!,
+                        onPick: (side, pid) async {
+                          final err = await rp.setFourballDrive(
+                              widget.foursomeId, side, _selectedHole, pid);
+                          if (err != null && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(err)));
+                          }
+                        })
                     : _miniSinglesCard(rp) != null
                     ? MiniSinglesMatches(card: _miniSinglesCard(rp)!)
                     : _threeCard(rp) != null
@@ -5339,7 +5387,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
               // Stableford running-points band — only when Stableford is the
               // primary (as a side game it shows on the leaderboard, not here).
-              if (resolvePrimary(rp.round?.primaryGame, games) == 'stableford' &&
+              if (_resolvePrimaryFamily(rp.round?.primaryGame, games) == 'stableford' &&
                   rp.stablefordResult != null)
                 _StablefordStrip(
                   result:      rp.stablefordResult!,
@@ -5358,7 +5406,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               // the leaderboard's (`widgets/banker_board.dart`). Paul,
               // 10 Nov 2026: "I don't want the scorecard showing underneath
               // when we get to the bet entry stage."
-              if (resolvePrimary(rp.round?.primaryGame, games) ==
+              if (_resolvePrimaryFamily(rp.round?.primaryGame, games) ==
                       GameIds.banker &&
                   rp.bankerSummary != null &&
                   !_bankerBetsOpen(rp, scores)) ...[
@@ -5385,7 +5433,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               // Game status cards
               _GameStatusSection(
                 games:                   games,
-                primaryGame:             resolvePrimary(rp.round?.primaryGame, games),
+                primaryGame:             _resolvePrimaryFamily(rp.round?.primaryGame, games),
                 nassau:                  nas,
                 skins:                   skins,
                 sixesSummary:            games.contains('sixes')             ? rp.sixesSummary              : null,

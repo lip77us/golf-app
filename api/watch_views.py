@@ -1020,7 +1020,7 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
         })
     if _has_casual_fourball(round_obj):
         tabs.append({
-            'key': 'fourball', 'label': 'Fourball',
+            'key': 'fourball', 'label': _fourball_tab_label(round_obj),
             'url': f'{base}?view=fourball', 'active': current == 'fourball',
         })
     if _has_casual_triple_nassau(round_obj):
@@ -2311,7 +2311,7 @@ def _render_casual_fourball(request, round_obj, token: str, tabs: list):
         'course_name':  normalize_course_name(round_obj.course.name),
         'tournament':   round_obj.tournament,
         'is_match':     True,
-        'game_label':   'Fourball',
+        'game_label':   _fourball_tab_label(round_obj),
         'groups':       groups,
         'refresh_secs': 30,
         'tabs':         tabs,
@@ -2341,8 +2341,24 @@ def _has_casual_triple_nassau(round_obj) -> bool:
     return 'triple_nassau' in (round_obj.active_games or [])
 
 
+_FOURBALL_FAMILY_LABELS = {
+    'fourball': 'Fourball',
+    'scramble_match': 'Two-man Scramble',
+    'alternate_shot_match': 'Alternate Shot',
+}
+
+
 def _has_casual_fourball(round_obj) -> bool:
-    return 'fourball' in (round_obj.active_games or [])
+    # The two-man Scramble and Alternate Shot matches ride the Fourball
+    # engine and draw the same page, titled for what they are.
+    return bool(set(_FOURBALL_FAMILY_LABELS) & set(round_obj.active_games or []))
+
+
+def _fourball_tab_label(round_obj) -> str:
+    for slug, label in _FOURBALL_FAMILY_LABELS.items():
+        if slug in (round_obj.active_games or []):
+            return label
+    return 'Fourball'
 
 
 def _has_casual_better_ball(round_obj) -> bool:

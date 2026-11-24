@@ -180,6 +180,13 @@ class GameType(models.TextChoices):
     # halved match is a push.  Engine in services/fourball.py and
     # games/models.py FourballGame/Team/HoleResult.
     FOURBALL        = 'fourball',        'Fourball'
+    # Two-man scramble and alternate shot as a 2v2 MATCH in one group: two
+    # fixed pairs, ONE score a side a hole, the lower (net) pair score wins
+    # the hole, closing out like any match.  They ride the FourballGame
+    # tables (`ball_format`), so the match, money, board and receipt are
+    # Fourball's; only the score a side makes differs.
+    SCRAMBLE_MATCH  = 'scramble_match',  'Two-man Scramble'
+    ALTERNATE_SHOT_MATCH = 'alternate_shot_match', 'Alternate Shot'
     # Capture add-on: user-defined per-hole achievements tallied by hand
     # (greenie, sandy, barky, …), settled on their own pot.  Engine in
     # services/spots.py and games/models.py SpotsGame/SpotsPlayerHoleResult.

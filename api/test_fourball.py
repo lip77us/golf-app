@@ -88,3 +88,87 @@ class FourballEndpointTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['status'], 'pending')
         self.assertEqual(resp.data['result_label'], '—')
+
+
+class PairMatchEndpointTests(FourballEndpointTests):
+    """Two-man scramble / alternate shot ride the Fourball endpoints."""
+
+    def test_scramble_setup_round_trips_and_reports_its_slug(self):
+        self.round.active_games = ['scramble_match']
+        self.round.save(update_fields=['active_games'])
+        url = reverse('api-fourball-setup', args=[self.fs.id])
+        r = self.client.post(url, self._body(
+            handicap_mode='net', ball_format='scramble', allowance_pct=40),
+            format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.data['ball_format'], 'scramble')
+        self.assertEqual(r.data['game_slug'], 'scramble_match')
+        self.assertEqual(r.data['allowance_pct'], 40)
+
+    def test_alternate_shot_first_tee_round_trips(self):
+        self.round.active_games = ['alternate_shot_match']
+        self.round.save(update_fields=['active_games'])
+        r = self.client.post(
+            reverse('api-fourball-setup', args=[self.fs.id]),
+            self._body(ball_format='alternate_shot',
+                       team1_first_tee=self.ids[1]), format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.data['first_tee']['1'], self.ids[1])
+
+    def test_configured_games_reports_the_format_slug_not_fourball(self):
+        self.round.active_games = ['scramble_match']
+        self.round.save(update_fields=['active_games'])
+        self.client.post(
+            reverse('api-fourball-setup', args=[self.fs.id]),
+            self._body(ball_format='scramble'), format='json')
+        from api.serializers import FoursomeSerializer
+        data = FoursomeSerializer(self.fs).data
+        self.assertIn('scramble_match', data['configured_games'])
+        self.assertNotIn('fourball', data['configured_games'])
+
+
+class PairMatchDriveAndWatchTests(FourballEndpointTests):
+    def _setup_scramble(self, **extra):
+        self.round.active_games = ['scramble_match']
+        self.round.save(update_fields=['active_games'])
+        return self.client.post(
+            reverse('api-fourball-setup', args=[self.fs.id]),
+            self._body(ball_format='scramble', **extra), format='json')
+
+    def test_a_drive_pick_round_trips_through_the_card(self):
+        r = self._setup_scramble(drive_rule='per_nine', drives_required=1)
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.data['drive_rule'], 'per_nine')
+        r = self.client.post(
+            reverse('api-fourball-drive', args=[self.fs.id]),
+            {'team': 1, 'hole': 1, 'player_id': self.ids[0]}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        side = r.data['fourball_hole']['drive']['sides'][0]
+        self.assertEqual(side['picked'], self.ids[0])
+
+    def test_the_other_sides_golfer_is_a_400(self):
+        self._setup_scramble(drive_rule='per_nine')
+        r = self.client.post(
+            reverse('api-fourball-drive', args=[self.fs.id]),
+            {'team': 1, 'hole': 1, 'player_id': self.ids[2]}, format='json')
+        self.assertEqual(r.status_code, 400)
+
+    def test_no_quota_no_drive_endpoint(self):
+        self._setup_scramble()
+        r = self.client.post(
+            reverse('api-fourball-drive', args=[self.fs.id]),
+            {'team': 1, 'hole': 1, 'player_id': self.ids[0]}, format='json')
+        self.assertEqual(r.status_code, 400)
+
+    def test_the_watch_page_carries_a_tab_named_for_the_game(self):
+        from api.watch_views import _fourball_tab_label, _has_casual_fourball
+        self.round.active_games = ['alternate_shot_match']
+        self.assertTrue(_has_casual_fourball(self.round))
+        self.assertEqual(_fourball_tab_label(self.round), 'Alternate Shot')
+
+    def test_the_watch_page_renders_and_names_the_game(self):
+        self._setup_scramble()
+        from django.test import Client
+        body = Client().get(
+            f'/watch/{self.round.watch_token}/?view=fourball').content.decode()
+        self.assertIn('Two-man Scramble', body)

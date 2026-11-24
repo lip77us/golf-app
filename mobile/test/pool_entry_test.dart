@@ -235,7 +235,7 @@ void main() {
     test('a pool that is NOT the primary changes nothing here', () {
       // On a tournament it rides beside Stroke Play, which owns the entry.
       expect(body('bool _poolIsPrimary(RoundProvider rp)'),
-          contains('resolvePrimary('));
+          contains('_resolvePrimaryFamily('));
     });
 
     test('a row takes its stroke dots from the pool\'s card', () {

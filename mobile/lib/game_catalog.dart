@@ -38,6 +38,13 @@ class GameIds {
   /// and a single match bet.  Owns the foursome's match structure, so it's
   /// mutually exclusive with the other casual games.
   static const String fourball   = 'fourball';
+  /// Two-man Scramble — a 2v2 MATCH in one group: two pairs, ONE score a
+  /// side a hole, lower net pair score wins the hole, closes out like any
+  /// match. Rides the Fourball engine (`ball_format`).
+  static const String scrambleMatch = 'scramble_match';
+  /// Alternate Shot — the same match with one ball a pair hit in turn; the
+  /// score is kept by whoever tees the hole.
+  static const String alternateShotMatch = 'alternate_shot_match';
   /// UI-only shortcut: an "18-Hole Match" — a Nassau with only the Overall bet.
   /// Translated to `nassau` (Overall-only) when the round is created.
   static const String match18    = 'match_18';
@@ -395,6 +402,38 @@ const List<GameMeta> kGameCatalog = [
                     GameIds.strokePlay, GameIds.stableford, GameIds.tripleCup,
                     GameIds.matchPlay, GameIds.threePersonMatch,
                     GameIds.wolf, GameIds.rabbit, GameIds.survivor},
+  ),
+  // The two pair formats share Fourball's match structure and its mutual
+  // exclusions — one match between two sides owns the foursome.
+  GameMeta(
+    id           : GameIds.scrambleMatch,
+    hasLiveActivity: true,
+    displayName  : 'Two-man Scramble',
+    summary      : 'Scramble match, two pairs, one ball a side',
+    casual       : true,
+    exactPlayers : 4,
+    hostsOverlaySideGames: false,
+    excludes     : {GameIds.sixes, GameIds.vegas, GameIds.nassau,
+                    GameIds.points531, GameIds.skins, GameIds.match18,
+                    GameIds.strokePlay, GameIds.stableford, GameIds.tripleCup,
+                    GameIds.matchPlay, GameIds.threePersonMatch,
+                    GameIds.wolf, GameIds.rabbit, GameIds.survivor,
+                    GameIds.fourball, GameIds.alternateShotMatch},
+  ),
+  GameMeta(
+    id           : GameIds.alternateShotMatch,
+    hasLiveActivity: true,
+    displayName  : 'Alternate Shot',
+    summary      : 'Alternate shot match, two pairs, one ball a side',
+    casual       : true,
+    exactPlayers : 4,
+    hostsOverlaySideGames: false,
+    excludes     : {GameIds.sixes, GameIds.vegas, GameIds.nassau,
+                    GameIds.points531, GameIds.skins, GameIds.match18,
+                    GameIds.strokePlay, GameIds.stableford, GameIds.tripleCup,
+                    GameIds.matchPlay, GameIds.threePersonMatch,
+                    GameIds.wolf, GameIds.rabbit, GameIds.survivor,
+                    GameIds.fourball, GameIds.scrambleMatch},
   ),
   GameMeta(
     id           : GameIds.points531,

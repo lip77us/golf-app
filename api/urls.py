@@ -181,6 +181,7 @@ urlpatterns = [
     # ---- Fourball (2v2 best-ball match play) ----
     path('foursomes/<int:pk>/fourball/',         views.FourballResultView.as_view(),  name='api-fourball-result'),
     path('foursomes/<int:pk>/fourball/setup/',   views.FourballSetupView.as_view(),   name='api-fourball-setup'),
+    path('foursomes/<int:pk>/fourball/drive/',   views.FourballDriveView.as_view(),   name='api-fourball-drive'),
 
     # ---- Skins ----
     path('foursomes/<int:pk>/skins/',        views.SkinsResultView.as_view(), name='api-skins-result'),

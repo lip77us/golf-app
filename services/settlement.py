@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 # here is surfaced as uncovered.
 NETTABLE = {
     'skins', 'spots', 'points_531', 'wolf', 'sixes', 'fourball',
+    'scramble_match', 'alternate_shot_match',
     'low_net_round', 'stableford', 'match_play', 'triple_nassau',
     'annandale_friday',
     # Added with the settle-up receipt (handoff §4 Group A), which lists all
@@ -68,6 +69,7 @@ _LABELS = {
     'skins': 'Skins', 'multi_skins': 'Multi-Group Skins',
     'spots': 'Spots', 'points_531': 'Points 5-3-1',
     'wolf': 'Wolf', 'sixes': 'Sixes', 'fourball': 'Fourball',
+    'scramble_match': 'Two-man Scramble', 'alternate_shot_match': 'Alternate Shot',
     'low_net_round': 'Stroke Play', 'stableford': 'Stableford',
     'match_play': 'Singles Bracket', 'triple_nassau': 'Triple Nassau',
     'annandale_friday': 'Annandale Friday',
@@ -228,7 +230,7 @@ def _pid_nets_for_game(game_key, round_obj, foursomes):
             for p in (sixes_summary(fs).get('money', {}) or {}).get('by_player', []):
                 out[p['player_id']] += p.get('amount', 0) or 0
 
-    elif game_key == 'fourball':
+    elif game_key in ('fourball', 'scramble_match', 'alternate_shot_match'):
         from services.fourball import fourball_summary
         for fs in foursomes:
             s = fourball_summary(fs) or {}

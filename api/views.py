@@ -209,7 +209,7 @@ def _recalculate_games(foursome: Foursome) -> None:
         from services.vegas import calculate_vegas
         calculate_vegas(foursome)
 
-    if 'fourball' in active_games:
+    if {'fourball', 'scramble_match', 'alternate_shot_match'} & set(active_games):
         from services.fourball import calculate_fourball
         calculate_fourball(foursome)
 
@@ -1130,10 +1130,14 @@ def _build_leaderboard(round_obj: Round) -> dict:
             ],
         }
 
-    if 'fourball' in active_games:
+    for _slug, _label in (('fourball', 'Fourball'),
+                          ('scramble_match', 'Two-man Scramble'),
+                          ('alternate_shot_match', 'Alternate Shot')):
+        if _slug not in active_games:
+            continue
         from services.fourball import fourball_summary
-        games['fourball'] = {
-            'label'   : 'Fourball',
+        games[_slug] = {
+            'label'   : _label,
             'by_group': [
                 {'foursome_id': fs.id, 'group_number': fs.group_number,
                  'summary': fourball_summary(fs)}
@@ -6666,7 +6670,8 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
         active.add(scored_on)
     wants = {'annandale_friday', 'sixes', 'rabbit', 'survivor',
              'low_net_round', 'points_531', 'wolf', 'vegas',
-             'fourball', 'match_18', 'nassau', 'nassau_nine', 'skins',
+             'fourball', 'scramble_match', 'alternate_shot_match',
+             'match_18', 'nassau', 'nassau_nine', 'skins',
              'sequoya_threes', 'triple_cup', 'match_play',
              'stableford', 'triple_nassau',
              'three_person_match'} & active
@@ -6793,7 +6798,8 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
                 card = triple_cup_hole_card(foursome, hole_number)
                 if card:
                     out['triple_cup_hole'] = card
-            if 'fourball' in wants and hole_number:
+            if {'fourball', 'scramble_match',
+                    'alternate_shot_match'} & wants and hole_number:
                 from services.fourball import fourball_hole_card
                 card = fourball_hole_card(foursome, hole_number)
                 if card:
@@ -9485,6 +9491,12 @@ class FourballSetupView(APIView):
                 handicap_mode = d.get('handicap_mode', 'net'),
                 net_percent   = d.get('net_percent', 100),
                 bet_amount    = d.get('bet_amount'),
+                ball_format   = d.get('ball_format', 'best_ball'),
+                allowance_pct = d.get('allowance_pct'),
+                team1_first_tee = d.get('team1_first_tee'),
+                team2_first_tee = d.get('team2_first_tee'),
+                drive_rule      = d.get('drive_rule', 'none'),
+                drives_required = d.get('drives_required', 1),
             )
         except ValueError as exc:
             return Response({'detail': str(exc)},
@@ -9492,6 +9504,34 @@ class FourballSetupView(APIView):
         calculate_fourball(foursome)
         return Response(fourball_summary(foursome),
                         status=status.HTTP_201_CREATED)
+
+
+class FourballDriveView(APIView):
+    """
+    POST /api/foursomes/{id}/fourball/drive/
+    Body: team (1|2), hole, player_id (null clears).
+
+    Whose tee shot a side used on a hole, for a two-man scramble's drive
+    quota. Never blocks a score. Returns that hole's card, whose `drive`
+    block carries the updated tracker.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        try:
+            team = int(request.data.get('team'))
+            hole = int(request.data.get('hole'))
+        except (TypeError, ValueError):
+            return Response({'detail': 'team and hole are required.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        pid = request.data.get('player_id')
+        from services.fourball import (set_drive, fourball_hole_card,
+                                       DriveRefused)
+        try:
+            set_drive(foursome, team, hole, int(pid) if pid is not None else None)
+        except DriveRefused as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return Response({'fourball_hole': fourball_hole_card(foursome, hole)})
 
 
 class FourballResultView(APIView):

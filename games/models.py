@@ -3691,6 +3691,47 @@ class FourballGame(models.Model):
                         max_digits=8, decimal_places=2, default=0,
                         help_text="Match stake per player; winners +, losers −, halve = push.",
                     )
+    ball_format   = models.CharField(
+                        max_length=20, default='best_ball',
+                        choices=[('best_ball', 'Best ball'),
+                                 ('scramble', 'Scramble'),
+                                 ('alternate_shot', 'Alternate shot')],
+                        help_text="best_ball = each plays his own ball (Fourball). "
+                                  "scramble / alternate_shot = ONE score a side, "
+                                  "kept on the side's first golfer in card order.",
+                    )
+    team1_first_tee = models.ForeignKey(
+                        Player, null=True, blank=True, on_delete=models.SET_NULL,
+                        related_name='+',
+                        help_text="Alternate shot: who tees off the first hole "
+                                  "played for team 1 (fixed for the round).",
+                    )
+    team2_first_tee = models.ForeignKey(
+                        Player, null=True, blank=True, on_delete=models.SET_NULL,
+                        related_name='+',
+                        help_text="Alternate shot: who tees off the first hole "
+                                  "played for team 2 (fixed for the round).",
+                    )
+    drive_rule    = models.CharField(
+                        max_length=12, default='none',
+                        choices=[('none', 'No requirement'),
+                                 ('per_nine', 'Per nine'),
+                                 ('per_eighteen', 'Per eighteen')],
+                        help_text="Scramble match only: a quota of each "
+                                  "golfer's drives the pair must use. Recorded "
+                                  "(TeamDrivePick, slot = team number); falling "
+                                  "short costs nothing.",
+                    )
+    drives_required = models.PositiveSmallIntegerField(
+                        default=1,
+                        help_text="Drives owed per golfer per window.",
+                    )
+    allowance_pct = models.PositiveSmallIntegerField(
+                        null=True, blank=True,
+                        help_text="One flat percentage for every golfer in a "
+                                  "scramble / alternate-shot match, replacing the "
+                                  "table (the group's own tradition). Null = table.",
+                    )
     result        = models.CharField(
                         max_length=6, null=True, blank=True,
                         choices=[('team1', 'Team 1'), ('team2', 'Team 2'),

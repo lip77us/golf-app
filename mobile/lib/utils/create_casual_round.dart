@@ -85,6 +85,8 @@ class CasualRoundLaunch {
     case GameIds.vegas:
       return ('/vegas-setup', fsArg());
     case GameIds.fourball:
+    case GameIds.scrambleMatch:
+    case GameIds.alternateShotMatch:
       return ('/fourball-setup', fsArg());
     case GameIds.skins:
       return ('/skins-setup', fsArg());

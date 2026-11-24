@@ -688,7 +688,7 @@ class FoursomeSerializer(serializers.ModelSerializer):
             ('spots_game',         'spots'),
             ('points_531_game',    'points_531'),
             ('vegas_game',         'vegas'),
-            ('fourball_game',      'fourball'),
+            ('fourball_game',      'fourball'),   # re-keyed by ball_format below
             ('three_person_match', 'three_person_match'),
             ('wolf_game',          'wolf'),
             ('rabbit_game',        'rabbit'),
@@ -703,6 +703,17 @@ class FoursomeSerializer(serializers.ModelSerializer):
                 games.append(key)
             except ObjectDoesNotExist:
                 pass
+        # A two-man scramble / alternate-shot match lives on the Fourball
+        # tables — report it under ITS game slug, not 'fourball'.
+        if 'fourball' in games:
+            try:
+                fmt = obj.fourball_game.ball_format
+            except ObjectDoesNotExist:        # pragma: no cover
+                fmt = 'best_ball'
+            if fmt == 'scramble':
+                games[games.index('fourball')] = 'scramble_match'
+            elif fmt == 'alternate_shot':
+                games[games.index('fourball')] = 'alternate_shot_match'
         # FK relationships — check if any rows exist
         if obj.sixes_segments.exists():
             games.append('sixes')
@@ -1737,6 +1748,26 @@ class FourballSetupSerializer(serializers.Serializer):
                           child=serializers.IntegerField(), min_length=2, max_length=2)
     team2_player_ids = serializers.ListField(
                           child=serializers.IntegerField(), min_length=2, max_length=2)
+    # best_ball (Fourball) | scramble | alternate_shot — the two-man formats
+    # score ONE ball a side as a match (see services/fourball.py).
+    ball_format      = serializers.ChoiceField(
+                          choices=['best_ball', 'scramble', 'alternate_shot'],
+                          default='best_ball')
+    # One flat allowance for every golfer in place of the pairs table.
+    allowance_pct    = serializers.IntegerField(
+                          min_value=1, max_value=100,
+                          required=False, allow_null=True, default=None)
+    # Alternate shot: who tees off the first hole played, per side.
+    team1_first_tee  = serializers.IntegerField(
+                          required=False, allow_null=True, default=None)
+    team2_first_tee  = serializers.IntegerField(
+                          required=False, allow_null=True, default=None)
+    # Scramble match: a per-nine / per-eighteen quota of each golfer's drives.
+    drive_rule       = serializers.ChoiceField(
+                          choices=['none', 'per_nine', 'per_eighteen'],
+                          default='none')
+    drives_required  = serializers.IntegerField(
+                          min_value=1, max_value=9, default=1)
 
     def validate(self, data):
         overlap = set(data['team1_player_ids']) & set(data['team2_player_ids'])

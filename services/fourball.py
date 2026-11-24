@@ -51,6 +51,12 @@ def setup_fourball(
     handicap_mode: str = HandicapMode.NET,
     net_percent: int = 100,
     bet_amount=None,
+    ball_format: str = 'best_ball',
+    allowance_pct=None,
+    team1_first_tee=None,
+    team2_first_tee=None,
+    drive_rule: str = 'none',
+    drives_required: int = 1,
 ) -> FourballGame:
     """
     Create (or replace) the FourballGame for *foursome*.
@@ -79,9 +85,25 @@ def setup_fourball(
         raise ValueError("All Fourball players must belong to this foursome.")
 
     net_percent = max(0, min(200, int(net_percent)))
+    if ball_format not in BALL_FORMATS:
+        ball_format = 'best_ball'
     if handicap_mode not in (HandicapMode.NET, HandicapMode.GROSS,
                              HandicapMode.STROKES_OFF):
         handicap_mode = HandicapMode.NET
+    if ball_format != 'best_ball':
+        # One score a side: the allowance is the PAIR's, off the team table,
+        # so strokes-off-the-low-golfer has no meaning here.
+        if handicap_mode == HandicapMode.STROKES_OFF:
+            handicap_mode = HandicapMode.NET
+        allowance_pct = (None if allowance_pct in (None, '')
+                         else max(1, min(100, int(allowance_pct))))
+    else:
+        allowance_pct = None
+    # A drive quota is a scramble's — alternate shot runs on a rota and best
+    # ball has both golfers drive every hole.
+    if ball_format != 'scramble' or drive_rule not in DRIVE_RULES:
+        drive_rule = 'none'
+    drives_required = max(1, min(9, int(drives_required or 1)))
 
     if bet_amount is None:
         bet_amount = foursome.round.bet_unit
@@ -94,6 +116,12 @@ def setup_fourball(
         net_percent   = net_percent,
         bet_amount    = bet_amount,
         status        = MatchStatus.PENDING,
+        ball_format   = ball_format,
+        allowance_pct = allowance_pct,
+        drive_rule    = drive_rule,
+        drives_required = drives_required,
+        team1_first_tee_id = team1_first_tee if team1_first_tee in t1 else None,
+        team2_first_tee_id = team2_first_tee if team2_first_tee in t2 else None,
     )
 
     g_t1 = FourballTeam.objects.create(game=game, team_number=1)
@@ -103,6 +131,280 @@ def setup_fourball(
 
     return game
 
+
+
+BALL_FORMATS = ('best_ball', 'scramble', 'alternate_shot')
+DRIVE_RULES  = ('none', 'per_nine', 'per_eighteen')
+
+# The GameType slug a ball format plays under (the round's `active_games`).
+FORMAT_SLUG = {
+    'best_ball'     : 'fourball',
+    'scramble'      : 'scramble_match',
+    'alternate_shot': 'alternate_shot_match',
+}
+FOURBALL_FAMILY = tuple(FORMAT_SLUG.values())
+FORMAT_LABEL = {
+    'best_ball': 'Fourball', 'scramble': 'Two-man Scramble',
+    'alternate_shot': 'Alternate Shot',
+}
+
+
+def is_one_ball(game) -> bool:
+    """True for scramble / alternate shot: ONE score a side a hole."""
+    return getattr(game, 'ball_format', 'best_ball') != 'best_ball'
+
+
+def _team_pids(foursome, game) -> dict:
+    """{team_number: [player_id, ...]} in CARD order, real golfers only."""
+    from services.player_labels import card_order
+    rank = card_order(foursome)
+    return {t.team_number: sorted((p.id for p in t.players.all()
+                                   if not p.is_phantom),
+                                  key=lambda pid: rank.get(pid, 99))
+            for t in game.teams.all()}
+
+
+def scorer_on_hole(foursome, game, team_number: int, hole: int,
+                   order=None, pids=None):
+    """Who a side's ONE score is kept on for *hole*.
+
+    Scramble: the side's first golfer in card order, every hole.
+    Alternate shot: whoever TEES the hole — the pair's first-tee golfer on
+    the first hole played, the partner on the next, alternating along the
+    group's PLAY ORDER (so a shotgun start is right). This is the same
+    shape a Triple Cup foursomes hole has: the one who tees keeps the
+    number, and his partner is dimmed.
+    """
+    pids = pids if pids is not None else _team_pids(foursome, game)
+    mine = pids.get(team_number) or []
+    if not mine:
+        return None
+    if game.ball_format != 'alternate_shot' or len(mine) < 2:
+        return mine[0]
+    first = (game.team1_first_tee_id if team_number == 1
+             else game.team2_first_tee_id)
+    if first not in mine:
+        first = mine[0]
+    other = next(p for p in mine if p != first)
+    if order is None:
+        from services.hole_plan import play_order
+        order = play_order(foursome.round, foursome) or list(range(1, 19))
+    if hole not in order:
+        return first
+    return first if order.index(hole) % 2 == 0 else other
+
+
+def team_scorers(foursome, game) -> dict:
+    """{team_number: player_id} for a scramble (fixed). For alternate shot use
+    `scorer_on_hole`, which changes every hole."""
+    pids = _team_pids(foursome, game)
+    return {tn: v[0] for tn, v in pids.items() if v}
+
+
+def pair_allowances(foursome, game) -> dict:
+    """{team_number: allowance strokes} for a one-ball match, off the same
+    positional table the Team Play pairs use (35% low + 15% high for a
+    scramble, 50% of combined for alternate shot) — or one flat
+    ``allowance_pct`` when the group has its own tradition."""
+    from services.team_handicap import PAIRS_TABLES, positional_allowance
+    table = PAIRS_TABLES[game.ball_format]
+    chcp = {m.player_id: (m.course_handicap or 0)
+            for m in foursome.memberships.all()}
+    out = {}
+    for tn, pids in _team_pids(foursome, game).items():
+        out[tn] = positional_allowance(
+            [chcp.get(p, 0) for p in pids], table,
+            override_pct=game.allowance_pct).strokes
+    return out
+
+
+def team_hole_strokes(foursome, game, holes) -> dict:
+    """{team_number: {hole: strokes}} — the side with the higher allowance
+    gets the DIFFERENCE, allocated by stroke index; the lower plays to
+    scratch. Stroke index is the hole's, read off the side's first golfer's
+    tee (a pair shares a tee in practice)."""
+    out = {}
+    if game.handicap_mode == HandicapMode.GROSS:
+        return out
+    allow = pair_allowances(foursome, game)
+    if not allow:
+        return out
+    low = min(allow.values())
+    members = {m.player_id: m for m in
+               foursome.memberships.select_related('player', 'tee')}
+    for tn, pids in _team_pids(foursome, game).items():
+        diff = max(0, allow.get(tn, 0) - low)
+        m = members.get(pids[0]) if pids else None
+        per = out.setdefault(tn, {})
+        if diff <= 0 or m is None or m.tee_id is None:
+            continue
+        for h in holes:
+            n = _strokes_on_hole(diff, m.tee.hole(h).get('stroke_index', 18))
+            if n:
+                per[h] = n
+    return out
+
+
+def pair_strokes(foursome, game, holes) -> dict:
+    """{player_id: {hole: strokes}} for the stroke DOTS: a side's strokes sit
+    on whoever holds its score that hole (the scorer / the teeing golfer)."""
+    by_team = team_hole_strokes(foursome, game, holes)
+    pids = _team_pids(foursome, game)
+    alloc = {}
+    for tn, per in by_team.items():
+        for h, n in per.items():
+            who = scorer_on_hole(foursome, game, tn, h, order=list(holes),
+                                 pids=pids)
+            if who is not None:
+                alloc.setdefault(who, {})[h] = n
+    return alloc
+
+
+def game_score_index(foursome, game) -> dict:
+    """{player_id: {hole: score}} for THIS game — best-ball nets for a
+    Fourball, or each side's single net score for a scramble / alternate-shot
+    match (kept on whoever holds the number that hole)."""
+    if not is_one_ball(game):
+        return _fourball_score_index(
+            foursome, game.handicap_mode, game.net_percent)
+    from services.hole_plan import play_order
+    order = play_order(foursome.round, foursome) or list(range(1, 19))
+    by_team = team_hole_strokes(foursome, game, order)
+    pids = _team_pids(foursome, game)
+    team_of = {p: tn for tn, v in pids.items() for p in v}
+    index = {}
+    for r in (HoleScore.objects
+              .filter(foursome=foursome, player_id__in=list(team_of))
+              .exclude(gross_score=None)
+              .values('player_id', 'hole_number', 'gross_score')):
+        pid, h = r['player_id'], r['hole_number']
+        n = by_team.get(team_of[pid], {}).get(h, 0)
+        index.setdefault(pid, {})[h] = r['gross_score'] - n
+    return index
+
+
+def game_strokes(foursome, game, holes) -> dict:
+    """The per-golfer stroke allocation the card's dots draw."""
+    if is_one_ball(game):
+        return pair_strokes(foursome, game, holes)
+    from services.live_activity_registry import full_round_strokes
+    return full_round_strokes(
+        foursome, handicap_mode=game.handicap_mode,
+        net_percent=game.net_percent, holes=holes)
+
+
+
+
+# ---------------------------------------------------------------------------
+# Drives — the two-man scramble's quota (same rule as the Team Play pairs)
+# ---------------------------------------------------------------------------
+
+class _DriveCfg:
+    """The few fields `services.team_play`'s window arithmetic reads, so the
+    match uses the SAME quota maths as the pairs rather than a copy of it."""
+    team_size = 2
+    drive_penalty = 'warn'      # falling short costs nothing
+
+    def __init__(self, game):
+        self.drive_rule      = game.drive_rule
+        self.drives_required = game.drives_required
+
+
+def drive_quota_on(game) -> bool:
+    return game.ball_format == 'scramble' and game.drive_rule != 'none'
+
+
+def drive_picks(foursome, team_number: int) -> dict:
+    from tournament.models import TeamDrivePick
+    return {p.hole_number: p.player_id
+            for p in TeamDrivePick.objects.filter(
+                foursome=foursome, slot=team_number)}
+
+
+class DriveRefused(ValueError):
+    pass
+
+
+@transaction.atomic
+def set_drive(foursome, team_number: int, hole: int, player_id):
+    """Record whose tee shot a side used on *hole* (None clears it).
+
+    The pick never blocks a score — a pair may knowingly take the shortfall,
+    and falling short costs nothing."""
+    from tournament.models import TeamDrivePick
+    try:
+        game = FourballGame.objects.prefetch_related(
+            'teams__players').get(foursome=foursome)
+    except FourballGame.DoesNotExist:
+        raise DriveRefused('No match is set up for this group.')
+    if not drive_quota_on(game):
+        raise DriveRefused('This match has no drive requirement.')
+    pids = _team_pids(foursome, game).get(team_number) or []
+    if not pids:
+        raise DriveRefused('No such side.')
+    if not 1 <= int(hole) <= 18:
+        raise DriveRefused('No such hole.')
+    qs = TeamDrivePick.objects.filter(
+        foursome=foursome, slot=team_number, hole_number=hole)
+    if player_id is None:
+        qs.delete()
+        return None
+    if player_id not in pids:
+        raise DriveRefused('That golfer is not on this side.')
+    pick, _ = TeamDrivePick.objects.update_or_create(
+        foursome=foursome, slot=team_number, hole_number=hole,
+        defaults={'player_id': player_id})
+    return pick
+
+
+def drive_state(foursome, game, thru: int = 0) -> dict:
+    """{} when there is no quota, else each side's picks and window tracker."""
+    if not drive_quota_on(game):
+        return {}
+    from services.team_play import drive_windows, window_state
+    cfg = _DriveCfg(game)
+    out = {'rule': game.drive_rule, 'per_golfer': game.drives_required,
+           'teams': {}}
+    for tn, pids in _team_pids(foursome, game).items():
+        picks = drive_picks(foursome, tn)
+        out['teams'][str(tn)] = {
+            'player_ids': pids,
+            'picks'     : {str(h): p for h, p in picks.items()},
+            'windows'   : [window_state(cfg, w, picks, pids, thru)
+                           for w in drive_windows(cfg)],
+        }
+    return out
+
+
+def _drive_card(foursome, game, hole, sides, label, thru) -> dict:
+    """What the hole card shows for the drive: per side, whose is picked, and
+    one line telling the pair where the quota stands."""
+    if not drive_quota_on(game):
+        return {}
+    st = drive_state(foursome, game, thru)
+    out = {'rule': game.drive_rule, 'sides': []}
+    for n in (1, 2):
+        t = st['teams'].get(str(n)) or {}
+        win = next((w for w in t.get('windows', [])
+                    if w['window'][0] <= hole <= w['window'][1]), None)
+        line, warn = '', False
+        if win:
+            bits = ' · '.join(f"{label.get(g['player_id'], '')} {g['used']}"
+                              for g in win['golfers'])
+            if win['impossible']:
+                line, warn = f'{bits} — short by {win["owed"] - win["holes_left"]}', True
+            elif win['tight']:
+                line, warn = f'{bits} — every hole left is owed', True
+            else:
+                line = f'{bits} — {win["owed"]} owed, {win["free_left"]} free'
+        out['sides'].append({
+            'side'  : n,
+            'picked': (t.get('picks') or {}).get(str(hole)),
+            'line'  : line,
+            'warn'  : warn,
+            'player_ids': t.get('player_ids') or [],
+        })
+    return out
 
 # ---------------------------------------------------------------------------
 # Score index (net / gross / strokes-off over the full 18-hole match)
@@ -198,9 +500,7 @@ def calculate_fourball(foursome) -> FourballGame | None:
     t1_pids = list(t1.players.values_list('id', flat=True))
     t2_pids = list(t2.players.values_list('id', flat=True))
 
-    index = _fourball_score_index(
-        foursome, game.handicap_mode, game.net_percent,
-    )
+    index = game_score_index(foursome, game)
 
     FourballHoleResult.objects.filter(game=game).delete()
 
@@ -441,8 +741,7 @@ def fourball_summary(foursome) -> dict | None:
                    for h in ((tee.holes if tee else None) or [])}
     # Net honours the game's handicap mode (incl. strokes-off), so gross − net
     # is the real per-hole allocation — not the generic stored handicap_strokes.
-    net_index = _fourball_score_index(
-        foursome, game.handicap_mode, game.net_percent)
+    net_index = game_score_index(foursome, game)
     gross_by = {}
     for hs in HoleScore.objects.filter(foursome=foursome,
                                        player_id__in=real_pids):
@@ -465,12 +764,7 @@ def fourball_summary(foursome) -> dict | None:
     # a full 18 rather than scaling for a part round — fourball is an 18-hole
     # match, so that is not a case it has.)
     from services.live_activity_registry import full_round_strokes
-    strokes_by = full_round_strokes(
-        foursome,
-        handicap_mode=game.handicap_mode,
-        net_percent=game.net_percent,
-        holes=holes_in_play,
-    )
+    strokes_by = game_strokes(foursome, game, holes_in_play)
     # **Which BALL won the hole, not which side.** The card tinted both of
     # the winning side's scores, so a 6 beside the 5 that won it wore the
     # same colour (Paul, 10 Nov 2026: *"only highlight the winner or winners,
@@ -548,12 +842,44 @@ def fourball_summary(foursome) -> dict | None:
         'players'          : players_out,
         'scorecard'        : scorecard,
         'holes_in_play'    : holes_in_play,
+        # Which ball this match plays: best_ball (Fourball) or ONE score a side.
+        'ball_format'      : game.ball_format,
+        'format_label'     : FORMAT_LABEL.get(game.ball_format, 'Fourball'),
+        'game_slug'        : FORMAT_SLUG.get(game.ball_format, 'fourball'),
+        'allowance_pct'    : game.allowance_pct,
+        # Who holds each side's score on each hole in play: {hole: [t1, t2]}.
+        'scorers_by_hole'  : ({str(h): [scorer_on_hole(foursome, game, n, h,
+                                                       order=holes_in_play)
+                                        for n in (1, 2)]
+                               for h in holes_in_play}
+                              if is_one_ball(game) else {}),
+        'first_tee'        : {'1': game.team1_first_tee_id,
+                              '2': game.team2_first_tee_id},
+        'drive_rule'       : game.drive_rule,
+        'drives_required'  : game.drives_required,
+        'drives'           : drive_state(foursome, game, len(holes_out)),
+        'allowances'       : ({str(k): v for k, v in
+                               pair_allowances(foursome, game).items()}
+                              if is_one_ball(game) else {}),
     }
 
 
 # ---------------------------------------------------------------------------
 # Score-entry card — `~/Downloads/handoff-fourball-score-entry`
 # ---------------------------------------------------------------------------
+
+def _pair_sub(foursome, game, n, hole, strokes_by, scorers) -> str:
+    """`gets 3 · 1 stroke here` — what the pair is playing off."""
+    allow = pair_allowances(foursome, game)
+    low = min(allow.values()) if allow else 0
+    gets = max(0, allow.get(n, 0) - low)
+    if game.handicap_mode == HandicapMode.GROSS or not gets:
+        return ''
+    here = team_hole_strokes(foursome, game, [hole]).get(n, {}).get(hole, 0)
+    base = f'gets {gets}'
+    return f'{base} · {here} stroke{"s" if here != 1 else ""} here' if here \
+        else base
+
 
 def fourball_hole_card(foursome, hole: int) -> dict:
     """Everything the Fourball score-entry screen draws for ONE hole.
@@ -610,11 +936,8 @@ def fourball_hole_card(foursome, hole: int) -> dict:
                 for n, t in teams.items()}
     label = first_names(by_pid)
 
-    index = _fourball_score_index(
-        foursome, game.handicap_mode, game.net_percent)
-    strokes_by = full_round_strokes(
-        foursome, handicap_mode=game.handicap_mode,
-        net_percent=game.net_percent, holes=order)
+    index = game_score_index(foursome, game)
+    strokes_by = game_strokes(foursome, game, order)
     gross_by = {
         r['player_id']: r['gross_score']
         for r in (HoleScore.objects
@@ -645,6 +968,11 @@ def fourball_hole_card(foursome, hole: int) -> dict:
     closed_out = closed_pos is not None and closed_pos < len(order) - 1
     counts_for_card = closed_out and pos > closed_pos
 
+    one_ball = is_one_ball(game)
+    tpids    = _team_pids(foursome, game) if one_ball else {}
+    scorers  = ({n: scorer_on_hole(foursome, game, n, hole, order=order,
+                                   pids=tpids) for n in (1, 2)}
+                if one_ball else {})
     rows = []
     for n in (1, 2):
         for pid in side_ids[n]:
@@ -661,6 +989,9 @@ def fourball_hole_card(foursome, hole: int) -> dict:
                 'net'            : index.get(pid, {}).get(hole),
                 'side'           : n,
                 'counted'        : False,
+                # One score a side: only the scorer's row takes a number; his
+                # partner's is dimmed ("partner").
+                'scorer'         : (not one_ball) or pid == scorers.get(n),
             })
     by_row = {r['player_id']: r for r in rows}
 
@@ -672,7 +1003,7 @@ def fourball_hole_card(foursome, hole: int) -> dict:
             else []
         # Only a hole that COUNTS has a ball that counted — after a close-out
         # there is no team score to be the best of.
-        if not counts_for_card:
+        if not counts_for_card and not one_ball:
             for pid in counts:
                 by_row[pid]['counted'] = True
         result = None
@@ -691,15 +1022,17 @@ def fourball_hole_card(foursome, hole: int) -> dict:
             # counted (`counts: Paul · Larry`) and no longer does (Paul,
             # 10 Nov 2026): each golfer's row marks his own ball as the one
             # that counted, directly above the tray, so the tray repeated it.
-            'sub'       : '',
+            'sub'       : (_pair_sub(foursome, game, n, hole, strokes_by,
+                                     scorers) if one_ball else ''),
             'result'    : result,
         })
 
     # **Every golfer still playing has a score.** After a close-out the
     # scorer may mark a golfer as picked up, which no row on this server can
     # express — the tray counts what it has and says so.
-    scored = sum(1 for r in rows if r['gross'] is not None)
-    hole_complete = scored == len(rows)
+    scoring_rows = [r for r in rows if r['scorer']]
+    scored = sum(1 for r in scoring_rows if r['gross'] is not None)
+    hole_complete = scored == len(scoring_rows)
 
     # ── The match card ──────────────────────────────────────────────────────
     holes_up = entry.get('margin')
@@ -790,7 +1123,10 @@ def fourball_hole_card(foursome, hole: int) -> dict:
         'thru'        : pos + 1,
         'stake'       : bet,
         # What the tray's label calls the figures: `HOLE 5 · BEST BALL`.
-        'kind'        : 'best ball',
+        'kind'        : {'best_ball': 'best ball', 'scramble': 'scramble',
+                         'alternate_shot': 'alternate shot'}[game.ball_format],
+        'ball_format' : game.ball_format,
+        'drive'       : _drive_card(foursome, game, hole, sides, label, pos),
         'players'     : rows,
         'sides'       : sides,
         'scored'      : scored,

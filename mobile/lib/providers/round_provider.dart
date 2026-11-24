@@ -1283,6 +1283,25 @@ class RoundProvider extends ChangeNotifier {
     }
   }
 
+  /// Record whose drive a side took on [hole]. The server answers with the
+  /// hole's card, so the tracker line is the server's. Returns an error text
+  /// on failure, null on success.
+  Future<String?> setFourballDrive(int foursomeId, int team, int hole,
+      int? playerId) async {
+    try {
+      final card = await _client.postFourballDrive(
+          foursomeId, team: team, hole: hole, playerId: playerId);
+      if (card != null) {
+        _fourballHoles[hole] = card;
+        notifyListeners();
+      }
+      return null;
+    } catch (e) {
+      debugPrint('setFourballDrive error: $e');
+      return friendlyError(e);
+    }
+  }
+
   /// Fetch one hole's Fourball card. Silent on failure, like Rabbit's: a
   /// card that cannot be fetched must not stop a group entering scores.
   Future<void> loadFourballHole(int foursomeId, int hole) async {

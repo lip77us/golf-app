@@ -22,6 +22,8 @@ Future<(String mode, int netPercent)> primaryHandicapFor(
   try {
     switch (primary) {
       case 'fourball':
+      case 'scramble_match':
+      case 'alternate_shot_match':
         final s = await client.getFourballSummary(foursomeId);
         return (s.handicapMode, s.netPercent);
       case 'points_531':

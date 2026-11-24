@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Find Your Golf Game: Which Betting Game Should Your Group Play? | Halved</title>
+<link rel="canonical" href="https://halved.golf/games/find-a-game/">
+<meta name="description" content="Answer a few quick questions about your group: how many are playing, your handicaps and how far apart they are. Get the golf game that fits, with the rules to go with it.">
+<meta property="og:title" content="Find your game | Halved">
+<meta property="og:description" content="How many are playing, how good are they, how far apart. A few questions and you have the game for Saturday.">
+<meta property="og:url" content="https://halved.golf/games/find-a-game/">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://halved.golf/og.png">
+<meta property="og:site_name" content="Halved">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="apple-itunes-app" content="app-id=6768284628">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Spline+Sans:wght@400;500;600;700&display=swap">
+<style>
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}body{margin:0;background:#F3F1EA}*{box-sizing:border-box}a{color:#0F6E56}a:hover{color:#0B1F1A}
+:root{--ink:#0B1F1A;--pine:#0F6E56;--mint:#3BD89A;--body:#33443C;--muted:#5C6B62;--faint:#7C8C82;--line:#DCE5DD;--paper:#F3F1EA;--soft:#EEF4EF}
+.H{font-family:'Schibsted Grotesk',system-ui,sans-serif}
+.wrap{max-width:820px;margin:0 auto;padding:0 24px}
+.quiz{background:#fff;border:1px solid var(--line);border-radius:20px;padding:30px 30px 26px;box-shadow:0 14px 40px rgba(11,31,26,.06)}
+.prog{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.prog .bar{flex:1;height:5px;border-radius:9px;background:#E7EDE8;overflow:hidden}
+.prog .bar i{display:block;height:100%;background:var(--pine);border-radius:9px;transition:width .3s}
+.prog span{font-size:12.5px;color:var(--faint);white-space:nowrap}
+.q{font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(24px,3.6vw,30px);line-height:1.12;letter-spacing:-.7px;color:var(--ink);margin:0 0 8px}
+.qs{font-size:15.5px;line-height:1.6;color:var(--muted);margin:0 0 22px;max-width:60ch;text-wrap:pretty}
+.opts{display:grid;gap:10px}
+.opts.n6{grid-template-columns:repeat(6,1fr)}
+.opts.two{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+@media(max-width:600px){.opts.n6{grid-template-columns:repeat(3,1fr)}.quiz{padding:24px 18px 20px}}
+.opt{appearance:none;font:inherit;text-align:left;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:15px 16px;cursor:pointer;color:var(--body);transition:border-color .15s,background .15s}
+.opt:hover{border-color:#9DBDAE}
+.opt:focus-visible,.btn:focus-visible,.lnk:focus-visible,.hc input:focus-visible{outline:3px solid rgba(59,216,154,.55);outline-offset:2px}
+.opt[aria-pressed="true"]{border-color:var(--pine);background:var(--soft);box-shadow:inset 0 0 0 1px var(--pine)}
+.opt b{display:block;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16.5px;color:var(--ink);letter-spacing:-.2px}
+.opt small{display:block;font-size:13.5px;line-height:1.45;color:var(--muted);margin-top:3px}
+.opt.num{text-align:center;padding:16px 8px}
+.opt.num b{font-size:26px;letter-spacing:-.5px}
+.opt.num small{margin-top:1px;font-size:12px}
+.hcs{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.hc{display:flex;align-items:center;gap:10px;border:1.5px solid var(--line);border-radius:14px;padding:9px 10px 9px 12px}
+.hc .av{width:30px;height:30px;border-radius:50%;background:var(--soft);color:var(--pine);font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;flex:none}
+.hc input{font:inherit;border:0;outline:0;background:transparent;color:var(--ink);min-width:0}
+.hc input.nm{flex:1;font-size:15px}
+.hc input.ix{width:64px;text-align:right;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:18px;border-left:1px solid var(--line);padding-left:8px}
+.hc input::placeholder{color:#A9B6AE;font-weight:500}
+.hc.bad{border-color:#C9573C}
+.readout{margin-top:16px;min-height:52px;border-radius:14px;background:var(--paper);padding:13px 16px;font-size:14.5px;line-height:1.55;color:var(--body)}
+.readout b{color:var(--ink)}
+.spread{display:flex;align-items:center;gap:10px;margin-top:8px}
+.spread .track{position:relative;flex:1;height:8px;border-radius:9px;background:#E3E9E4}
+.spread .track i{position:absolute;top:0;bottom:0;border-radius:9px;background:var(--pine)}
+.spread .track em{position:absolute;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#fff;border:2px solid var(--pine)}
+.spread span{font-size:11.5px;color:var(--faint)}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:26px;flex-wrap:wrap}
+.btn{appearance:none;border:0;cursor:pointer;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:15.5px;border-radius:999px;padding:13px 26px;background:var(--pine);color:#fff;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{background:var(--ink);color:#fff}
+.btn[disabled]{background:#B9C8BF;cursor:default}
+.lnk{appearance:none;border:0;background:none;cursor:pointer;font:inherit;font-size:14.5px;font-weight:600;color:var(--pine);padding:6px 2px}
+.lnk:hover{color:var(--ink)}
+.sub{font-size:13px;color:var(--faint)}
+.rough{display:grid;gap:22px}
+.rough h3{font-family:'Schibsted Grotesk',system-ui,sans-serif;font-size:15px;font-weight:700;color:var(--ink);margin:0 0 10px}
+/* results */
+.sum{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 22px}
+.sum span{border:1px solid var(--line);border-radius:999px;padding:6px 13px;font-size:13.5px;color:var(--muted);background:#fff}
+.pick{border-radius:20px;background:var(--ink);background-image:radial-gradient(120% 90% at 90% -10%,#14473A 0%,#0B1F1A 60%);color:#fff;padding:30px 30px 28px;position:relative;overflow:hidden}
+.pick .tag{display:inline-flex;align-items:center;gap:7px;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:10.5px;letter-spacing:1.3px;color:var(--ink);background:var(--mint);border-radius:999px;padding:5px 11px;margin-bottom:16px}
+.pick .meta{font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:10.5px;letter-spacing:1.2px;color:#8FB3A5;margin-bottom:6px}
+.pick h2{font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(34px,5vw,46px);line-height:1;letter-spacing:-1.4px;margin:0 0 12px}
+.pick p.d{font-size:17px;line-height:1.6;color:#D7E5DE;margin:0 0 20px;max-width:58ch;text-wrap:pretty}
+.why{list-style:none;padding:0;margin:0 0 24px;display:grid;gap:10px}
+.why li{display:flex;gap:11px;font-size:15px;line-height:1.55;color:#E6EFEA;text-wrap:pretty}
+.why li:before{content:"";flex:none;width:18px;height:18px;margin-top:2px;border-radius:50%;background:rgba(59,216,154,.18) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='M5 9.2l2.6 2.6L13 6.4' fill='none' stroke='%233BD89A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/18px no-repeat}
+.why li.warn:before{background:rgba(242,184,75,.2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='M9 5v5M9 13h.01' fill='none' stroke='%23F2B84B' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E") center/18px no-repeat}
+.teams{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:14px 16px;margin:0 0 24px;font-size:14.5px;color:#D7E5DE}
+.teams b.h{display:block;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-size:10.5px;letter-spacing:1.2px;color:#8FB3A5;margin-bottom:8px}
+.teams .row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.teams .side{background:rgba(255,255,255,.08);border-radius:10px;padding:7px 11px;color:#fff}
+.teams .side small{color:#8FB3A5;margin-left:6px}
+.pick .go{display:inline-flex;align-items:center;gap:8px;background:var(--mint);color:var(--ink);font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;padding:14px 24px;border-radius:999px;text-decoration:none}
+.pick .go:hover{background:#fff;color:var(--ink)}
+.sec{font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:13px;letter-spacing:1.1px;color:var(--faint);margin:34px 0 12px;text-transform:uppercase}
+.alts{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.gcard{display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px 22px 20px;text-decoration:none;transition:border-color .18s,transform .18s,box-shadow .18s}
+.gcard:hover{border-color:var(--pine);transform:translateY(-2px);box-shadow:0 10px 26px rgba(11,31,26,.09)}
+.gcard .m{font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:10px;letter-spacing:1.2px;color:var(--pine);margin-bottom:9px}
+.gcard h3{font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:22px;letter-spacing:-.5px;color:var(--ink);margin:0 0 7px}
+.gcard p{font-size:14.5px;line-height:1.55;color:var(--muted);margin:0 0 14px;text-wrap:pretty}
+.gcard .more{margin-top:auto;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:14px;color:var(--pine)}
+.gcard.side{flex-direction:row;align-items:center;gap:16px;padding:18px 20px}
+.gcard.side .ic{flex:none;width:44px;height:44px;border-radius:12px;background:var(--soft);color:var(--pine);display:flex;align-items:center;justify-content:center;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:20px}
+.gcard.side p{margin:0}
+.gcard.side .more{margin:0 0 0 auto;white-space:nowrap}
+.fit{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:3px 9px;margin-bottom:10px;background:var(--soft);color:var(--pine)}
+.again{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin-top:28px}
+.opts.n5{grid-template-columns:repeat(5,1fr)}
+.opts.n7{grid-template-columns:repeat(7,1fr)}
+@media(max-width:600px){.opts.n7{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:600px){.opts.n5{grid-template-columns:repeat(3,1fr)}}
+.opt[disabled]{opacity:.45;cursor:not-allowed}
+.lnk.sm{font-size:13px;padding:4px 0;color:#7C8C82;font-weight:600}.lnk.sm:hover{color:#0B1F1A}
+.lnk.sm.lt{color:#8FB3A5}.lnk.sm.lt:hover{color:#fff}
+.rates{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:#5C6B62;margin:0 0 14px}
+.rates span{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.rates.dk{color:#B5CCC2;margin:0 0 22px}
+.dots{display:inline-flex;gap:3px}.dots i{width:8px;height:8px;border-radius:50%;background:#DCE5DD}
+.dots i.on{background:#0F6E56}.dots i.half{background:linear-gradient(90deg,#0F6E56 50%,#DCE5DD 50%)}
+.pst{border:1px solid #CFE3D7;border-radius:999px;padding:1px 8px;color:#0F6E56;font-weight:600}.pst.no{border-color:#EBD3B9;color:#8A5A12}
+.rates.dk .pst{border-color:rgba(59,216,154,.4);color:#3BD89A}.rates.dk .pst.no{border-color:rgba(242,184,75,.45);color:#F2B84B}
+.soon{font-size:13px;color:#7C8C82;font-weight:600}
+.rates.dk .dots i{background:rgba(255,255,255,.18)}.rates.dk .dots i.on{background:#3BD89A}.rates.dk .dots i.half{background:linear-gradient(90deg,#3BD89A 50%,rgba(255,255,255,.18) 50%)}
+.pfoot{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px}
+.cfoot{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.cfoot .more{text-decoration:none}
+div.gcard:hover{transform:none;box-shadow:none;border-color:#DCE5DD}
+.how{margin-top:34px;border:1px solid #DCE5DD;border-radius:16px;background:#FBFAF6}
+.how>summary{list-style:none;cursor:pointer;padding:18px 20px;display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.how>summary::-webkit-details-marker{display:none}
+.how>summary span{font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A}
+.how>summary span:after{content:" ▾";color:#0F6E56;font-size:14px}.how[open]>summary span:after{content:" ▴"}
+.how>summary small{font-size:13px;color:#7C8C82}
+.hx{font-size:14.5px;line-height:1.6;color:#5C6B62;margin:0 20px 14px;text-wrap:pretty}
+.key{margin:0 20px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.key div{background:#fff;border:1px solid #E7EDE8;border-radius:12px;padding:11px 13px}
+.key dt{font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:13.5px;color:#0B1F1A;margin-bottom:3px}
+.key dd{margin:0;font-size:13px;line-height:1.5;color:#5C6B62}
+.tbl{border-top:1px solid #E7EDE8}
+.tr{display:grid;grid-template-columns:minmax(120px,1fr) 2fr minmax(170px,1.3fr) auto;gap:8px 16px;align-items:center;padding:12px 20px;border-bottom:1px solid #EEF1EC}
+.tr:last-child{border-bottom:0}
+.tr .rates{margin:0;font-size:12px}
+.tn a{font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:15px;color:#0B1F1A;text-decoration:none}.tn a:hover{color:#0F6E56}
+.tn small{display:block;font-size:12px;color:#7C8C82}
+.fbar{display:block;height:6px;border-radius:9px;background:#E7EDE8;overflow:hidden}.fbar i{display:block;height:100%;background:#0F6E56;border-radius:9px}
+.pt summary{font-size:12px;color:#0F6E56;font-weight:600;cursor:pointer;margin-top:5px}
+.pt ul{list-style:none;padding:0;margin:6px 0 0;font-size:12px;color:#5C6B62}
+.pt li{display:flex;justify-content:space-between;gap:8px;padding:2px 0}.pt li b{color:#0F6E56}.pt li b.neg{color:#B4532A}
+.tr.off .tn a,.tr.off .rates{opacity:.45}
+@media(max-width:700px){.tr{grid-template-columns:1fr auto}.tr .tc{grid-column:1/-1;order:3}.tr .tf{grid-column:1/-1;order:4}}
+@media (prefers-reduced-motion:reduce){.gcard,.prog .bar i{transition:none}.gcard:hover{transform:none}}
+@media(max-width:600px){.gcard.side{flex-wrap:wrap}.gcard.side .more{margin-left:60px}.pick{padding:24px 20px}}
+</style>
+<!-- seo:begin — generated by build-seo.py; edit the script, not this block -->
+<meta name="twitter:image" content="https://halved.golf/og.png">
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "Organization",
+   "@id": "https://halved.golf/#organization",
+   "name": "Halved",
+   "url": "https://halved.golf/",
+   "email": "info@halved.golf",
+   "sameAs": [
+    "https://apps.apple.com/app/id6768284628"
+   ]
+  },
+  {
+   "@type": "Article",
+   "@id": "https://halved.golf/games/find-a-game/#article",
+   "url": "https://halved.golf/games/find-a-game/",
+   "mainEntityOfPage": "https://halved.golf/games/find-a-game/",
+   "headline": "Find Your Golf Game: Which Betting Game Should Your Group Play?",
+   "description": "Answer a few quick questions about your group: how many are playing, your handicaps and how far apart they are. Get the golf game that fits, with the rules to go with it.",
+   "image": "https://halved.golf/og.png",
+   "inLanguage": "en-US",
+   "datePublished": "2026-11-24",
+   "dateModified": "2026-11-24",
+   "author": {
+    "@id": "https://halved.golf/#organization"
+   },
+   "publisher": {
+    "@id": "https://halved.golf/#organization"
+   },
+   "about": {
+    "@type": "Thing",
+    "name": "What should we play today? (golf game)"
+   },
+   "breadcrumb": {
+    "@id": "https://halved.golf/games/find-a-game/#breadcrumb"
+   }
+  },
+  {
+   "@type": "BreadcrumbList",
+   "@id": "https://halved.golf/games/find-a-game/#breadcrumb",
+   "itemListElement": [
+    {
+     "@type": "ListItem",
+     "position": 1,
+     "name": "Halved",
+     "item": "https://halved.golf/"
+    },
+    {
+     "@type": "ListItem",
+     "position": 2,
+     "name": "Game guides",
+     "item": "https://halved.golf/games/"
+    },
+    {
+     "@type": "ListItem",
+     "position": 3,
+     "name": "What should we play today?",
+     "item": "https://halved.golf/games/find-a-game/"
+    }
+   ]
+  }
+ ]
+}
+</script>
+<!-- seo:end -->
+</head>
+<body>
+<div style="font-family:'Spline Sans',system-ui,sans-serif;color:#33443C;background:#F3F1EA">
+
+<div style="background:#0B1F1A;background-image:radial-gradient(120% 90% at 82% -10%,#123C31 0%,#0B1F1A 62%);color:#fff">
+<div style="max-width:1080px;margin:0 auto;padding:22px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+<a href="/" style="display:inline-flex;align-items:center;gap:9px;text-decoration:none;color:#fff"><span style="width:24px;height:24px;border-radius:7px;background:#3BD89A;color:#0B1F1A;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center">H</span><span style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;letter-spacing:-.2px">Halved</span></a>
+<a href="https://apps.apple.com/app/id6768284628" style="font-size:13.5px;font-weight:500;color:#8FB3A5;text-decoration:none">Get the app →</a>
+</div>
+<div style="max-width:820px;margin:0 auto;padding:26px 24px 120px">
+<nav aria-label="Breadcrumb" style="font-size:12.5px;color:#8FB3A5;margin-bottom:20px"><a href="/" style="color:#8FB3A5;text-decoration:none">Home</a> <span style="opacity:.5">/</span> <a href="/games/" style="color:#8FB3A5;text-decoration:none">Golf games</a> <span style="opacity:.5">/</span> <span style="color:#D7E5DE">Find your game</span></nav>
+<h1 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(36px,6vw,54px);line-height:1.04;letter-spacing:-1.6px;margin:0 0 16px;color:#fff;max-width:16ch">What should we play today?</h1>
+<p style="max-width:600px;font-size:18.5px;line-height:1.6;color:#D7E5DE;margin:0;text-wrap:pretty">A few quick questions about your group: a round or a tournament, how many of you, how good, and how far apart. You get the game that fits, and the rules to go with it.</p>
+</div>
+</div>
+
+<div class="wrap" style="margin-top:-84px;padding-bottom:24px">
+<div class="quiz" id="quiz" aria-live="polite"></div>
+</div>
+
+<div class="wrap" style="padding-top:40px;padding-bottom:90px">
+<section style="background:#0F6E56;background-image:linear-gradient(165deg,#15866A,#0B4A38);border-radius:20px;padding:36px 32px 38px;color:#fff">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(24px,3.2vw,31px);line-height:1.14;letter-spacing:-.8px;margin:0 0 12px;color:#fff;max-width:520px">Found your game? Let Halved keep score.</h2>
+<p style="font-size:17px;line-height:1.6;color:#CDE8DD;margin:0 0 26px;max-width:540px;text-wrap:pretty">Pick it on the first tee. Halved works out the strokes, scores every hole live and settles the money before you reach the car park.</p>
+<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+<a href="https://apps.apple.com/app/id6768284628" style="display:inline-flex;align-items:center;justify-content:center;background:#fff;color:#0B4A38;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;padding:14px 26px;border-radius:999px;text-decoration:none">Download on the App Store</a>
+<a href="/games/" style="display:inline-flex;align-items:center;justify-content:center;border:1.5px solid rgba(255,255,255,.4);color:#fff;font-weight:600;font-size:15.5px;padding:13px 24px;border-radius:999px;text-decoration:none">Browse every game</a>
+</div>
+</section>
+</div>
+</div>
+
+<script>
+(function(){
+/* ---------- The games Halved scores ----------
+   p: player counts it is built for · st: solo | teams | rotate | turns
+   vol: 1 friendly → 3 big swings · sp: how well it copes with a wide handicap spread (1–3)
+   hi: how kind it is to higher handicaps (1–3) · pop: how often groups pick it */
+var G={
+ 'oakmont-swat':{n:'Oakmont SWAT',p:[7],evd:1,tm:'fours',min:12,st:'teams',vol:2,sp:3,hi:2,pop:7,meta:'TOURNAMENT · 12+ GOLFERS · TEAMS OF FOUR',
+  d:'The field is split into teams of four in snake order by index, every team plays its best gross ball, and every team plays every other team a Nassau.',
+  fit:{d:'Built for a field of twelve or more: three full teams before anyone plays as a threesome.'},
+  wide:'The snake order does the handicapping. Every team gets one golfer from each band of the list, so nobody plays strokes.',
+  tight:'An even field makes for a round robin where every match is close.',
+  vibe:{2:'A Nassau against every other team, so there is always a match in play.',3:'Every team plays every other team a Nassau: plenty of bets, and Halved keeps them all.'}},
+ 'scramble-2v2':{n:'Two-man Scramble',slug:'scramble',p:[4],st:'teams',vol:2,sp:3,hi:3,pop:6,post:0,meta:'4 PLAYERS · TWO ON TWO · ONE BALL A SIDE',
+  d:'Two teams of two in one foursome. Both partners hit, the side picks the better shot, and both play from there. The lower team score wins the hole.',
+  fit:{4:'A scramble needs another team to beat, and a foursome has two: you against them.'},
+  wide:'Each side plays off 35% of the low handicap plus 15% of the high, so a mixed pair is handicapped fairly.',
+  high:'You only need one good shot between the two of you, so a bad swing costs nothing.',
+  vibe:{1:'Relaxed and social, with plenty of birdie chances.',2:'Match play between two scramble teams. Every hole is won, lost or halved.'}},
+ 'stroke-play':{n:'Stroke Play',p:[2,3,4,5,6,7],st:'solo',evd:1,tm:'solo',vol:1,sp:2,hi:1,pop:8,meta:'ANY NUMBER · LOW NET, LOW GROSS',
+  d:'Every stroke counts and the lowest total wins, net or gross. The plainest game there is, and the one every tournament is built on.',
+  fit:{d:'Works for any number, one group or a full field with flights.',7:'Low net and low gross across the whole field, with flights by index.'},
+  wide:'Full handicaps level the field, and flights keep the 5s and the 25s on separate boards.',
+  tight:'An even group makes for a real race to the lowest card.',
+  highWarn:'Every stroke counts, so one big number stays on the card. Net double bogey max fixes that.',
+  vibe:{1:'No swings at all: just your card against theirs.'}},
+ fourball:{n:'Fourball',p:[4],st:'teams',vol:2,sp:2,hi:2,pop:7,meta:'4 PLAYERS · TWO ON TWO · BETTER BALL',
+  d:'Two on two match play, and the better net on each side wins the hole for the team. Every golfer plays his own ball.',
+  fit:{4:'Partners for a foursome, with every ball still in play.'},
+  wide:'Each golfer gets his own strokes, so the 22 can win holes for his side while the 4 carries the rest.',
+  tight:'Close handicaps make for a match that goes the distance.',
+  vibe:{2:'A friendly match with an edge. Add a Nassau on top for more.'}},
+ 'better-ball':{n:'Better Ball',p:[7],evd:1,tm:'fours',st:'teams',vol:1,sp:3,hi:3,pop:7,meta:'TOURNAMENT · TEAMS OF FOUR · BEST 2 OF 4',
+  d:'Every golfer plays his own ball and the team’s best nets count on every hole. Count one, two, three or all four.',
+  fit:{d:'A four-man team event where everyone still plays his own ball.'},
+  wide:'Only the best nets count, so a bad hole from anyone can be dropped.',
+  high:'Net double bogey max is always on, and the team carries anyone having a rough day.',
+  vibe:{1:'Steady team golf. Nobody is ever playing for the whole side.'}},
+ scramble:{n:'Scramble',p:[7],evd:1,tm:['pairs','fours'],st:'teams',vol:1,sp:3,hi:3,pop:9,post:0,meta:{pairs:'TOURNAMENT · TWO-MAN TEAMS · ONE BALL',fours:'TOURNAMENT · FOUR-MAN TEAMS · ONE BALL',d:'TOURNAMENT · TEAMS OF TWO OR FOUR'},
+  d:'Everyone hits, the team picks the best shot, and everyone plays from there. One team score a hole.',
+  fit:{d:'The outing format. Fast, social, and nobody has to finish a bad hole.'},
+  wide:'The team handicap is a blend of the golfers’ handicaps, so every team plays off one number however mixed it is.',
+  high:'The friendliest format there is for higher handicaps: you only need one good shot from the team.',
+  vibe:{1:'Low pressure and lots of birdies. Good for a mixed field.'}},
+ shamble:{n:'Shamble',p:[7],evd:1,tm:'fours',st:'teams',vol:1,sp:3,hi:3,pop:6,post:0,meta:'TOURNAMENT · FOUR-MAN TEAMS',
+  d:'The team picks the best drive, then everyone plays his own ball in. The best two scores count, or set your own count hole by hole.',
+  fit:{d:'Half scramble, half better ball: the best drive, then everyone plays his own ball.'},
+  wide:'Everyone plays from the best drive and keeps his own strokes, so the high handicaps contribute.',
+  high:'Everyone starts from a good drive, which takes the worst holes out of the round.',
+  vibe:{1:'A step up from a scramble without the pressure of every shot counting.'}},
+ 'best-ball-pairs':{n:'Two-man Best Ball',p:[7],evd:1,tm:'pairs',st:'teams',vol:1,sp:2,hi:2,pop:8,meta:'TOURNAMENT · TWO-MAN TEAMS',
+  d:'Both partners play their own ball and the better net counts on every hole. The member-guest standard.',
+  fit:{d:'The classic two-man event. Both of you play every shot.'},
+  wide:'85% handicaps each, and the better net counts. One partner can carry a hole the other has lost.',
+  tight:'Two even partners means both balls matter on every hole.',
+  vibe:{1:'Steady and fair. A partner covers your bad holes.'}},
+ 'alternate-shot':{n:'Alternate Shot',p:[7],evd:1,tm:'pairs',st:'teams',vol:2,sp:2,hi:1,pop:5,post:0,meta:'TOURNAMENT · TWO-MAN TEAMS · ONE BALL',
+  d:'One ball per team, played in turn. Partners take turns teeing off on the odd and even holes.',
+  fit:{d:'The hardest two-man format, and the most fun to watch.'},
+  wide:'The team gets half of the combined handicap, the most generous allowance of any format.',
+  highWarn:'One ball means you live with your partner’s mistakes. Hard going for high handicaps.',
+  vibe:{2:'Pressure on every shot, because there is no second ball.'}},
+ scotch:{n:'Scotch',p:[7],evd:1,tm:'pairs',st:'teams',vol:2,sp:2,hi:2,pop:4,post:0,meta:'TOURNAMENT · TWO-MAN TEAMS',
+  d:'Both partners drive, the team picks one, and the other partner hits the second shot. Alternate shot from there.',
+  fit:{d:'Alternate shot with a softer start: two drives to choose from.'},
+  wide:'60% of the low handicap plus 40% of the high, so a mixed pair is handicapped fairly.',
+  vibe:{2:'Two drives, then one ball. Plenty of pressure, but not from the tee.'}},
+ chapman:{n:'Chapman',p:[7],evd:1,tm:'pairs',st:'teams',vol:2,sp:2,hi:2,pop:5,post:0,meta:'TOURNAMENT · TWO-MAN TEAMS',
+  d:'Both drive, swap balls for the second shot, pick the better ball and alternate in from there. Also called Pinehurst.',
+  fit:{d:'The friendliest of the one-ball pairs formats: everyone hits a second shot.'},
+  wide:'60% of the low handicap plus 40% of the high, the same allowance as Scotch.',
+  vibe:{2:'Both partners hit the first two shots, so nobody sits out.'}},
+ 'multi-skins':{n:'Skins across groups',slug:'skins',p:[7],ev:'side',st:'solo',vol:3,sp:3,hi:3,pop:8,meta:'SIDE GAME · WHOLE FIELD',
+  d:'One skins game across every group in the field. A skin only pays if nobody else in the field matches the score on that hole.',
+  fit:{d:'The side game almost every club event runs, net or gross.'},
+  vibe:{3:'Field-wide carries. One birdie on a hard hole can pay the whole pot.'}},
+ nassau:{n:'Nassau',p:[2,4],st:{2:'solo',4:'teams'},vol:2.5,sp:2,hi:2,pop:10,meta:{2:'HEAD TO HEAD · MATCH PLAY',4:'TWO ON TWO · MATCH PLAY'},
+  d:'Three bets on one round: the front nine, the back nine and the eighteen. Lose the front and you have lost a third of it, not the day.',
+  fit:{2:'The classic match for two. Every hole is you against him.',4:'Two on two, at net better ball. The foursome game most groups grew up on.'},
+  tight:'You are close enough that it is a real match, and the press is there for whoever falls behind.',
+  wide:'Halved gives the strokes off the low handicap, so the match starts square however far apart you are.',
+  vibe:{1:'Play it without presses and it stays friendly: three small bets, and that is all.',3:'Add presses and a two-down Nassau gets expensive fast.'}},
+ skins:{n:'Skins',p:[2,3,4],st:'solo',vol:3,sp:3,hi:3,pop:9,meta:'EVERY HOLE IS A BET',
+  d:'Eighteen separate bets, one a hole. Win it outright and it is yours. Tie and the skin carries to the next one.',
+  fit:{2:'Works heads up, though it is best with three or four.',3:'Three of you, every man for himself, on every hole.',4:'Four players, eighteen bets, and nobody is ever out of it.'},
+  wide:'Each hole stands alone, so one blow-up never ends anyone’s day. It is the game groups fall back on when handicaps don’t match.',
+  high:'A double bogey costs you one hole and nothing else. Win one big carry and you are up for the day.',
+  vibe:{3:'Carries are where the action is. Three ties in a row and the next hole is worth four.',1:'Keep the skin small and let the carries do the rest.'}},
+ stableford:{n:'Stableford',p:[2,3,4,5,6,7],st:'solo',evd:1,tm:'solo',vol:1,sp:3,hi:3,pop:7,meta:'ANY NUMBER · POINTS',
+  d:'Every hole is worth points against your net par, and the highest total wins. A bad hole costs a point or two, not the round.',
+  fit:{5:'One of the few games that works the same for five as for fifty.',6:'One of the few games that works the same for six as for sixty.',7:'Everyone plays their own card, so it works across any number of groups.',d:'Everyone plays their own card, so the size of the group doesn’t matter.'},
+  wide:'A blow-up hole scores zero and you move on, so the higher handicaps are still in it on the sixteenth.',
+  high:'Pick up when you are out of points. It is the friendliest scoring there is for a group that makes some big numbers.',
+  vibe:{1:'Low pressure: nobody owes anyone on any single hole.',3:'Play Modified Stableford, where birdies and eagles pay big and the leader can still be caught.'}},
+ claremont:{n:'Claremont',p:[4],st:'teams',vol:3,sp:2,hi:2,pop:6,meta:'4 PLAYERS · PRESSES BUILT IN',
+  d:'A Nassau for four with the presses built in. Fall behind and a new bet starts on its own, so a match that gets away from you is never over.',
+  fit:{4:'Built for a foursome, two on two.'},
+  tight:'An even group means presses come late and the match is decided on the back nine.',
+  vibe:{3:'Presses are always on, so the action builds by itself.',2:'Nobody has to call a press. They come by themselves when a side falls behind.'}},
+ wolf:{n:'Wolf',p:[4],st:'rotate',vol:3,sp:3,hi:2,pop:9,meta:'4 PLAYERS · ROTATING PARTNERS',
+  d:'A different golfer is the Wolf on every tee. He picks a partner off the drive he just watched, or goes it alone against the other three.',
+  fit:{4:'Made for a foursome. The Wolf rotates, so everyone gets the same number of chances.'},
+  wide:'The best player can’t hide. Everyone wants him as a partner, and when he goes alone he takes on all three. The rotation does the balancing for you.',
+  vibe:{3:'Going Lone Wolf pays triple, and that is where the round gets loud.',1:'Play it without the Lone Wolf multiplier and it is just a good partners game.'}},
+ survivor:{n:'Survivor',p:[3],st:'solo',vol:2,sp:2,hi:2,pop:6,meta:'3 PLAYERS · ELIMINATION',
+  d:'The worst score on the hole is knocked out, and the two left play for the pot. With the Zombie rule on, the man eliminated can come back.',
+  fit:{3:'Built for a threesome: every hole has a loser, then a match.'},
+  vibe:{2:'Two decisions a hole: don’t be last, then win it.'}},
+ banker:{n:'Banker',p:[3,4],st:'turns',vol:3,sp:2,hi:2,pop:6,meta:'3 OR 4 PLAYERS · ONE AGAINST THE GROUP',
+  d:'One golfer takes on everyone else, one bet at a time, and the role moves every hole. Both sides can double.',
+  fit:{3:'With three, the Banker plays two bets a hole and the role moves round fast.',4:'With four, the Banker takes on three bets at once from the last tee.'},
+  wide:'Every bet is net and head to head, so the strokes are settled between two golfers at a time.',
+  vibe:{3:'Doubles on both sides. The Banker answers them all at once.'}},
+ 'las-vegas':{n:'Las Vegas',p:[4],st:'teams',vol:3,sp:1,hi:1,pop:8,meta:'4 PLAYERS · TWO ON TWO',
+  d:'Each side’s two scores make a two-digit number, and the low number wins the difference. A birdie flips the other team’s digits.',
+  fit:{4:'A two-on-two game for a foursome.'},
+  tight:'You are within a few shots of each other, so the numbers stay close and every putt moves money.',
+  low:'Low handicaps keep the scores in fours and fives, which is where Vegas is at its best.',
+  wideWarn:'An eight anywhere on the card turns into a big number. With your spread, pair the low and high handicaps together.',
+  highWarn:'Big numbers swing Vegas hard. Agree a cap per hole before you start.',
+  vibe:{3:'The biggest swings of any foursome game. One birdie can be worth twenty points.'}},
+ 'triple-cup':{n:'Triple Cup',p:[4],st:'teams',post:0,postWhy:'The six holes of foursomes are alternate shot, so the round can\u2019t be posted.',vol:2,sp:2,hi:2,pop:7,meta:'4 PLAYERS · THREE FORMATS',
+  d:'A one-round Ryder Cup: six holes of fourball, six of foursomes, six of singles, and four points on the table.',
+  fit:{4:'A two-on-two match for a foursome, with three different formats.'},
+  wide:'Fourball and singles both run off handicap, so set the sides one strong and one weak each and it is a real cup.',
+  tight:'An even group makes for a cup that is decided in the singles.',
+  vibe:{2:'Four points over three formats. There is always another match coming.'}},
+ 'sequoya-threes':{n:'Sequoya 3s',p:[4],st:'rotate',vol:2,sp:3,hi:2,pop:6,meta:'4 PLAYERS · ROTATING PAIRS',
+  d:'Six three-hole matches, and the pairing rotates every third hole, so everyone partners everyone twice.',
+  fit:{4:'A foursome game where nobody gets stuck with the same partner all day.'},
+  wide:'Everyone partners the best player twice and the highest handicap twice, so nobody can complain about the teams.',
+  vibe:{2:'Short matches and a press that covers only a hole or two. A bad stretch never sinks you.'}},
+ sixes:{n:'Sixes',p:[4],st:'rotate',vol:2,sp:3,hi:2,pop:7,meta:'4 PLAYERS · THREE 6-HOLE MATCHES',
+  d:'Two on two with a new partner every match, each scheduled for six holes. A match ends as soon as it is decided.',
+  fit:{4:'A foursome game with a new partner every six holes.'},
+  wide:'Everyone partners everyone once, so a wide spread evens out over the day.',
+  vibe:{2:'Three fresh matches. Lose one and the next one starts square.'}},
+ rabbit:{n:'Rabbit',p:[3],st:'solo',vol:2,sp:2,hi:2,pop:5,meta:'3 PLAYERS · THE CHASE',
+  d:'Win a hole outright and you catch the rabbit. Hold it to the end of the match and the pot is yours.',
+  fit:{3:'A threesome game with one pot and one thing to chase.'},
+  vibe:{1:'One pot and nothing else. It is hard to lose much at Rabbit.',2:'The rabbit changes hands all day, and it only matters who has it at the end.'}},
+ 'points-5-3-1':{n:'Points 5-3-1',p:[3],st:'solo',vol:1,sp:3,hi:3,pop:7,meta:'3 PLAYERS · POINTS',
+  d:'Five points for the low score, three for second, one for third. Every hole pays exactly nine, and second place is worth something.',
+  fit:{3:'The other answer for a threesome, and the steadiest one.'},
+  wide:'A bad hole costs you a couple of points, not the hole’s whole bet, so the highest handicap is never out of it.',
+  high:'Finishing second still scores. That keeps everyone in the game.',
+  vibe:{1:'Points add up slowly. A friendly game that still has an edge.'}},
+ 'triple-nassau':{n:'Triple Nassau',p:[3],st:'solo',vol:2,sp:2,hi:2,pop:6,meta:'3 PLAYERS · THREE MATCHES',
+  d:'A Nassau for a threesome. Everyone plays a separate match against each of the other two, and every hole counts in both.',
+  fit:{3:'A Nassau for three: you play a match against each of the others.'},
+  wide:'Each match has its own strokes, so the 5 against the 20 is as fair as the 12 against the 15.',
+  vibe:{2:'Six bets on the go and every hole counts in two of them.',3:'Add presses and there are a lot of bets to keep track of. Halved keeps them.'}},
+ 'annandale-friday':{n:'Annandale Friday',p:[5,6],st:'teams',vol:2,sp:2,hi:2,pop:9,meta:'5 OR 6 PLAYERS · THREE NASSAUS',
+  d:'Nassaus for a group of five or six on one card. The teams decide the three matches, each played at net better ball.',
+  fit:{5:'Built for five on one card, which almost nothing else is.',6:'Built for six on one card, which almost nothing else is.'},
+  wide:'Better ball off handicap evens things out, and everyone plays in more than one match.',
+  vibe:{2:'Three Nassaus at once, so there is always something on.'}},
+ 'irish-rumble':{n:'Irish Rumble',p:[7],ev:'side',st:'teams',vol:1,sp:3,hi:3,pop:7,meta:'SIDE GAME · GROUPS OF FOUR',
+  d:'Your group’s best nets count on every hole, and the number climbs through the round: one ball early, all four on the last.',
+  fit:{d:'Each group is a team for the side game while everyone plays the main event.'},
+  wide:'Only your best nets count early on, so the higher handicaps can relax and chip in when it matters.',
+  high:'Net scores and best-ball counting are kind to every level of golfer.',
+  vibe:{1:'A team format where nobody carries the whole round.',2:'The number of balls climbs, so the last three holes decide it.'}},
+ 'hot-seat':{n:'Hot Seat',p:[7],ev:'side',st:'teams',vol:2,sp:2,hi:2,pop:6,meta:'SIDE GAME · GROUPS OF FOUR',
+  d:'Two scores count on every hole: the anchor’s, whatever it is, and the best net of the other three. The anchor rotates.',
+  fit:{d:'Each group is a team of four for the side game, and everyone takes a turn as the anchor.'},
+  wide:'Everyone has to post a score on their anchor holes, so every handicap matters.',
+  vibe:{2:'Pressure, but shared. Your three teammates are playing for you.'}},
+ '40-balls':{n:'40 Balls',p:[7],ev:'side',st:'teams',vol:1,sp:3,hi:3,pop:5,meta:'SIDE GAME · GROUP NETS',
+  d:'Forty balls to spend over eighteen holes. After every hole your group decides how many of its nets count.',
+  fit:{d:'A group strategy game that runs on the same scores as the main event.'},
+  wide:'Your group chooses which nets to use, so a big spread is something to plan around.',
+  vibe:{1:'Strategy more than pressure. Good for a mixed field.'}},
+ 'pink-ball':{n:'Pink Ball',p:[7],ev:'side',st:'teams',vol:2,sp:2,hi:2,pop:6,meta:'SIDE GAME · ONE BALL A GROUP',
+  d:'One ball per group, played in turn, no replacements. The last group still holding it wins.',
+  fit:{d:'Only one golfer in each foursome plays the pink ball on a hole, so it rides along on everyone\u2019s stroke play round.'},
+  vibe:{2:'Everyone gets a turn with the ball, and everyone gets nervous.',3:'Lose the ball and you’re out. That gets tense.'}},
+ 'dream-round':{n:'Dream Round',p:[2,3,4,5,6,7],ev:'trip',tm:'solo',st:'solo',vol:1,sp:3,hi:3,pop:6,meta:'TRIP · MULTI-ROUND',
+  d:'Your best score on every hole, across every round of the trip. Each round is another chance at all eighteen.',
+  fit:{d:'It runs underneath every round of the trip, whatever else you play.'},
+  wide:'Gross and net leaderboards run side by side, so everyone has a title to chase.',
+  vibe:{1:'Nothing to lose on any one round, only holes to improve.'}},
+ 'road-trip':{n:'Road Trip',p:[2,3,4,5,6,7],ev:'trip',tm:'solo',st:'solo',vol:1,sp:2,hi:2,pop:6,meta:'TRIP · MULTI-ROUND',
+  d:'A championship for a golf trip. Every round is scored to par for its course, and your best rounds count towards a net title and a gross title.',
+  fit:{d:'One championship for the whole trip, played across every course.'},
+  wide:'A net title and a gross title, so the best player and the most improved both have something to play for.',
+  vibe:{2:'A trip-long leaderboard that keeps every round meaningful.'}},
+ 'mini-singles-bracket':{n:'Mini Singles Bracket',p:[7],ev:'side',st:'solo',vol:2,sp:2,hi:2,pop:7,meta:'SIDE GAME · KNOCKOUT IN EACH GROUP',
+  d:'A four-man knockout inside each group: semi-finals, then a final, all on the scores of the main round. Group winners can meet in one more bracket.',
+  fit:{d:'Half the field is out of a bracket by the turn, so run it on top of the stroke play. Everyone still has the main event to play for.'},
+  wide:'Every match is net, head to head, so each one gets its own strokes.',
+  vibe:{2:'Match play drama inside every foursome, without anyone losing their round.',3:'Lose and you are out of the bracket. Win and you play for the title.'}}
+};
+var SIDE={spots:{n:'Spots',ic:'★',d:'Greenies, sandies, one-putts: whatever the group agrees to pay for. Tap them in on the hole.'},
+          honors:{n:'Honors',ic:'◆',d:'A point for every hole you hold the honor. A tie never takes it from the holder.'}};
+
+var LBL={vol:'Action',sp:'Handles a wide spread',hi:'Kind to high handicaps'};
+var STY={solo:'Every man for himself',teams:'Teams',rotate:'Rotating partners',turns:'One against the group'};
+var FRESH=function(){return{step:0,kind:null,len:null,n:null,p:[],rough:false,rs:null,rl:null,st:null,tm:null,post:null,act:null,cap:null,hide:{}}};
+var TMN={solo:'Individual',pairs:'Two-man teams',fours:'Four-man teams'};
+var S=FRESH();
+try{var hz=JSON.parse(localStorage.getItem('halved-fg-hide')||'{}');if(hz&&typeof hz==='object')S.hide=hz}catch(e){}
+function saveHide(){try{localStorage.setItem('halved-fg-hide',JSON.stringify(S.hide))}catch(e){}}
+var Q=document.getElementById('quiz');
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function big(){return S.n>=7}
+function ev(){return S.kind==='event'}
+function multi(){return ev()&&S.len==='multi'}
+function steps(){var a=['kind'];if(ev())a.push('len');a.push('players','hcp');
+ if(ev()&&big())a.push('team');else if(S.n!==2)a.push('style');
+ a.push('post','action','cap');return a}
+function parseIx(v){v=String(v||'').trim();if(!v)return null;var plus=/^\+/.test(v);var x=parseFloat(v.replace('+',''));if(isNaN(x))return undefined;if(plus)x=-x;if(x<-10||x>54)return undefined;return x}
+function fmt(x){return x<0?'+'+(-x).toFixed(1):x.toFixed(1)}
+function label(i){var p=S.p[i]||{};return (p.nm&&p.nm.trim())||(true?(i?'Highest':'Lowest'):'Player '+(i+1))}
+function fmtGap(s){var r=Math.round(s);return r===1?'1 shot':r+' shots'}
+function capped(){return S.cap==='yes'}
+
+function stats(){
+ if(!S.rough){var v=S.p.map(function(p){return parseIx(p&&p.ix)}).filter(function(x){return typeof x==='number'});
+  if(v.length>=2){var mn=Math.min.apply(0,v),mx=Math.max.apply(0,v),av=v.reduce(function(a,b){return a+b},0)/v.length;
+   if(true)av=(mn+mx)/2;return{known:true,min:mn,max:mx,avg:av,spread:mx-mn}}}
+ var sp={tight:3,some:8,wide:15}[S.rs||'some'],av={low:6,mid:14,high:24}[S.rl||'mid'];return{known:false,spread:sp,avg:av}}
+function band(st){return{sp:st.spread<6?'tight':st.spread<12?'some':'wide',lv:st.avg<10?'low':st.avg<20?'mid':'high'}}
+
+/* ---------- Which games are in play ---------- */
+function tmOK(k){var t=G[k].tm;if(!S.tm||S.tm==='any')return true;return t&&(t===S.tm||(t.indexOf&&t.indexOf(S.tm)>=0))}
+function postOK(k){return S.post!=='must'||G[k].post!==0}
+function pool(which){var n=Math.min(S.n,7),out=[];
+ for(var k in G){var g=G[k];if(g.p.indexOf(n)<0)continue;
+  if(which==='round'&&(g.ev||n>=7))continue;
+  if(which==='day'&&!(g.evd&&tmOK(k)))continue;
+  if(which==='trip'&&!(g.ev==='trip'&&tmOK(k)))continue;
+  if(which==='side'&&g.ev!=='side')continue;
+  if(k==='mini-singles-bracket'&&S.n<8)continue;
+  if(g.min&&S.n<g.min)continue;
+  out.push(k)}
+ return out}
+/* The main pick, plus optional shelves */
+function plan(){
+ if(!ev())return{main:pool('round'),mainT:'OUR PICK FOR YOUR GROUP'};
+ if(!multi())return{main:pool('day'),mainT:'OUR PICK FOR YOUR TOURNAMENT',side:pool('side')};
+ if(!big())return{main:pool('trip'),mainT:'OUR PICK FOR YOUR TRIP',second:pool('round'),secondT:'Each round, play'};
+ if(S.tm==='pairs'||S.tm==='fours'){var t=S.tm;S.tm='solo';var tr=pool('trip');S.tm=t;return{main:pool('day'),mainT:'OUR PICK FOR EACH ROUND OF YOUR TRIP',second:tr,secondT:'Across the whole trip'}}
+ var t2=S.tm;S.tm='solo';var dy=pool('day');S.tm=t2;
+ return{main:pool('trip'),mainT:'OUR PICK FOR YOUR TRIP',second:dy,secondT:'Each round, play',side:pool('side')}}
+function slugOf(k){return G[k].slug||k}
+function hasGuide(k){return G[k].guide!==0}
+function style(k){var s=G[k].st;return typeof s==='object'?s[S.n]:s}
+
+/* ---------- Scoring: every term is shown in "How we picked" ---------- */
+function parts(k){var g=G[k],st=stats(),b=band(st),want=S.act||2,cf=capped()?0.4:1,P=[];
+ P.push(['Popular with groups',g.pop*0.5]);
+ if(S.st&&S.st!=='any')P.push([style(k)===S.st?'Matches how you like to play':'Not how you like to play',style(k)===S.st?6:-5]);
+ P.push(['Action vs. what you asked for',-2.5*Math.abs(g.vol-want)]);
+ if(b.sp==='wide')P.push(['Wide spread'+(capped()?' (softened by the cap)':''),2.5*(g.sp-2)*cf]);
+ else if(b.sp==='tight')P.push(['Close group',(2-g.sp)+((k==='las-vegas'||k==='nassau'||k==='claremont')?1.5:0)]);
+ if(b.lv==='high')P.push(['Higher handicaps'+(capped()?' (softened by the cap)':''),2.5*(g.hi-2)*cf]);
+ else if(b.lv==='low')P.push(['Low handicaps',(2-g.hi)]);
+ if(multi()&&G[k].ev==='trip')P.push(['Built for several rounds',4]);
+ if(capped()&&k==='stableford')P.push(['Your cap already does Stableford’s job',-6]);
+ if(S.post==='nice'&&G[k].post===0)P.push(['Not a postable score',-4]);
+ return P.filter(function(p){return Math.abs(p[1])>0.01})}
+function score(k){return parts(k).reduce(function(a,p){return a+p[1]},0)}
+function rank(list){return list.filter(function(k){return !S.hide[k]&&postOK(k)}).sort(function(a,b){return score(b)-score(a)})}
+
+function pick(o,n){return o&&(o[n]||o.d)}
+function reasons(k,full){var g=G[k],st=stats(),b=band(st),r=[];
+ var f=pick(g.fit,Math.min(S.n,7));if(f)r.push({t:f});
+ var apart=st.known?'You are '+fmtGap(st.spread)+' apart. ':'';
+ if(capped()&&k==='stableford')r.push({t:'You already pick up at net double bogey, which does most of what Stableford does. Pick it for the points, not for the protection.',w:1});
+ else if(b.sp==='wide'&&g.wideWarn)r.push(capped()?{t:'Net double bogey max keeps the numbers sane, so your spread is less of a problem here. Still pair the low and high handicaps together.'}:{t:g.wideWarn,w:1});
+ else if(b.sp==='wide'&&g.wide)r.push({t:apart+g.wide});
+ else if(b.sp==='tight'&&g.tight)r.push({t:g.tight});
+ else if(b.sp!=='tight'&&g.wide&&g.sp>=2&&full)r.push({t:g.wide});
+ if(b.lv==='high'&&g.highWarn&&!capped())r.push({t:g.highWarn,w:1});
+ else if(b.lv==='high'&&g.high&&!(capped()&&k==='stableford'))r.push({t:g.high});
+ else if(b.lv==='low'&&g.low)r.push({t:g.low});
+ if(capped()&&k!=='stableford'&&(b.sp==='wide'||b.lv==='high')&&full&&!g.wideWarn)r.push({t:'With net double bogey max, nobody’s blow-up hole decides it.'});
+ if(S.post&&S.post!=='no'){if(g.post===0&&!g.ev)r.push({t:'Not a postable score. '+(g.postWhy||'Under the handicap rules a team-ball format can\u2019t be posted.'),w:1});else if(g.post!==0&&!g.ev&&full)r.push({t:'Postable: every golfer plays his own ball to the hole, and Halved keeps each card.'})}
+ var want=S.act||2,v=g.vibe&&(g.vibe[want]||g.vibe[Math.round(g.vol)]||g.vibe[2]);if(v&&full)r.push({t:v});
+ return full?r.slice(0,4):r.slice(0,1)}
+function teams(k){if(S.n!==4||style(k)!=='teams')return'';var st=stats();
+ var lo=st.known?' <small>'+fmt(st.min)+'</small>':'',hi=st.known?' <small>'+fmt(st.max)+'</small>':'';
+ return '<div class="teams"><b class="h">FAIREST SIDES</b><div class="row"><span class="side">Lowest index'+lo+' + highest'+hi+'</span><span style="color:#8FB3A5">v</span><span class="side">The two in the middle</span></div><div style="margin-top:9px;font-size:13px;color:#8FB3A5">Best with worst against the middle two. Halved gives the strokes from there.</div></div>'}
+function dots(v){var h='';for(var i=1;i<=3;i++)h+='<i class="'+(v>=i?'on':v>=i-.5?'half':'')+'"></i>';return '<span class="dots" aria-label="'+v+' of 3">'+h+'</span>'}
+function rates(k,dark){var g=G[k];return '<div class="rates'+(dark?' dk':'')+'">'+['vol','sp','hi'].map(function(f){return '<span>'+LBL[f]+' '+dots(g[f])+'</span>'}).join('')+(g.ev==='side'?'':'<span class="pst'+(g.post===0?' no':'')+'">'+(g.post===0?'Not postable':'Postable')+'</span>')+'</div>'}
+function metaOf(k){var g=G[k],m=g.meta;return typeof m==='object'?(m[S.n]||m[S.tm]||m.d):m}
+/* ---------- Views ---------- */
+function cur(){return S.step===99?'res':steps()[S.step]}
+function prog(){var a=steps(),i=a.indexOf(cur());return '<div class="prog"><div class="bar"><i style="width:'+Math.round((i+1)/(a.length)*100)+'%"></i></div><span>Question '+(i+1)+' of '+a.length+'</span></div>'}
+function opt(attr,val,on,b,s,cls,dis){return '<button type="button" class="opt'+(cls?' '+cls:'')+'" '+attr+'="'+val+'" aria-pressed="'+(on?'true':'false')+'"'+(dis?' disabled':'')+'><b>'+b+'</b>'+(s?'<small>'+s+'</small>':'')+'</button>'}
+function nav(ok,lbl){return '<div class="nav">'+(S.step>0?'<button type="button" class="lnk" data-back="1">← Back</button>':'<span></span>')+'<button type="button" class="btn" data-next="1"'+(ok?'':' disabled')+'>'+(lbl||'Next')+' →</button></div>'}
+
+function vKind(){return prog()+'<h2 class="q">What are you setting up?</h2><p class="qs">A round is your group, on one day. A tournament is several groups, several rounds, or both.</p><div class="opts two" role="group" aria-label="Round or tournament">'+
+ opt('data-kind','round',S.kind==='round','A round','Your group, one day. Saturday’s game.')+opt('data-kind','event',S.kind==='event','A tournament','Several groups, a member-guest, or a trip with several rounds')+'</div>'+nav(!!S.kind)}
+function vLen(){return prog()+'<h2 class="q">One day or several?</h2><p class="qs">Some formats run across every round of a trip. Others are built for a single day with a full field.</p><div class="opts two" role="group" aria-label="Length">'+
+ opt('data-len','day',S.len==='day','One day','Every group out on the same round')+opt('data-len','multi',S.len==='multi','Several rounds','A trip or a weekend, one champion at the end')+'</div>'+nav(!!S.len)}
+function vPlayers(){var o=ev()?[[2,''],[3,''],[4,'one group'],[5,''],[6,''],[8,'2–3 groups'],[12,'3+ groups']]:[[2,'heads up'],[3,'a threesome'],[4,'a foursome'],[5,'one card'],[6,'one card']];
+ var oneDay=ev()&&S.len==='day';
+ var h=prog()+'<h2 class="q">How many are playing?</h2><p class="qs">'+(ev()?'Tournament formats need the right number of groups, so this narrows things a lot.':'This decides the most. Most games are built for one size of group, so it tells us which ones you can play at all.')+'</p><div class="opts n6'+(ev()?' n7':' n5')+'" role="group" aria-label="Number of players">'+
+ o.map(function(x){var dis=oneDay&&x[0]<7;return opt('data-n',x[0],S.n===x[0],x[0]===8?'7–11':x[0]===12?'12+':x[0],dis?'one group':x[1],'num',dis)}).join('')+'</div>';
+ if(oneDay)h+='<p class="sub" style="margin:14px 2px 0">One group on one day is a round. <button type="button" class="lnk" data-kind="round" data-jump="1" style="padding:0;font-size:13px">Set up a round instead</button></p>';
+ else if(S.n>=8)h+='<p class="sub" style="margin:14px 2px 0">More than one group: we’ll look at formats that play across groups.</p>';
+ return h+nav(!!S.n&&!(oneDay&&S.n<7))}
+
+function vHcp(){var h;
+ if(S.rough){
+  h='<h2 class="q">Roughly, what is the group like?</h2><p class="qs">No problem. A rough idea is enough to pick a game.</p><div class="rough"><div><h3>How far apart are you?</h3><div class="opts two">'+
+  opt('data-rs','tight',S.rs==='tight','All about the same','Within five shots or so')+opt('data-rs','some',S.rs==='some','A few shots apart','Somewhere around 6 to 11')+opt('data-rs','wide',S.rs==='wide','All over the place','A dozen shots or more between best and worst')+
+  '</div></div><div><h3>And the group as a whole?</h3><div class="opts two">'+
+  opt('data-rl','low',S.rl==='low','Mostly single digits','Low handicaps, few big numbers')+opt('data-rl','mid',S.rl==='mid','Mostly in the teens','A typical weekend group')+opt('data-rl','high',S.rl==='high','Mostly 20 and up','Some big numbers on the card')+
+  '</div></div></div><div style="margin-top:14px"><button type="button" class="lnk" data-rough="0">Enter handicaps instead</button></div>';
+  return prog()+h+nav(S.rs&&S.rl)}
+ var cnt=true?2:S.n;while(S.p.length<cnt)S.p.push({nm:'',ix:''});
+ h='<h2 class="q">'+(true?'What is the range of handicaps?':'What are their handicaps?')+'</h2><p class="qs">'+(true?'Just the lowest and highest index'+(ev()?' in the field':' in the group')+'. Use + for a plus handicap. How far apart they are matters as much as how good they are.':'Handicap index for each player. Names are optional, and use + for a plus handicap. How far apart you are matters as much as how good you are.')+'</p><div class="hcs">';
+ for(var i=0;i<cnt;i++){var p=S.p[i],bad=parseIx(p.ix)===undefined;
+  h+='<label class="hc'+(bad?' bad':'')+'"><span class="av">'+(true?(i?'↑':'↓'):(p.nm.trim()?esc(p.nm.trim()[0].toUpperCase()):i+1))+'</span>'+
+  (true?'<span style="flex:1;font-size:15px;color:#5C6B62">'+(i?'Highest':'Lowest')+' index</span>':'<input class="nm" data-pi="'+i+'" data-f="nm" value="'+esc(p.nm)+'" placeholder="Player '+(i+1)+'" aria-label="Player '+(i+1)+' name" autocomplete="off">')+
+  '<input class="ix" data-pi="'+i+'" data-f="ix" value="'+esc(p.ix)+'" placeholder="Index" inputmode="decimal" aria-label="'+(true?(i?'Highest':'Lowest'):'Player '+(i+1))+' handicap index" autocomplete="off"></label>'}
+ h+='</div><div class="readout" id="ro">'+readout()+'</div><div style="margin-top:12px"><button type="button" class="lnk" data-rough="1">We don’t know our handicaps</button></div>';
+ return prog()+h+nav(hcpOK())}
+function hcpOK(){if(S.rough)return S.rs&&S.rl;var cnt=true?2:S.n,v=0;for(var i=0;i<cnt;i++){var x=parseIx(S.p[i]&&S.p[i].ix);if(x===undefined)return false;if(typeof x==='number')v++}return v>=2}
+function readout(){var bad=S.p.some(function(p){return parseIx(p.ix)===undefined});if(bad)return 'Use an index between +10 and 54, like 12.4 or +1.2.';
+ var st=stats();if(!st.known)return '<span style="color:#7C8C82">Enter at least two handicaps and we’ll show the spread.</span>';
+ var b=band(st),lo=Math.min(st.min,0),hi=Math.max(36,st.max),pos=function(x){return ((x-lo)/(hi-lo)*100).toFixed(1)+'%'};
+ var say={tight:'A close group. Almost any game will be a fair fight.',some:'A few shots apart. Handicaps will do most of the evening-out.',wide:'A wide spread. We’ll lean towards games where one bad hole can’t sink anyone.'}[b.sp];
+ var dts=S.p.map(function(p){return parseIx(p.ix)}).filter(function(x){return typeof x==='number'}).map(function(x){return '<em style="left:'+pos(x)+'"></em>'}).join('');
+ return '<b>'+fmt(st.min)+' to '+fmt(st.max)+'</b> · '+fmtGap(st.spread)+' apart'+(true?'':' · average '+fmt(st.avg))+'<br>'+say+
+ '<div class="spread"><span>'+fmt(lo).replace('.0','')+'</span><div class="track"><i style="left:'+pos(st.min)+';width:'+(((st.max-st.min)/(hi-lo))*100).toFixed(1)+'%"></i>'+dts+'</div><span>'+hi+'</span></div>'}
+
+function vStyle(){var o;
+ if(S.n===3)o=[['solo','Every man for himself','Everyone plays everyone, all day'],['turns','Take turns against the group','One player against the other two, rotating'],['any','No preference','Show me the best fit']];
+ else if(S.n===4)o=[['teams','Fixed teams','Two on two, same partner all day'],['rotate','Rotating partners','A new partner as the round goes on'],['solo','Every man for himself','Your score against everyone’s'],['any','No preference','Show me the best fit']];
+ else if(big())o=[['teams','Teams','Each group plays as a team'],['solo','Individual','One leaderboard, every player on it'],['any','No preference','Show me the best fit']];
+ else o=[['teams','Teams','Sides within the group'],['solo','Every man for himself','One leaderboard for everyone'],['any','No preference','Show me the best fit']];
+ return prog()+'<h2 class="q">How do you like to play?</h2><p class="qs">Some groups want a partner to lean on. Others want the bragging rights to themselves.</p><div class="opts two" role="group" aria-label="Play style">'+o.map(function(x){return opt('data-st',x[0],S.st===x[0],x[1],x[2])}).join('')+'</div>'+nav(!!S.st)}
+
+function vTeam(){var o=[['solo','Individual','Low net, low gross or Stableford. One leaderboard, flights by index'],['pairs','Two-man teams','Best ball, scramble, alternate shot, Scotch or Chapman'],['fours','Four-man teams','Scramble, shamble or best 2 of 4'],['any','No preference','Show me the best fit']];
+ return prog()+'<h2 class="q">How will the field play?</h2><p class="qs">This picks the main event. Side games like Pink Ball or Irish Rumble can run alongside an individual tournament, and we’ll suggest those too.</p><div class="opts two" role="group" aria-label="Teams">'+o.map(function(x){return opt('data-tm',x[0],S.tm===x[0],x[1],x[2])}).join('')+'</div>'+nav(!!S.tm)}
+function vPost(){var o=[['must','Yes, we post every round','Only formats where everyone plays his own ball'],['nice','Nice to have','Lean towards postable formats'],['no','Doesn’t matter','Today is about the game']];
+ return prog()+'<h2 class="q">Do you need a score you can post?</h2><p class="qs">Under the World Handicap System, stroke play, Stableford, match play and four-ball scores can be posted, and so can most money games where everyone plays his own ball. Scrambles, shambles and alternate-shot formats can’t.</p><div class="opts two" role="group" aria-label="Postable score">'+o.map(function(x){return opt('data-post',x[0],S.post===x[0],x[1],x[2])}).join('')+'</div>'+nav(!!S.post)}
+
+function vAction(){var o=[[1,'Keep it friendly','A few dollars and some bragging rights'],[2,'A few swings','Enough on it that the back nine matters'],[3,'Bring the pressure','Presses, doubles and carries. Let it build']];
+ return prog()+'<h2 class="q">How much action?</h2><p class="qs">Not how much money, just how much it can move around during the round.</p><div class="opts two" role="group" aria-label="Action">'+o.map(function(x){return opt('data-act',x[0],S.act===x[0],x[1],x[2])}).join('')+'</div>'+nav(!!S.act)}
+
+function vCap(){var o=[['yes','Yes, net double bogey max','Pick up once you can’t do better than net double'],['no','No, every stroke counts','The card shows what you made'],['unsure','Haven’t decided','We’ll treat it as no cap']];
+ return prog()+'<h2 class="q">Do you cap blow-up holes?</h2><p class="qs">A net double bogey max takes the sting out of a bad hole in any game. That does most of what Stableford does for a mixed group, so with a cap on we stop leaning on it.</p><div class="opts two" role="group" aria-label="Hole cap">'+o.map(function(x){return opt('data-cap',x[0],S.cap===x[0],x[1],x[2])}).join('')+'</div>'+nav(!!S.cap,'Find our game')}
+
+function guideLink(k,cls){var g=G[slugOf(k)]||G[k];return hasGuide(k)?'<a class="'+cls+'" href="../'+slugOf(k)+'/index.html">How to play '+g.n+' →</a>':'<span class="'+cls+' soon">Halved scores it · guide coming soon</span>'}
+function card(k,fitTxt){var g=G[k],rs=reasons(k,true),r=g.ev==='side'?rs[0]:(rs[1]||rs[0]);
+ return '<div class="gcard"><div class="m">'+metaOf(k)+'</div><h3>'+g.n+'</h3>'+(fitTxt?'<span class="fit">'+fitTxt+'</span>':'')+'<p>'+g.d+'</p>'+(r?'<p style="margin-top:-6px;color:'+(r.w?'#8A5A12':'#33443C')+'">'+(r.w?'<b>Watch: </b>':'')+r.t+'</p>':'')+rates(k)+
+ '<div class="cfoot">'+guideLink(k,'more')+'<button type="button" class="lnk sm" data-hide="'+k+'">Not for us</button></div></div>'}
+function how(list){var grp=function(k){return (S.hide[k]||!postOK(k))?3:G[k].ev==='side'?2:0};var all=list.filter(function(k,i){return list.indexOf(k)===i}).sort(function(a,b){return grp(a)-grp(b)||score(b)-score(a)});
+ var vis=all.filter(function(k){return !S.hide[k]&&postOK(k)}),mx=vis.length?score(vis[0]):1,mn=vis.length?Math.min.apply(0,vis.map(score)):0;
+ var h='<details class="how"'+(S.open?' open':'')+'><summary><span>How we picked</span><small>'+vis.length+' game'+(vis.length===1?'':'s')+' fit your group'+(all.length>vis.length?' · '+(all.length-vis.length)+' left out':'')+'</small></summary>'+
+ '<p class="hx">Every game gets three ratings, from one to three, and is marked postable or not. We score each one against your answers: how well it matches the way you like to play and the action you asked for, how it handles your spread and your handicaps, and whether you need a score to post. Hide any game your group won’t play and the picks update.</p>'+
+ '<dl class="key"><div><dt>'+LBL.vol+'</dt><dd>How much the money can move in one round. One is steady, three is presses, doubles and carries.</dd></div><div><dt>'+LBL.sp+'</dt><dd>How fair it stays when the best and worst players are far apart. Three means a bad hole or a big gap can’t decide it.</dd></div><div><dt>'+LBL.hi+'</dt><dd>How well it suits a group that makes some big numbers. Three means a blow-up costs little.</dd></div></dl><div class="tbl">';
+ all.forEach(function(k){var g=G[k],hid=!!S.hide[k],sc=score(k),w=hid?0:Math.max(6,Math.round(((sc-mn)/((mx-mn)||1))*94+6));
+  var np=!postOK(k);h+='<div class="tr'+(hid||np?' off':'')+'"><div class="tn"><a href="../'+(hasGuide(k)?slugOf(k)+'/':'')+'index.html">'+g.n+'</a><small>'+(g.ev==='side'?'Side game':(G[k].tm?(typeof G[k].tm==='string'?TMN[G[k].tm]:'Two- or four-man teams'):(STY[style(k)]||'')))+'</small></div><div class="tc">'+rates(k)+'</div>'+
+  '<div class="tf">'+(np?'<span class="sub">Can\u2019t be posted</span>':hid?'<span class="sub">Hidden</span>':'<span class="fbar"><i style="width:'+w+'%"></i></span><details class="pt"><summary>Why</summary><ul>'+parts(k).map(function(p){return '<li><span>'+p[0]+'</span><b class="'+(p[1]<0?'neg':'')+'">'+(p[1]>0?'+':'')+(Math.round(p[1]*10)/10)+'</b></li>'}).join('')+'</ul></details>')+'</div>'+
+  '<div class="tx"><button type="button" class="lnk sm" data-'+(hid?'show':'hide')+'="'+k+'">'+(hid?'Bring back':'Not for us')+'</button></div></div>'});
+ return h+'</div></details>'}
+
+function vRes(){var P=plan(),st=stats(),main=rank(P.main),top=main[0],alts=main.slice(1,3);
+ var sum=['<span>'+(ev()?(multi()?'Tournament · several rounds':'Tournament · one day'):'A round')+'</span>','<span>'+(big()?(S.n>=12?'12+ players':'7–11 players'):S.n+' players')+'</span>',
+  st.known?'<span>Index '+fmt(st.min)+' to '+fmt(st.max)+'</span><span>'+fmtGap(st.spread)+' apart</span>':'<span>'+{tight:'Close together',some:'A few shots apart',wide:'Wide spread'}[S.rs]+'</span><span>'+{low:'Single digits',mid:'Mostly teens',high:'Mostly 20+'}[S.rl]+'</span>',
+  S.st&&S.st!=='any'?'<span>'+STY[S.st]+'</span>':'',S.tm&&S.tm!=='any'?'<span>'+TMN[S.tm]+'</span>':'',
+  {must:'<span>Must be postable</span>',nice:'<span>Postable preferred</span>'}[S.post]||'',
+  '<span>'+{1:'Friendly',2:'A few swings',3:'Big swings'}[S.act]+'</span>',capped()?'<span>Net double bogey max</span>':''].join('');
+ var h='<div class="sum">'+sum+'</div>';
+ if(!top){h+='<div class="readout" style="font-size:15.5px">Nothing left that fits: every game for this group is hidden'+(S.post==='must'?' or can’t be posted':'')+'. Bring one back below, or <button type="button" class="lnk" data-edit="1" style="padding:0">change your answers</button>.</div>'}
+ else{var g=G[top];
+  h+='<div class="pick"><div class="tag">'+P.mainT+'</div><div class="meta">'+metaOf(top)+'</div><h2>'+g.n+'</h2><p class="d">'+g.d+'</p><ul class="why">'+reasons(top,true).map(function(r){return '<li'+(r.w?' class="warn"':'')+'>'+r.t+'</li>'}).join('')+'</ul>'+rates(top,true)+teams(top)+
+  '<div class="pfoot">'+(hasGuide(top)?'<a class="go" href="../'+slugOf(top)+'/index.html">How to play '+g.n+' →</a>':'<a class="go" href="https://apps.apple.com/app/id6768284628">Set it up in Halved →</a><span style="font-size:13px;color:#8FB3A5">The written guide is on the way.</span>')+'<button type="button" class="lnk sm lt" data-hide="'+top+'">Not for us, show the next one</button></div></div>'}
+ var sideOK=P.side&&top&&(G[top].tm==='solo'||G[top].ev==='trip'),sides=sideOK?rank(P.side).slice(0,4):[];
+ if(sides.length)h+='<div class="sec">Run alongside it</div><p class="sub" style="margin:-4px 2px 12px;font-size:14px">Side games that ride on the same scores, group by group. Each foursome plays its own while the field plays '+G[top].n+'.</p><div class="alts">'+sides.map(function(k){return card(k)}).join('')+'</div>';
+ if(P.second){var sec=rank(P.second);if(sec.length)h+='<div class="sec">'+P.secondT+'</div><div class="alts">'+sec.slice(0,2).map(function(k,i){return card(k,i?'':'Best fit')}).join('')+'</div>'}
+ if(alts.length)h+='<div class="sec">Also a good fit</div><div class="alts">'+alts.map(function(k){return card(k)}).join('')+'</div>';
+ if(S.n<=4&&!ev()){var sk=S.act===1?'honors':'spots',s=SIDE[sk];
+  h+='<div class="sec">Add a side game</div><a class="gcard side" href="../'+sk+'/index.html"><span class="ic">'+s.ic+'</span><div><h3 style="margin:0 0 3px;font-size:19px">'+s.n+'</h3><p>'+s.d+'</p></div><span class="more">How to play →</span></a>'}
+ h+=how(P.main.concat(P.second||[],sideOK?P.side:[]));
+ h+='<div class="again"><button type="button" class="btn" data-restart="1" style="background:#fff;color:#0F6E56;box-shadow:inset 0 0 0 1.5px #0F6E56">Start over</button><button type="button" class="lnk" data-edit="1">Change my answers</button><a class="lnk" href="/games/" style="text-decoration:none">Browse all games →</a></div>';
+ return h}
+function render(focus){var k=cur();
+ Q.innerHTML={kind:vKind,len:vLen,players:vPlayers,hcp:vHcp,style:vStyle,team:vTeam,post:vPost,action:vAction,cap:vCap,res:vRes}[k]();
+ if(focus){var f=Q.querySelector(k==='hcp'&&!S.rough?'input':'.q,.pick h2');if(f){if(f.tagName!=='INPUT')f.setAttribute('tabindex','-1');f.focus({preventScroll:true})}
+  var top=Q.getBoundingClientRect().top+window.scrollY-20;if(window.scrollY>top)window.scrollTo({top:top,behavior:'smooth'})}}
+function go(d){var a=steps();if(S.step===99){S.step=a.length-1}else{S.step+=d}
+ if(S.step>=a.length)S.step=99;if(S.step<0)S.step=0;render(true)}
+function setN(n){if(n===S.n)return;var cb=(n>=7)!==big();S.n=n;S.st=null;S.tm=null;if(cb)S.p=[]}
+
+Q.addEventListener('click',function(e){var t=e.target.closest('button');if(!t)return;var d=t.dataset;
+ if(d.kind){if(d.kind!==S.kind){S.kind=d.kind;S.len=null;if(d.kind==='round'&&S.n>=7){S.n=null;S.p=[]}}
+  if(d.jump){S.step=steps().indexOf('players')}render(!!d.jump);return}
+ if(d.len){S.len=d.len;if(d.len==='day'&&S.n&&S.n<7)S.n=null;render();return}
+ if(d.n){setN(+d.n);render();return}
+ if(d.rough){S.rough=d.rough==='1';render(true);return}
+ if(d.rs){S.rs=d.rs;render();return}
+ if(d.rl){S.rl=d.rl;render();return}
+ if(d.st){S.st=d.st;render();return}
+ if(d.act){S.act=+d.act;render();return}
+ if(d.cap){S.cap=d.cap;render();return}
+ if(d.tm){S.tm=d.tm;render();return}
+ if(d.post){S.post=d.post;render();return}
+ if(d.hide){S.hide[d.hide]=1;saveHide();S.open=!!t.closest('.how');render();return}
+ if(d.show){delete S.hide[d.show];saveHide();S.open=true;render();return}
+ if(d.next&&!t.disabled){go(1);return}
+ if(d.back){go(-1);return}
+ if(d.restart){var hd=S.hide;S=FRESH();S.hide=hd;render(true);return}
+ if(d.edit){S.step=0;render(true);return}
+});
+Q.addEventListener('toggle',function(e){if(e.target.classList&&e.target.classList.contains('how'))S.open=e.target.open},true);
+Q.addEventListener('input',function(e){var t=e.target;if(!t.dataset.f)return;var i=+t.dataset.pi;S.p[i][t.dataset.f]=t.value;
+ var lab=t.closest('.hc');if(t.dataset.f==='ix')lab.classList.toggle('bad',parseIx(t.value)===undefined);
+ if(t.dataset.f==='nm'&&!big()){lab.querySelector('.av').textContent=t.value.trim()?t.value.trim()[0].toUpperCase():i+1}
+ document.getElementById('ro').innerHTML=readout();var b=Q.querySelector('[data-next]');b.disabled=!hcpOK()});
+Q.addEventListener('keydown',function(e){if(e.key==='Enter'&&e.target.tagName==='INPUT'){var b=Q.querySelector('[data-next]');if(b&&!b.disabled)go(1)}});
+render();
+})();
+</script>
+</body>
+</html>

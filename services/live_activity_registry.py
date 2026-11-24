@@ -730,6 +730,8 @@ BUILDERS = {
     # so both slugs land on the same one and it declares `kind = 'match'`.
     'match_18': _match,
     'fourball': _match,
+    'scramble_match': _match,
+    'alternate_shot_match': _match,
     # Stableford is a ROUND-level game — every foursome plays it — but the card
     # is still built per foursome, because the locked corner is the reader's
     # own hole and his own tee's yardage.
@@ -803,11 +805,13 @@ BUILDERS = {
 # Builders that need to know which slug selected them, because one card serves
 # more than one game.
 _SLUG_AWARE = {'match_18', 'fourball',
+               'scramble_match', 'alternate_shot_match',
                'scramble', 'better_ball', 'irish_rumble'}
 
 # slug -> the card `kind` its builder declares, where that differs from the
 # slug. Only needed for a builder serving several games.
 CARD_KIND = {'match_18': 'match', 'fourball': 'match',
+             'scramble_match': 'match', 'alternate_shot_match': 'match',
              'oakmont_swat': 'nassau',
              'match_play': 'match',
              'nassau_nine': 'match',

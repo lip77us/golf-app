@@ -33,7 +33,11 @@ KIND = 'match'
 # riding the NassauGame model; `fourball` is its own engine. They share every
 # slot, so they share the layout — the registry maps both here and the state
 # declares `kind = 'match'` rather than either slug.
-SLUGS = ('match_18', 'fourball')
+SLUGS = ('match_18', 'fourball', 'scramble_match', 'alternate_shot_match')
+
+# The two pair formats ARE a Fourball match with one score a side, so they
+# draw through the Fourball normaliser and the same card.
+_FOURBALL_SLUGS = ('fourball', 'scramble_match', 'alternate_shot_match')
 
 _HOLES = 18
 
@@ -170,7 +174,7 @@ def _normalise_fourball(foursome, player_id):
                   if e.get('player_id') == player_id), None)
 
     return {
-        'game'      : 'FOURBALL',
+        'game'      : (summary.get('format_label') or 'Fourball').upper(),
         'side1'     : ' & '.join((summary.get('team1') or {}).get('players') or []),
         'side2'     : ' & '.join((summary.get('team2') or {}).get('players') or []),
         'margin'    : margin,
@@ -198,6 +202,22 @@ def _fourball_to_par(summary, player_id):
     reads `holes`, so the list is handed over rather than the summary.
     """
     from services.live_activity_registry import gross_to_par
+    if summary.get('ball_format', 'best_ball') != 'best_ball':
+        # One score a side: the reader's side's gross against par, over the
+        # holes it has scored — his partner holds the number on half of them.
+        side = ((summary.get('team1') or {}).get('player_ids') or [],
+                (summary.get('team2') or {}).get('player_ids') or [])
+        mine = next((s for s in side if player_id in s), None)
+        if mine is None:
+            return None
+        total = par = 0
+        for h in summary.get('scorecard') or []:
+            g = sum(s.get('gross') or 0 for s in h.get('scores') or []
+                    if s.get('player_id') in mine)
+            if g and h.get('par'):
+                total += g
+                par   += h['par']
+        return (total - par) if par else None
     return gross_to_par({'holes': summary.get('scorecard') or []}, player_id)
 
 
@@ -213,7 +233,7 @@ def _handicap_cfg(foursome, slug):
     band. Read from the model rather than threaded through, so the two paths
     stay as thin as they are.
     """
-    if slug == 'fourball':
+    if slug in _FOURBALL_SLUGS:
         from games.models import FourballGame
         g = FourballGame.objects.filter(foursome=foursome).first()
     else:
@@ -227,7 +247,7 @@ def _handicap_cfg(foursome, slug):
 
 def match_activity_state(foursome, *, slug, player_id=None, thru=None) -> dict:
     """The five slots for this foursome's match, right now."""
-    if slug == 'fourball':
+    if slug in _FOURBALL_SLUGS:
         m = _normalise_fourball(foursome, player_id)
     else:
         m = _normalise_nassau(foursome, player_id)
@@ -245,9 +265,17 @@ def match_activity_state(foursome, *, slug, player_id=None, thru=None) -> dict:
                                                  full_round_strokes)
     _mode, _npct = _handicap_cfg(foursome, slug)
     _hip   = hole_in_play(foursome, played)
-    ribbon = stroke_ribbon(
-        foursome, player_id, _hip,
-        full_round_strokes(foursome, handicap_mode=_mode, net_percent=_npct))
+    if slug in ('scramble_match', 'alternate_shot_match'):
+        # One score a side: the strokes are the PAIR's difference, and sit on
+        # whoever holds the score that hole.
+        from services.fourball import game_strokes
+        from games.models import FourballGame
+        _g = FourballGame.objects.filter(foursome=foursome).first()
+        _alloc = game_strokes(foursome, _g, list(range(1, 19))) if _g else {}
+    else:
+        _alloc = full_round_strokes(foursome, handicap_mode=_mode,
+                                    net_percent=_npct)
+    ribbon = stroke_ribbon(foursome, player_id, _hip, _alloc)
     tee    = combo_tee(foursome, player_id, _hip)
 
     # ── Sides. Assigned once and immutable for the round, which is what lets
@@ -335,7 +363,7 @@ def match_final_state(foursome, *, slug, player_id=None) -> dict:
     Nobody needs a match summary on a lock screen at that point; they need to
     know who has the cash.
     """
-    if slug == 'fourball':
+    if slug in _FOURBALL_SLUGS:
         m = _normalise_fourball(foursome, player_id)
     else:
         m = _normalise_nassau(foursome, player_id)
