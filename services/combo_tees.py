@@ -63,7 +63,11 @@ MAX_PARENTS = 4
 
 def is_combo(tee) -> bool:
     """Detection is the name, case-insensitively — there is no flag for it."""
-    return 'combo' in (getattr(tee, 'tee_name', '') or '').lower()
+    n = (getattr(tee, 'tee_name', '') or '').lower()
+    # A slash names two tee sets blended ("White/Blue"), with or without the
+    # word combo. Yardage matching still has to confirm every hole, so a
+    # slashed name that is not a blend simply turns the indicator off.
+    return 'combo' in n or '/' in n
 
 
 def _yards(tee) -> dict:

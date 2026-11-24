@@ -54,6 +54,7 @@ class DetectionTests(_Base):
         """There is no flag for it in the data."""
         self.assertTrue(is_combo(self._combo('Blue/White Combo', 'BW' * 9)))
         self.assertTrue(is_combo(self._combo('combo', 'BW' * 9)))
+        self.assertTrue(is_combo(self._combo('White/Blue', 'BW' * 9)))
         self.assertFalse(is_combo(self.blue))
 
     def test_an_ordinary_tee_resolves_to_nothing(self):
