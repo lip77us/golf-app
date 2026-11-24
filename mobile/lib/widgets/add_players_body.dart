@@ -49,7 +49,7 @@ class HalvedHit {
 const Duration _halvedDebounce = Duration(milliseconds: 450);
 
 class AddPlayersBody extends StatefulWidget {
-  /// You — always seated first and never removable.
+  /// You — seated first to start with, and removable like anybody else.
   final PlayerProfile? me;
 
   /// Everyone seated, in seat order (you first).
@@ -262,7 +262,7 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
 
   void _toggle(PlayerProfile p) {
     if (_seatedIds.contains(p.id)) {
-      if (p.id != _meId) widget.onRemove(p);
+      widget.onRemove(p);
     } else if (_hasRoom) {
       widget.onAdd(p);
     }
@@ -428,7 +428,7 @@ class _AddPlayersBodyState extends State<AddPlayersBody> {
     final isMe = p.id == _meId;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: isMe ? null : () => widget.onRemove(p),
+      onTap: () => widget.onRemove(p),
       child: SizedBox(
         width: 56,
         child: Column(children: [

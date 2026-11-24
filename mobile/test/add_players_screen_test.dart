@@ -167,13 +167,14 @@ void main() {
       expect(find.text('Open'), findsNothing);
     });
 
-    testWidgets('tapping a seated golfer takes them out; you cannot go',
+    testWidgets('tapping a seated golfer takes them out, you included',
         (t) async {
       final log = <String>[];
       await open(t, log, seated: [_roster[1]]);
       await t.tap(find.text('You'));
       await t.pump();
-      expect(log, isEmpty, reason: 'you are always seated');
+      expect(log, ['remove ${_roster[0].name}']);
+      log.clear();
       await t.tap(find.descendant(
           of: find.byType(Wrap).first, matching: find.text('Dave')));
       await t.pump();

@@ -259,10 +259,12 @@ class _SwatStepState extends State<SwatStep> {
               const Expanded(child: Text('A foursome golfer\'s stake per bet')),
               const SizedBox(width: 16),
               SizedBox(
-                width: 90,
+                width: 56,
                 child: TextField(
                   controller: _stakeCtrl,
-                  textAlign: TextAlign.right,
+                  textAlign: TextAlign.center,
+                  maxLength: 4,
+                  buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(prefixText: '\$', isDense: true),
                   onChanged: (v) => widget.onStake(double.tryParse(v) ?? 0),

@@ -823,6 +823,13 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             .where((p) => !p.isPhantom)
             .toList()
           ..sort((a, b) => a.name.compareTo(b.name));
+        // The TD is usually playing: seat the logged-in golfer to start with.
+        // They can be taken off like anybody else.
+        final me = context.read<AuthProvider>().player?.id;
+        if (_createNewTournament && _selectedIds.isEmpty && me != null &&
+            _allPlayers.any((p) => p.id == me)) {
+          _selectedIds.add(me);
+        }
         _dataLoading = false;
       });
       // Best effort: without it there are simply no regulars yet.
