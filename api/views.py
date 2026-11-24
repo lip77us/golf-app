@@ -4564,7 +4564,8 @@ class CasualRoundListView(APIView):
     GET /api/rounds/casual/?status=complete
 
     Returns casual rounds (no tournament) that include the authenticated
-    user's player in any foursome, filtered by status.  Each item contains
+    user's player in any foursome, OR that he created himself (a TD who set
+    a round up for others and is not playing), filtered by status.  Each item contains
     enough data for the Casual Rounds list screen: date, course, active
     games, players, current hole, and whether this user is the creator
     (so the client can show the delete button).
@@ -4574,6 +4575,7 @@ class CasualRoundListView(APIView):
         if requesting_player is None:
             return Response([])
 
+        from django.db.models import Q
         # Accept ?status= query param; default to in_progress.
         requested_status = request.query_params.get('status', 'in_progress')
         if requested_status not in ('in_progress', 'complete', 'pending'):
@@ -4583,9 +4585,11 @@ class CasualRoundListView(APIView):
             Round.objects
             .for_account(request.user.account)
             .filter(
+                Q(foursomes__memberships__player=requesting_player)
+                # A round the TD set up for others still belongs on his list.
+                | Q(created_by=requesting_player),
                 tournament__isnull=True,
                 status=requested_status,
-                foursomes__memberships__player=requesting_player,
             )
             .select_related('course', 'created_by')
             .prefetch_related(

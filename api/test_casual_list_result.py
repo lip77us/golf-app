@@ -117,3 +117,32 @@ class CasualListResultTests(TestCase):
         submit_round(fs, {h: [(self.me, 4), (self.pal, 5)] for h in range(1, 19)})
         item = self.client.get(self.url, {'status': 'complete'}).data[0]
         self.assertIsNone(item['my_gross'])
+
+
+class TheTdSeesARoundHeCreatedButIsNotPlayingTests(CasualListResultTests):
+    def test_a_round_i_created_for_others_is_on_my_list(self):
+        other = Player.objects.create(
+            account=self.account, name='Dan Gabe', handicap_index=Decimal('9.0'))
+        rnd = Round.objects.create(
+            account=self.account, course=self.course, status='in_progress',
+            active_games=['skins'], primary_game='skins',
+            bet_unit=Decimal('2.00'), created_by=self.me)
+        fs = Foursome.objects.create(round=rnd, group_number=1)
+        for p in (self.pal, other):
+            FoursomeMembership.objects.create(
+                foursome=fs, player=p, tee=self.tee,
+                course_handicap=9, playing_handicap=9)
+        ids = [r['id'] for r in self.client.get(self.url).json()]
+        self.assertIn(rnd.id, ids)
+
+    def test_someone_elses_round_i_am_not_in_stays_off(self):
+        rnd = Round.objects.create(
+            account=self.account, course=self.course, status='in_progress',
+            active_games=['skins'], primary_game='skins',
+            bet_unit=Decimal('2.00'), created_by=self.pal)
+        fs = Foursome.objects.create(round=rnd, group_number=1)
+        FoursomeMembership.objects.create(
+            foursome=fs, player=self.pal, tee=self.tee,
+            course_handicap=9, playing_handicap=9)
+        ids = [r['id'] for r in self.client.get(self.url).json()]
+        self.assertNotIn(rnd.id, ids)
