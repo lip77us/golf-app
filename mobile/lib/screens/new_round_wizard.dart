@@ -139,6 +139,15 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   List<List<int>>? _swatTeams;         // the TD's arrangement; null = snake
   Map<String, dynamic>? _swatPreview;  // the last deal the server returned
 
+  /// The field in dealt-team order, so the review slices it into the teams.
+  List<PlayerProfile> get _swatOrderedPlayers {
+    final byId = {for (final p in _orderedPlayers) p.id: p};
+    return [
+      for (final t in _swatResolvedTeams)
+        for (final id in t) if (byId[id] != null) byId[id]!
+    ];
+  }
+
   List<List<int>> get _swatResolvedTeams => [
         for (final t in (_swatPreview?['teams'] as List? ?? const []))
           [for (final p in (t as Map)['players'] as List) (p as Map)['id'] as int]
@@ -2355,9 +2364,12 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           activeGames          : _activeGames.toList(),
           additionalRounds     : _additionalRounds,
           courses              : _courses,
-          orderedPlayers       : _orderedPlayers,
+          // A SWAT event's groups are its dealt teams, not the Groups step's.
+          orderedPlayers       : _isSwat ? _swatOrderedPlayers : _orderedPlayers,
           playerTees           : _playerTees,
-          groupSizes           : _effectiveGroupSizes,
+          groupSizes           : _isSwat
+              ? [for (final t in _swatResolvedTeams) t.length]
+              : _effectiveGroupSizes,
           // Each game names its own price at review — entry was taken at
           // signup, so by this point every game already has one.
           // Only the day bet has a price by now — the rest are set on their

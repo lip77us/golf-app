@@ -182,7 +182,7 @@ class TeamFormatStep extends StatelessWidget {
             title   : 'Scramble',
             body    : 'All four hit, you play the best ball, repeat. '
                       'One score per hole.',
-            selected: !_isShamble,
+            selected: !_isShamble && !_isSwat,
             enabled : !locked,
             onTap   : () => onFormat('scramble'),
           ),

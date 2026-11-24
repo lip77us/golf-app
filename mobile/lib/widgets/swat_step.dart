@@ -108,6 +108,60 @@ class _SwatStepState extends State<SwatStep> {
     await _load(teams: teams);
   }
 
+  /// Turning fivesomes ON changes how many teams the field divides into, so
+  /// the TD is offered a fresh draft rather than being left to move golfers
+  /// by hand (and rebalance the A/B/C/D bands) himself.
+  Future<void> _toggleFive(bool v) async {
+    if (!v) {
+      widget.onAllowFivesomes(false);
+      await _load(five: false, teams: null);
+      return;
+    }
+    final keep = _preview == null ? null : _teamIds();
+    final client = context.read<AuthProvider>().client;
+    Map<String, dynamic> dealt;
+    try {
+      dealt = await client.swatPreview(widget.playerIds,
+          allowFivesomes: true, teams: null);
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+      return;
+    }
+    if (!mounted) return;
+    final newTeams = (dealt['teams'] as List).length;
+    final oldTeams = keep?.length ?? newTeams;
+    var redraft = true;
+    if (keep != null && newTeams != oldTeams) {
+      final sizes = [for (final t in dealt['teams'] as List) (t as Map)['size']]
+        ..sort((a, b) => (b as int).compareTo(a as int));
+      final r = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Redraft the teams?'),
+          content: Text('With fivesomes allowed, ${widget.playerIds.length} '
+              'golfers make $newTeams teams (${sizes.join(' · ')}) instead of '
+              '$oldTeams. The A–D bands are dealt again.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Keep my teams')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Redraft')),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      redraft = r ?? false;
+    }
+    widget.onAllowFivesomes(true);
+    if (redraft || keep == null) {
+      setState(() { _preview = dealt; _error = null; });
+      widget.onPreview(dealt);
+    } else {
+      widget.onTeams(keep);
+      await _load(five: true, teams: keep);
+    }
+  }
+
   Future<void> _reset() async {
     widget.onTeams(null);
     await _load(teams: null);
@@ -203,10 +257,12 @@ class _SwatStepState extends State<SwatStep> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               const Expanded(child: Text('A foursome golfer\'s stake per bet')),
+              const SizedBox(width: 16),
               SizedBox(
                 width: 90,
                 child: TextField(
                   controller: _stakeCtrl,
+                  textAlign: TextAlign.right,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(prefixText: '\$', isDense: true),
                   onChanged: (v) => widget.onStake(double.tryParse(v) ?? 0),
@@ -230,10 +286,7 @@ class _SwatStepState extends State<SwatStep> {
               title: const Text('Allow fivesomes'),
               subtitle: const Text('Only if the course allows groups of five'),
               value: widget.allowFivesomes,
-              onChanged: (v) {
-                widget.onAllowFivesomes(v);
-                _load(five: v);
-              },
+              onChanged: _toggleFive,
             ),
           ]),
         ),

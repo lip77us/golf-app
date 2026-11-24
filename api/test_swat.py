@@ -181,3 +181,24 @@ class SetupTests(_Base):
                             [g(3, 'Jan Lipkin', 3), g(4, 'Bo Poe', 8)],
                             [g(5, 'Cy Doe', 4), g(6, 'Di Fox', 7)]])
         self.assertEqual(names, ['Team P. Lipkin', 'Team J. Lipkin', 'Team Doe'])
+
+
+class FivesomeDealTests(TestCase):
+    def _golfers(self, n):
+        return [{'id': i, 'name': f'G{i} Name{i}', 'index': float(i), 'ch': 0}
+                for i in range(1, n + 1)]
+
+    def test_seventeen_golfers_make_four_teams_with_fivesomes(self):
+        from services.swat import snake_deal
+        sizes = sorted(len(t) for t in snake_deal(self._golfers(17), True)['teams'])
+        self.assertEqual(sizes, [4, 4, 4, 5])
+
+    def test_seventeen_without_fivesomes_is_unchanged(self):
+        from services.swat import snake_deal
+        sizes = sorted(len(t) for t in snake_deal(self._golfers(17))['teams'])
+        self.assertEqual(sizes, [3, 3, 3, 4, 4])
+
+    def test_leftovers_that_do_not_fit_fall_back(self):
+        from services.swat import snake_deal
+        # 15 golfers: 3 teams would be 5, 5, 5 (fits), 14: 3 teams of 5,5,4
+        self.assertEqual(sorted(len(t) for t in snake_deal(self._golfers(14), True)['teams']), [4, 5, 5])

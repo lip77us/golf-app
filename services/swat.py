@@ -67,17 +67,23 @@ def _sort_key(g):
     return (float(g['index']), int(g.get('ch') or 0), surname(g['name']).lower())
 
 
-def snake_deal(golfers: list) -> dict:
+def snake_deal(golfers: list, allow_fivesomes: bool = False) -> dict:
     """Deal *golfers* into teams in snake order.
 
     Each golfer is ``{'id', 'name', 'index', 'ch'?}``. Returns
     ``{'teams': [[id, ...], ...], 'bands': {id: 'A'}}``. The band is the
     golfer's row in the deal — A is the T lowest indexes, B the next T — and
     it is NOT recomputed when the TD moves anybody.
+
+    With *allow_fivesomes* the field is dealt into FEWER, bigger teams —
+    ``n // 4`` of them, the leftovers becoming fivesomes (17 golfers: 4, 4, 4,
+    5 rather than 4, 4, 3, 3, 3) — whenever the leftovers fit one a team.
     """
     ordered = sorted(golfers, key=_sort_key)
     n = len(ordered)
     t = max(1, math.ceil(n / 4))
+    if allow_fivesomes and n // 4 >= 3 and n - 4 * (n // 4) <= n // 4:
+        t = n // 4
     teams = [[] for _ in range(t)]
     bands = {}
     for k, g in enumerate(ordered):
@@ -194,7 +200,7 @@ def preview_teams(player_ids: list, *, allow_fivesomes=False,
     none, the snake deal. Never writes."""
     golfers = field_golfers(player_ids)
     by_id = {g['id']: g for g in golfers}
-    dealt = snake_deal(golfers)
+    dealt = snake_deal(golfers, allow_fivesomes)
     arrangement = teams if teams is not None else dealt['teams']
     seen = [pid for t in arrangement for pid in t]
     if sorted(seen) != sorted(player_ids):
@@ -248,7 +254,7 @@ def apply_teams(round_obj, teams: list, tee_by_player: dict, *,
         raise SwatError(problem)
     golfers = field_golfers(ids)
     by_id = {g['id']: g for g in golfers}
-    dealt = snake_deal(golfers)
+    dealt = snake_deal(golfers, cfg.allow_fivesomes)
 
     players = []
     for number, t in enumerate(teams, start=1):
