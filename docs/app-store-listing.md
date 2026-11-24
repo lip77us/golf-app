@@ -29,7 +29,8 @@ and the Android build omits two features, so the two are never the same text.
 | What's New | NEW — `docs/app-store-3.0.0.txt` (paste-ready, no hard wraps) |
 | Promotional text | NEW — same file, 157 chars |
 | Description | unchanged |
-| Name · Subtitle · Keywords · URLs · Category | unchanged |
+| Name · URLs · Category | unchanged |
+| Subtitle · Keywords | CHANGED in App Store Connect — see below; this file now matches the live values |
 
 **Not named in the copy:** Courses near me is unchanged, the lock-screen cards are iOS-only already.
 
@@ -653,7 +654,10 @@ Halved Golf
 (The standalone "Halved" was already taken on the App Store — names must be
 globally unique. In-app name / home-screen CFBundleDisplayName stays "Halved".)
 
-## Subtitle (30 max)
+## Subtitle (30 max) — live (set in App Store Connect, Nov 2026)
+Golf Scorecard: Skins & Nassau
+
+## Subtitle — previous
 Skins, Nassau & golf games
 
 ## Privacy Policy URL
@@ -665,7 +669,12 @@ https://halved.golf/support
 ## Primary category
 Sports  (Secondary: optional, e.g. Utilities)
 
-## Keywords (100 max) — refreshed for 2.9.1 (99 chars)
+## Keywords (100 max) — live (set in App Store Connect, Nov 2026)
+wolf,banker,vegas,sixes,stableford,handicap,foursome,tournament,rabbit,scramble,shamble,games,junk
+(`scorecard` moved into the subtitle, so it comes out here; `survivor` was
+dropped and `rabbit`, `games` and `junk` added.)
+
+## Keywords — previous (2.9.1, 99 chars)
 banker,vegas,wolf,sixes,stableford,handicap,foursome,scorecard,tournament,survivor,scramble,shamble
 (Added `scramble` and `shamble`: Pairs Play and Foursome Play both run them
 now, and a golfer looking for a scramble app searches the format by name.
