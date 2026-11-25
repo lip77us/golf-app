@@ -62,4 +62,34 @@ void main() {
     expect(src, contains("c.ballFormat == 'scramble' && c.drive != null"));
     expect(src, contains('PairDriveCard('));
   });
+
+  test('the next hole is held until both sides have named a drive', () {
+    final src = File('lib/screens/score_entry_screen.dart').readAsStringSync();
+    final i = src.indexOf('String? _driveHold(');
+    final body = src.substring(i, src.indexOf('FourballHoleCard? _fourballCard('));
+    expect(body, contains("s.picked == null"));
+    expect(body, contains("'Pick whose drive'"));
+    // Both the pager and the tray honour it.
+    expect(src, contains('var needsPick = _driveHold(rp) != null;'));
+    expect(src, contains('holdReason: _driveHold(rp),'));
+  });
+
+  test('a held forward button stays readable and the picker rides the tray', () {
+    final tray = File('lib/widgets/fourball_entry.dart').readAsStringSync();
+    expect(tray, contains('disabledBackgroundColor'));
+    expect(tray, contains('holdBody!'));
+    final src = File('lib/screens/score_entry_screen.dart').readAsStringSync();
+    expect(src, contains('holdBody: _driveHold(rp) == null'));
+  });
+
+  test('a scramble tray counts only the golfers who hold a score', () {
+    final c = FourballHoleCard.fromJson({
+      'hole': 1,
+      'players': [
+        {'player_id': 1, 'scorer': true}, {'player_id': 2, 'scorer': false},
+        {'player_id': 3, 'scorer': true}, {'player_id': 4, 'scorer': false},
+      ],
+    });
+    expect(c.players.where((p) => p.scorer).length, 2);
+  });
 }

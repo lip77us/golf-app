@@ -63,6 +63,15 @@ class FourballHoleTray extends StatelessWidget {
   final bool notSynced;
   final bool picking;
 
+  /// When set, the forward button is held and says this instead of the next
+  /// hole — a scramble match's drive quota is not satisfied until each side
+  /// has named whose drive it took (the same rule the tournament enforces).
+  final String? holdReason;
+
+  /// Drawn above the buttons while [holdReason] holds the hole — the drive
+  /// picker, so what is missing can be fixed where the tray is, not under it.
+  final Widget? holdBody;
+
   const FourballHoleTray({
     super.key,
     required this.card,
@@ -73,6 +82,8 @@ class FourballHoleTray extends StatelessWidget {
     this.gettingResult = false,
     this.notSynced = false,
     this.picking = false,
+    this.holdReason,
+    this.holdBody,
   });
 
   @override
@@ -113,8 +124,12 @@ class FourballHoleTray extends StatelessWidget {
               _Money(card: card),
             ],
           ],
+          if (holdReason != null && holdBody != null) ...[
+            const SizedBox(height: 10),
+            holdBody!,
+          ],
           const SizedBox(height: 12),
-          _Buttons(card: card, onPrev: onPrev, onNext: onNext,
+          _Buttons(card: card, onPrev: onPrev, onNext: onNext, holdReason: holdReason,
                    onFinishNow: onFinishNow),
         ],
       ),
@@ -127,7 +142,9 @@ class FourballHoleTray extends StatelessWidget {
   /// Two golfers read `Both scores in`, because `All 2 scores in` is not a
   /// sentence.
   String _title() {
-    final n = card.players.length;
+    // Only the golfers who hold a score: in a scramble or alternate shot the
+    // partner has none to enter, so "2 of 4 scored" was never true.
+    final n = card.players.where((p) => p.scorer).length;
     if (card.scored < n) return '${card.scored} of $n scored';
     return '';
   }
@@ -445,15 +462,19 @@ class _Buttons extends StatelessWidget {
   final VoidCallback? onPrev;
   final VoidCallback? onNext;
   final VoidCallback? onFinishNow;
+  final String? holdReason;
   const _Buttons({required this.card, required this.onPrev,
-                  required this.onNext, required this.onFinishNow});
+                  required this.onNext, required this.onFinishNow,
+                  this.holdReason});
 
   @override
   Widget build(BuildContext context) {
     final last = card.nextHole == null;
     // **`play on` is the honest word for it.** The match is over and the
     // group is still playing golf; the button says which of those it does.
-    final label = last
+    final label = holdReason != null
+        ? holdReason!
+        : last
         ? 'Finish round ›'
         : (card.closedOut
             ? 'Hole ${card.nextHole} · play on ›'
@@ -478,10 +499,15 @@ class _Buttons extends StatelessWidget {
           child: SizedBox(
             height: 50,
             child: FilledButton(
-              onPressed: onNext,
+              onPressed: holdReason != null ? null : onNext,
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Halved.deepPine,
+                // A held button must still be READ: the default disabled
+                // colours are near-invisible on deep pine, which made the
+                // forward button look missing instead of waiting.
+                disabledBackgroundColor: Colors.white.withValues(alpha: 0.22),
+                disabledForegroundColor: Colors.white.withValues(alpha: 0.85),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(25)),
               ),

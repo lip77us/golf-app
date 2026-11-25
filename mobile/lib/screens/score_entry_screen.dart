@@ -2140,6 +2140,16 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         ? c : null;
   }
 
+  /// A scramble match with a drive quota is not finished with a hole until
+  /// each side has said whose drive it took — the tournament holds its
+  /// next-hole button the same way ("Pick whose drive").
+  String? _driveHold(RoundProvider rp) {
+    final c = _pairDriveCard(rp);
+    if (c == null) return null;
+    return c.drive!.sides.any((s) => s.picked == null)
+        ? 'Pick whose drive' : null;
+  }
+
   FourballHoleCard? _fourballCard(RoundProvider rp) {
     final games = _activeGames(rp.round);
     if (_resolvePrimaryFamily(rp.round?.primaryGame, games) != GameIds.fourball) {
@@ -4481,6 +4491,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               // is hidden, so these are the only arrows on screen, and on
               // the last hole the forward button is Complete Round.
               onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
+              holdReason: _driveHold(rp),
+              holdBody: _driveHold(rp) == null
+                  ? null
+                  : PairDriveCard(
+                      card: _pairDriveCard(rp)!,
+                      onPick: (side, pid) =>
+                          rp.setFourballDrive(
+                              widget.foursomeId, side, _selectedHole, pid)),
               onNext: rp.submitting
                   ? null
                   : (_nextHoleInOrder(rp) == null
@@ -4892,7 +4910,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       // picker card above it, which is the thing you have to act on, says
       // what is missing. So this one just goes grey, like a hole waiting on
       // its last score.
-      var needsPick = false;
+      var needsPick = _driveHold(rp) != null;
 
       // **40 Balls does not walk on either, and for the same reason Banker
       // does not.** The hole is not finished when its scores are: the group

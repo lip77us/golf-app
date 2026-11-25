@@ -24,4 +24,12 @@ void main() {
   test('a game with no strokes says so rather than drawing a blank grid', () {
     expect(grid.contains('Nobody gets a stroke in this game.'), isTrue);
   });
+
+  test('a gross game does not offer the link', () {
+    final i = board.indexOf('Widget _strokesRow');
+    final body = board.substring(i, board.indexOf('Widget _strokesLink'));
+    // Shown only once the primary game is KNOWN not to be gross.
+    expect(body, contains('snap.data == false'));
+    expect(board, contains("r.\$1 == 'gross'"));
+  });
 }

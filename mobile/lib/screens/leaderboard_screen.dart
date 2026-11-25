@@ -25,6 +25,7 @@ import '../widgets/inline_message.dart';
 import '../widgets/hole_grid_scorecard.dart';
 import '../widgets/wolf_scorecard.dart';
 import '../providers/auth_provider.dart';
+import '../utils/primary_handicap.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../utils/route_observer.dart';
@@ -589,9 +590,39 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     );
   }
 
+  /// Whether the primary game plays GROSS — asked once per group. Nobody
+  /// strokes in a gross game, so the link would open an empty table.
+  Future<bool>? _grossFuture;
+  int? _grossFor;
+
+  Future<bool> _isGross(RoundProvider rp, int fsId) {
+    if (_grossFuture == null || _grossFor != fsId) {
+      _grossFor = fsId;
+      final round = rp.round;
+      _grossFuture = round == null
+          ? Future.value(false)
+          : primaryHandicapFor(
+                  context.read<AuthProvider>().client, round, fsId)
+              .then((r) => r.$1 == 'gross')
+              .catchError((_) => false);
+    }
+    return _grossFuture!;
+  }
+
   Widget _strokesRow(BuildContext context, RoundProvider rp) {
     final fsId = _landscapeFoursomeId(rp);
     if (fsId == null) return const SizedBox.shrink();
+    return FutureBuilder<bool>(
+      future: _isGross(rp, fsId),
+      // Hidden while asking and for a gross game; it only ever appears once
+      // the mode is known to be one where somebody gets strokes.
+      builder: (ctx, snap) => snap.data == false
+          ? _strokesLink(ctx, fsId)
+          : const SizedBox.shrink(),
+    );
+  }
+
+  Widget _strokesLink(BuildContext context, int fsId) {
     final theme = Theme.of(context);
     return InkWell(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(

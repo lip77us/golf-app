@@ -12080,6 +12080,10 @@ class FourballHolePlayer {
   /// a close-out, where there is no team score to be the best of.
   final bool counted;
 
+  /// One score a side (scramble / alternate shot): false for the partner who
+  /// does not hold the side's number on this hole.
+  final bool scorer;
+
   const FourballHolePlayer({
     required this.playerId,
     required this.name,
@@ -12091,6 +12095,7 @@ class FourballHolePlayer {
     required this.net,
     required this.side,
     required this.counted,
+    this.scorer = true,
   });
 
   factory FourballHolePlayer.fromJson(Map<String, dynamic> j) =>
@@ -12105,6 +12110,7 @@ class FourballHolePlayer {
         net: (j['net'] as num?)?.toInt(),
         side: (j['side'] as num?)?.toInt() ?? 0,
         counted: j['counted'] as bool? ?? false,
+        scorer: j['scorer'] as bool? ?? true,
       );
 }
 
