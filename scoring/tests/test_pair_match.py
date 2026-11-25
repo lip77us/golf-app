@@ -259,3 +259,22 @@ class PairMatchLockScreenTests(PairBase):
         for slug in ('scramble_match', 'alternate_shot_match'):
             self.assertIn(slug, BUILDERS)
             self.assertEqual(CARD_KIND[slug], 'match')
+
+
+class ShortResultTests(TestCase):
+    def test_the_margin_alone(self):
+        from services.fourball import short_result
+        self.assertEqual(short_result('Team 2 wins 5&4'), '5&4')
+        self.assertEqual(short_result('Team 1 wins 1 up'), '1 up')
+        self.assertEqual(short_result('All Square'), 'All Square')
+        self.assertEqual(short_result(None), '')
+
+    def test_the_watch_card_does_not_say_wins_twice(self):
+        from api.watch_views import _fourball_watch_card
+        card = _fourball_watch_card({
+            'team1': {'players': ['A', 'B']}, 'team2': {'players': ['C', 'D']},
+            'overall': {'holes_up': -5, 'leader': 'team2'},
+            'status': 'complete', 'result': 'team2',
+            'result_label': 'Team 2 wins 5&4', 'holes': [],
+        })
+        self.assertEqual(card['status'], 'C & D wins 5&4')

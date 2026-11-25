@@ -583,6 +583,13 @@ def calculate_fourball(foursome) -> FourballGame | None:
 # Summary
 # ---------------------------------------------------------------------------
 
+def short_result(label) -> str:
+    """`Team 2 wins 5&4` -> `5&4`: the margin alone, for a line that already
+    names who won (the watch page, the lock screen)."""
+    import re
+    return re.sub(r'^Team \d wins\s*', '', label or '').strip()
+
+
 def _result_label(game: FourballGame, holes_to_play: int | None = None) -> str:
     """Match-play notation: '3&2', '1 up', 'All Square', or '—' in progress.
 

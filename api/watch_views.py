@@ -2269,7 +2269,8 @@ def _fourball_watch_card(s: dict) -> dict:
 
     leader_name = t1 if leader == 'team1' else (t2 if leader == 'team2' else '')
     if s.get('status') in ('complete', 'halved'):
-        label = s.get('result_label') or ''
+        from services.fourball import short_result
+        label = short_result(s.get('result_label'))
         status = ('Halved' if s.get('result') == 'halved'
                   else f'{leader_name} wins {label}'.strip())
     elif up == 0:

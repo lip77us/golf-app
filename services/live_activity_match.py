@@ -149,7 +149,7 @@ def _normalise_nassau(foursome, player_id):
 
 def _normalise_fourball(foursome, player_id):
     """A Fourball: two pairings, one ball each, its own engine."""
-    from services.fourball import fourball_summary
+    from services.fourball import fourball_summary, short_result
 
     summary = fourball_summary(foursome)
     if not summary:
@@ -188,7 +188,7 @@ def _normalise_fourball(foursome, player_id):
         'stake'     : money.get('bet_amount') or 0,
         'payout'    : mine,
         'to_par'    : _fourball_to_par(summary, player_id),
-        'result_label': summary.get('result_label'),
+        'result_label': short_result(summary.get('result_label')),
     }
 
 
