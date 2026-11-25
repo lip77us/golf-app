@@ -92,4 +92,10 @@ void main() {
     });
     expect(c.players.where((p) => p.scorer).length, 2);
   });
+
+  test('the first jump waits for the match summary in a pair match', () {
+    final src = File('lib/screens/score_entry_screen.dart').readAsStringSync();
+    expect(src, contains('rp.fourballSummary == null;'));
+    expect(src, contains('!waitForPair) {'));
+  });
 }

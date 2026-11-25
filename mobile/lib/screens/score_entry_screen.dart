@@ -3700,12 +3700,20 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // `_jumpToFirstUnplayed`. The hub opens this screen directly now, so
     // nothing has loaded it beforehand.
     final waitForBanker = _bankerRound(rp) && rp.bankerSummary == null;
+    // A scramble / alternate-shot match holds ONE score a side, so the
+    // partner has none on any hole. Until the match summary says who the
+    // partner is, every hole looks unfinished and the jump lands on the wrong
+    // one (it opened on hole 2 and then, once the summary was cached, hole 5).
+    final waitForPair = (games.contains(GameIds.scrambleMatch) ||
+            games.contains(GameIds.alternateShotMatch)) &&
+        rp.fourballSummary == null;
     if (!_initialJumpDone &&
         sc != null &&
         rp.round != null &&
         rp.activeFoursomeId == widget.foursomeId &&
         !waitForTc &&
-        !waitForBanker) {
+        !waitForBanker &&
+        !waitForPair) {
       _initialJumpDone = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _jumpToFirstUnplayed(context.read<RoundProvider>());
