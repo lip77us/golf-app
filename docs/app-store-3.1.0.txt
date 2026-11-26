@@ -1,0 +1,17 @@
+PROMOTIONAL TEXT
+New 2v2 matches in one foursome: Scramble and Alternate Shot. Plus Skip at the keypad, so you can score the golfers who are in and come back to the rest.
+
+WHAT'S NEW
+TWO NEW MATCHES. Scramble and Alternate Shot are 2 v 2 matches inside one foursome, scored like any match: win the hole, go up, close it out as 3&2. Both have a lock-screen card and a live watch page, so the people following along see the match as it stands.
+
+SCRAMBLE. Each pair plays one ball and posts one score a hole. The pair's handicap is 35% of the lower index plus 15% of the higher, and the pair with the higher allowance gets the difference in strokes on the hardest holes. Turn on a drive requirement and Halved tracks whose drive each pair used, and holds the next hole until both pairs have picked one.
+
+ALTERNATE SHOT. One ball a pair, and partners take turns: whoever tees off alternates hole to hole from the first tee you choose. The pair's score is the one score they post, and the lower pair score wins the hole.
+
+SKIP AT THE KEYPAD. Don't have a score for the golfer at the keypad yet? Tap Skip to Dave and score the others. A skipped golfer keeps a dashed box and a SKIPPED tag until his score is in, and the keypad comes back around to him. You still can't leave the hole until every score is in, so nothing gets lost. Skip works on every game, including Wolf, Rabbit, Survivor, Sequoya and Points.
+
+ALSO
+• Gross rounds no longer show the where-we-get-strokes link on the leaderboard
+• After a Scramble or Alternate Shot match ends, the result reads once, not twice
+• Reopening a Scramble match lands on the right hole
+• New how-to guides for ten more formats on halved.golf

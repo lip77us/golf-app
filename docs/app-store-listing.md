@@ -1,4 +1,4 @@
-# Store listing copy — Halved (v3.0.0)
+# Store listing copy — Halved (v3.1.0)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -21,6 +21,38 @@ sweep rather than reading this line, which is only true of today's catalog.
 **App Store copy is everything above `## Google Play`; the Play half is its
 own section further down.** They are different fields with different limits
 and the Android build omits two features, so the two are never the same text.
+
+## Submitting 3.1.0 — everything that changes
+
+| Field | 3.1.0 |
+| --- | --- |
+| What's New | NEW — `docs/app-store-3.1.0.txt` (paste-ready, no hard wraps) |
+| Promotional text | NEW — same file, 153 chars |
+| Description | unchanged |
+| Name · URLs · Category · Subtitle · Keywords | unchanged |
+
+**Not named in the copy:** the two new games ship as 2v2 matches under Fourball's tables; no new permission, no new data type, so App Privacy does not move.
+
+## Promotional text (170 max) — 3.1.0, 153 chars
+New 2v2 matches in one foursome: Scramble and Alternate Shot. Plus Skip at the keypad, so you can score the golfers who are in and come back to the rest.
+
+## What's New (v3.1.0)
+
+TWO NEW MATCHES. Scramble and Alternate Shot are 2 v 2 matches inside one foursome, scored like any match: win the hole, go up, close it out as 3&2. Both have a lock-screen card and a live watch page, so the people following along see the match as it stands.
+
+SCRAMBLE. Each pair plays one ball and posts one score a hole. The pair's handicap is 35% of the lower index plus 15% of the higher, and the pair with the higher allowance gets the difference in strokes on the hardest holes. Turn on a drive requirement and Halved tracks whose drive each pair used, and holds the next hole until both pairs have picked one.
+
+ALTERNATE SHOT. One ball a pair, and partners take turns: whoever tees off alternates hole to hole from the first tee you choose. The pair's score is the one score they post, and the lower pair score wins the hole.
+
+SKIP AT THE KEYPAD. Don't have a score for the golfer at the keypad yet? Tap Skip to Dave and score the others. A skipped golfer keeps a dashed box and a SKIPPED tag until his score is in, and the keypad comes back around to him. You still can't leave the hole until every score is in, so nothing gets lost. Skip works on every game, including Wolf, Rabbit, Survivor, Sequoya and Points.
+
+ALSO
+• Gross rounds no longer show the where-we-get-strokes link on the leaderboard
+• After a Scramble or Alternate Shot match ends, the result reads once, not twice
+• Reopening a Scramble match lands on the right hole
+• New how-to guides for ten more formats on halved.golf
+
+---
 
 ## Submitting 3.0.0 — everything that changes
 
