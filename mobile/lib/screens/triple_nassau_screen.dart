@@ -14,6 +14,7 @@
 /// Scores post through the shared RoundProvider; the TripleNassauSummary is
 /// refreshed after every save.
 
+import '../utils/skip_cursor.dart';
 import '../utils/effective_scores.dart';
 import '../utils/handicap_rounding.dart';
 import 'package:flutter/material.dart';
@@ -61,6 +62,17 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
   bool _prevHadPending  = false;
   bool _initialJumpDone = false;
   int? _editingPlayerId;
+
+  final SkipCursor _skip = SkipCursor();
+
+  SkipKeys _skipKeys(
+          List<Membership> players, Map<int, int> scores, Membership m) =>
+      SkipKeys.of(
+          cursor: _skip,
+          hole: _selectedHole,
+          players: players,
+          activeIdx: players.indexOf(m),
+          scores: scores);
 
   /// `Edit scores` has been pressed: the keypad stays on whoever is chosen
   /// until `Done`. Only a tray's `onEdit` turns it on — a tap on a row is a
@@ -164,12 +176,8 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
         clearedSentinel: _kCleared,
       );
 
-  int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
-    for (int i = 0; i < players.length; i++) {
-      if (!scores.containsKey(players[i].player.id)) return i;
-    }
-    return -1;
-  }
+  int _hotSpotIdx(List<Membership> players, Map<int, int> scores) =>
+      _skip.hot(_selectedHole, players, (m) => !scores.containsKey(m.player.id));
 
   bool _allScored(List<Membership> players, Map<int, int> scores) =>
       players.every((m) => scores.containsKey(m.player.id));
@@ -1107,6 +1115,17 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             FortyBallsKeypad(
               playerName: m.player.name,
+              skippedIndexes: _skipKeys(players, scores, m).dots,
+              skipLabel: _skipKeys(players, scores, m).label,
+              onSkip: _skipKeys(players, scores, m).enabled
+                  ? () => setState(() {
+                        _skip.skip(_selectedHole, m.player.id);
+                        _editingPlayerId = null;
+                      })
+                  : null,
+              skippedNow: _skipKeys(players, scores, m).skippedNow,
+              progress: [for (final p in players) scores[p.player.id] != null],
+              activeIndex: players.indexOf(m),
               par: sc.holeData(_selectedHole)
                       ?.scoreFor(m.player.id)?.par ?? (card.par ?? 4),
               // The header line names the opponents the strokes are against
@@ -1122,6 +1141,7 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
                       })
                   : null,
               onScore: (n) {
+                _skip.moveFrom(_selectedHole, m.player.id);
                 _handleScore(ctx, m, n, players);
                 if (!_trayEditing && _editingPlayerId != null) {
                   setState(() => _editingPlayerId = null);

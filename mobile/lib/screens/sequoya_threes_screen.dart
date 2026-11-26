@@ -12,6 +12,8 @@
 /// over its own holes, so a single multiplier would be a lie: a press can be
 /// halved while the match is won, or won by the side that lost the match.
 
+import '../widgets/skipped_tag.dart';
+import '../utils/skip_cursor.dart';
 import '../utils/effective_scores.dart';
 import '../utils/handicap_rounding.dart';
 import 'package:flutter/material.dart';
@@ -93,6 +95,17 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
   bool _prevHadPending  = false;
   bool _initialJumpDone = false;
   int? _editingPlayerId;
+
+  final SkipCursor _skip = SkipCursor();
+
+  SkipKeys _skipKeys(
+          List<Membership> players, Map<int, int> scores, Membership m) =>
+      SkipKeys.of(
+          cursor: _skip,
+          hole: _selectedHole,
+          players: players,
+          activeIdx: players.indexOf(m),
+          scores: scores);
   bool _pressing = false;
 
   /// `Edit scores` was pressed: the keypad stays, golfer to golfer, until
@@ -172,10 +185,9 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
 
   /// The next golfer to score, in the order the screen draws them.
   int? _hotSpotId(List<int> displayOrder, Map<int, int> scores) {
-    for (final pid in displayOrder) {
-      if (!scores.containsKey(pid)) return pid;
-    }
-    return null;
+    final i = _skip.hotIndex(
+        _selectedHole, displayOrder, (id) => !scores.containsKey(id));
+    return i < 0 ? null : displayOrder[i];
   }
 
   /// player id → which side he is on FOR THIS MATCH. The rows stay in one
@@ -303,8 +315,9 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
         if (m.player.id == _editingPlayerId) return m;
       }
     }
+    final id = _hotSpotId([for (final m in players) m.player.id], scores);
     for (final m in players) {
-      if (!scores.containsKey(m.player.id)) return m;
+      if (m.player.id == id) return m;
     }
     return null;
   }
@@ -728,6 +741,7 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
             )
           else
             _HoleScoreCard(
+                skippedIds: _skip.skippedOn(_selectedHole),
               players:    players,
               sideOf:     _sideOf(match),
               holeData:   holeData,
@@ -861,6 +875,17 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             FortyBallsKeypad(
               playerName: m.player.name,
+              skippedIndexes: _skipKeys(players, scores, m).dots,
+              skipLabel: _skipKeys(players, scores, m).label,
+              onSkip: _skipKeys(players, scores, m).enabled
+                  ? () => setState(() {
+                        _skip.skip(_selectedHole, m.player.id);
+                        _editingPlayerId = null;
+                      })
+                  : null,
+              skippedNow: _skipKeys(players, scores, m).skippedNow,
+              progress: [for (final p in players) scores[p.player.id] != null],
+              activeIndex: players.indexOf(m),
               // HIS par, not the hole's — on mixed tees one golfer's 4 is
               // another's 5.
               par: sc.holeData(_selectedHole)
@@ -876,6 +901,7 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
                       })
                   : null,
               onScore: (n) {
+                _skip.moveFrom(_selectedHole, m.player.id);
                 _handleScore(ctx, m, n, players);
                 // A TAP is a one-shot; only `Edit scores` is a session.
                 if (!_trayEditing) {
@@ -1240,6 +1266,7 @@ class _PressOffer extends StatelessWidget {
 /// fourth green — Sixes doesn't do it either. The colour moves instead: a bar
 /// down the left of each row, so partners are the two rows sharing a colour.
 class _HoleScoreCard extends StatelessWidget {
+  final Set<int> skippedIds;
   final List<Membership>  players;
   final Map<int, int>     sideOf;
   final ScorecardHole?    holeData;
@@ -1257,6 +1284,7 @@ class _HoleScoreCard extends StatelessWidget {
   final bool showPicker;
 
   const _HoleScoreCard({
+    this.skippedIds = const {},
     required this.players, required this.sideOf, required this.holeData,
     required this.scores, required this.par, required this.summary,
     required this.hotSpotId, required this.editingPlayerId,
@@ -1349,6 +1377,7 @@ class _HoleScoreCard extends StatelessWidget {
     final editing = editingPlayerId == pid;
     final strokes = _strokesForHole(m);
     final row = _ScoreRow(
+                skipped: skippedIds.contains(m.player.id),
       member:   m,
       gross:    gross,
       par:      par,
@@ -1391,6 +1420,7 @@ class _HoleScoreCard extends StatelessWidget {
 }
 
 class _ScoreRow extends StatelessWidget {
+  final bool skipped;
   final Membership member;
   final int?       gross;
   final int        par;
@@ -1407,6 +1437,7 @@ class _ScoreRow extends StatelessWidget {
   final String?       comboTee;
 
   const _ScoreRow({
+    this.skipped = false,
     required this.member, required this.gross, required this.par,
     required this.strokes, required this.isHot, this.isEditing = false,
     required this.colour, this.onTap,
@@ -1452,6 +1483,10 @@ class _ScoreRow extends StatelessWidget {
                     style: Halved.body(
                             color: Halved.muted, weight: FontWeight.w600)
                         .copyWith(fontSize: 11.5)),
+                if (skipped && gross == null) ...[
+                  const SizedBox(width: 6),
+                  const SkippedTag(),
+                ],
                 // Which tee he plays on THIS hole, combo sets only.
                 ComboTeeChip(tee: comboTee),
               ]),
@@ -1499,6 +1534,7 @@ class _ScoreRow extends StatelessWidget {
           strokes: strokes,
           shapeStrokes: netStyle ? strokes : 0,
           active: active,
+          skipped: skipped && gross == null,
         ),
       ]),
     );

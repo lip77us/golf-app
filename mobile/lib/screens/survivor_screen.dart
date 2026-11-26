@@ -14,6 +14,8 @@
 /// State comes from the server summary (services.survivor.survivor_summary),
 /// refreshed after every score submission.
 
+import '../widgets/skipped_tag.dart';
+import '../utils/skip_cursor.dart';
 import '../utils/effective_scores.dart';
 import '../utils/handicap_rounding.dart';
 import 'package:flutter/material.dart';
@@ -76,6 +78,17 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
   // holds their id so the inline picker re-opens for that row (there's no
   // hot-spot on a completed hole).  Cleared on navigation and after saving.
   int? _editingPlayerId;
+
+  final SkipCursor _skip = SkipCursor();
+
+  SkipKeys _skipKeys(
+          List<Membership> players, Map<int, int> scores, Membership m) =>
+      SkipKeys.of(
+          cursor: _skip,
+          hole: _selectedHole,
+          players: players,
+          activeIdx: players.indexOf(m),
+          scores: scores);
 
   /// `Edit scores` is a SESSION: the keypad stays on the golfer being edited
   /// until Done, rather than ending on the first score. A TAP is a one-shot
@@ -258,12 +271,8 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
     rp.loadSurvivorHole(widget.foursomeId, _selectedHole);
   }
 
-  int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
-    for (int i = 0; i < players.length; i++) {
-      if (!scores.containsKey(players[i].player.id)) return i;
-    }
-    return -1;
-  }
+  int _hotSpotIdx(List<Membership> players, Map<int, int> scores) =>
+      _skip.hot(_selectedHole, players, (m) => !scores.containsKey(m.player.id));
 
   bool _allScored(List<Membership> players, Map<int, int> scores) =>
       players.every((m) => scores.containsKey(m.player.id));
@@ -717,6 +726,7 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
             ),
             const SizedBox(height: 12),
             _HoleScoreCard(
+                skippedIds: _skip.skippedOn(_selectedHole),
               holeData:   holeData,
               players:    players,
               scorecard:  sc,
@@ -877,6 +887,17 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             FortyBallsKeypad(
               playerName: m.player.name,
+              skippedIndexes: _skipKeys(rowOrder, scores, m).dots,
+              skipLabel: _skipKeys(rowOrder, scores, m).label,
+              onSkip: _skipKeys(rowOrder, scores, m).enabled
+                  ? () => setState(() {
+                        _skip.skip(_selectedHole, m.player.id);
+                        _editingPlayerId = null;
+                      })
+                  : null,
+              skippedNow: _skipKeys(rowOrder, scores, m).skippedNow,
+              progress: [for (final p in rowOrder) scores[p.player.id] != null],
+              activeIndex: rowOrder.indexOf(m),
               // HIS par, not the hole's — on mixed tees the hole is a 4 for
               // one golfer and a 5 for the next.
               par: sc.holeData(_selectedHole)
@@ -895,6 +916,7 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
                       })
                   : null,
               onScore: (n) {
+                _skip.moveFrom(_selectedHole, m.player.id);
                 _handleScore(ctx, m, n, players);
                 // An edit is a SESSION; only a one-shot ends on the score.
                 if (!_trayEditing && _editingPlayerId != null) {
@@ -989,6 +1011,7 @@ bool _survivorZeroSpotsClosed(int _) => false;
 void _survivorNoopPid(int _) {}
 
 class _HoleScoreCard extends StatelessWidget {
+  final Set<int> skippedIds;
   final ScorecardHole?   holeData;
   final List<Membership> players;
   final Scorecard        scorecard;
@@ -1012,6 +1035,7 @@ class _HoleScoreCard extends StatelessWidget {
   final bool Function(int pid) spotsSheetOpen;
 
   const _HoleScoreCard({
+    this.skippedIds = const {},
     required this.holeData,
     required this.players,
     required this.scorecard,
@@ -1086,6 +1110,7 @@ class _HoleScoreCard extends StatelessWidget {
           final editable = gross != null && !isHot;
           final strokes = _strokesForHole(m, holeData);
           final row = _PlayerRow(
+                skipped: skippedIds.contains(m.player.id),
               comboTee: m.comboTeeOnHole(holeData?.holeNumber ?? 0),
               par:      par,
               member:   m,
@@ -1132,6 +1157,7 @@ class _HoleScoreCard extends StatelessWidget {
 }
 
 class _PlayerRow extends StatelessWidget {
+  final bool skipped;
   final Membership member;
   /// This golfer's tee for the hole being entered — combo sets only.
   final String?    comboTee;
@@ -1157,6 +1183,7 @@ class _PlayerRow extends StatelessWidget {
   final bool               spotsSheetOpen;
 
   const _PlayerRow({
+    this.skipped = false,
     required this.member,
     this.comboTee,
     required this.gross,
@@ -1251,6 +1278,10 @@ class _PlayerRow extends StatelessWidget {
                 style: Halved.body(
                         color: Halved.muted, weight: FontWeight.w600)
                     .copyWith(fontSize: 11.5)),
+                if (skipped && gross == null) ...[
+                  const SizedBox(width: 6),
+                  const SkippedTag(),
+                ],
             // `stroking` — a LOCKED rule from the packet: the chip appears only
             // on the holes where this golfer actually gets a stroke, never as a
             // running allocation total. This row used to read `gets 3`, which
@@ -1323,6 +1354,7 @@ class _PlayerRow extends StatelessWidget {
           strokes: strokes,
           shapeStrokes: netStyle ? strokes : 0,
           active: active,
+          skipped: skipped && gross == null,
         ),
       ]),
     );

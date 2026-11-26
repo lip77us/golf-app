@@ -15,6 +15,8 @@
 /// server summary (services.wolf.wolf_summary), which is refreshed after
 /// every score submission and decision.
 
+import '../widgets/skipped_tag.dart';
+import '../utils/skip_cursor.dart';
 import '../utils/effective_scores.dart';
 import '../utils/handicap_rounding.dart';
 import 'package:flutter/material.dart';
@@ -86,6 +88,17 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
   // Set when the user taps an already-scored player to correct a past hole, so
   // the inline picker re-opens for that row (a completed hole has no hot-spot).
   int? _editingPlayerId;
+
+  final SkipCursor _skip = SkipCursor();
+
+  SkipKeys _skipKeys(
+          List<Membership> players, Map<int, int> scores, Membership m) =>
+      SkipKeys.of(
+          cursor: _skip,
+          hole: _selectedHole,
+          players: players,
+          activeIdx: players.indexOf(m),
+          scores: scores);
   bool _sheetOpen       = false;
 
   /// `Edit scores` is open: the keypad stays on the golfer just edited until
@@ -187,12 +200,8 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
     return fs?.hasAnyScore ?? false;
   }
 
-  int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
-    for (int i = 0; i < players.length; i++) {
-      if (!scores.containsKey(players[i].player.id)) return i;
-    }
-    return -1;
-  }
+  int _hotSpotIdx(List<Membership> players, Map<int, int> scores) =>
+      _skip.hot(_selectedHole, players, (m) => !scores.containsKey(m.player.id));
 
   /// The Wolf's call cannot be changed from the chips.
   ///
@@ -896,6 +905,7 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
 
               // ── Score entry ──
               _HoleScoreCard(
+                skippedIds: _skip.skippedOn(_selectedHole),
                 holeData:   holeData,
                 holeNumber: _selectedHole,
                 players:    players,
@@ -1000,6 +1010,17 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             FortyBallsKeypad(
               playerName: m.player.name,
+              skippedIndexes: _skipKeys(players, scores, m).dots,
+              skipLabel: _skipKeys(players, scores, m).label,
+              onSkip: _skipKeys(players, scores, m).enabled
+                  ? () => setState(() {
+                        _skip.skip(_selectedHole, m.player.id);
+                        _editingPlayerId = null;
+                      })
+                  : null,
+              skippedNow: _skipKeys(players, scores, m).skippedNow,
+              progress: [for (final p in players) scores[p.player.id] != null],
+              activeIndex: players.indexOf(m),
               // HIS par, not the hole's — on mixed tees one golfer's 4 is
               // another's 5.
               par: sc.holeData(_selectedHole)
@@ -1016,6 +1037,7 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
                       })
                   : null,
               onScore: (n) {
+                _skip.moveFrom(_selectedHole, m.player.id);
                 _handleScore(ctx, m, n, players);
                 // A TAP is a one-shot; only `Edit scores` is a session.
                 if (!_trayEditing) {
@@ -1347,6 +1369,7 @@ int wolfStrokesForHole(Membership m, ScorecardHole? h,
 }
 
 class _HoleScoreCard extends StatelessWidget {
+  final Set<int> skippedIds;
   final ScorecardHole?   holeData;
   final int              holeNumber;
   final List<Membership> players;
@@ -1372,6 +1395,7 @@ class _HoleScoreCard extends StatelessWidget {
   final bool Function(int pid) spotsSheetOpen;
 
   const _HoleScoreCard({
+    this.skippedIds = const {},
     required this.holeData,
     required this.holeNumber,
     required this.players,
@@ -1478,6 +1502,7 @@ class _HoleScoreCard extends StatelessWidget {
             final teamColor =
                 _wolfTeamColor(role) ?? Theme.of(context).colorScheme.primary;
             final row = _PlayerRow(
+                skipped: skippedIds.contains(m.player.id),
                 comboTee: m.comboTeeOnHole(holeData?.holeNumber ?? 0),
                 member:    m,
                 gross:     gross,
@@ -1549,6 +1574,7 @@ class _HoleScoreCard extends StatelessWidget {
 }
 
 class _PlayerRow extends StatelessWidget {
+  final bool skipped;
   final Membership member;
   /// This golfer's tee for the hole being entered — combo sets only.
   final String?    comboTee;
@@ -1565,6 +1591,7 @@ class _PlayerRow extends StatelessWidget {
   final bool               spotsSheetOpen;
 
   const _PlayerRow({
+    this.skipped = false,
     required this.member,
     this.comboTee,
     required this.gross,
@@ -1630,6 +1657,10 @@ class _PlayerRow extends StatelessWidget {
                     style: Halved.body(
                             color: Halved.muted, weight: FontWeight.w600)
                         .copyWith(fontSize: 11.5)),
+                if (skipped && gross == null) ...[
+                  const SizedBox(width: 6),
+                  const SkippedTag(),
+                ],
                 if (role == 'partner') ...[
                   const SizedBox(width: 6),
                   Container(
@@ -1691,6 +1722,7 @@ class _PlayerRow extends StatelessWidget {
           strokes: strokes,
           shapeStrokes: netStyle ? strokes : 0,
           active: active,
+          skipped: skipped && gross == null,
         ),
       ]),
     );

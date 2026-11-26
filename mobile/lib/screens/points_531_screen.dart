@@ -31,6 +31,8 @@
 ///   • Bottom nav:  ← Hole N-1  |  Hole N+1 →   (Done on hole 18)
 
 import '../widgets/reveal_on_mount.dart';
+import '../widgets/skipped_tag.dart';
+import '../utils/skip_cursor.dart';
 import '../utils/effective_scores.dart';
 import '../utils/handicap_rounding.dart';
 import 'package:flutter/material.dart';
@@ -93,6 +95,17 @@ class _Points531ScreenState extends State<Points531Screen>
   /// The golfer the keypad is pinned to during an edit. A TAP is a one-shot
   /// and sets only `_editHotPid`; only `Edit scores` opens a session.
   int? _editingPlayerId;
+
+  final SkipCursor _skip = SkipCursor();
+
+  SkipKeys _skipKeys(
+          List<Membership> players, Map<int, int> scores, Membership m) =>
+      SkipKeys.of(
+          cursor: _skip,
+          hole: _selectedHole,
+          players: players,
+          activeIdx: players.indexOf(m),
+          scores: scores);
 
   /// The hole we have asked the server for, so a missing card is fetched
   /// once rather than on every frame. Cleared the moment one arrives, which
@@ -218,12 +231,8 @@ class _Points531ScreenState extends State<Points531Screen>
         pending: _pending,
       );
 
-  int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
-    for (int i = 0; i < players.length; i++) {
-      if (!scores.containsKey(players[i].player.id)) return i;
-    }
-    return -1;
-  }
+  int _hotSpotIdx(List<Membership> players, Map<int, int> scores) =>
+      _skip.hot(_selectedHole, players, (m) => !scores.containsKey(m.player.id));
 
   bool _allScored(List<Membership> players, Map<int, int> scores) =>
       players.every((m) => scores.containsKey(m.player.id));
@@ -656,6 +665,17 @@ class _Points531ScreenState extends State<Points531Screen>
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             FortyBallsKeypad(
               playerName: m.player.name,
+              skippedIndexes: _skipKeys(players, scores, m).dots,
+              skipLabel: _skipKeys(players, scores, m).label,
+              onSkip: _skipKeys(players, scores, m).enabled
+                  ? () => setState(() {
+                        _skip.skip(_selectedHole, m.player.id);
+                        _editingPlayerId = null;
+                      })
+                  : null,
+              skippedNow: _skipKeys(players, scores, m).skippedNow,
+              progress: [for (final p in players) scores[p.player.id] != null],
+              activeIndex: players.indexOf(m),
               // HIS par, not the hole's — on mixed tees one golfer's 4 is
               // another's 5.
               par: sc.holeData(_selectedHole)
@@ -673,6 +693,7 @@ class _Points531ScreenState extends State<Points531Screen>
                       })
                   : null,
               onScore: (n) {
+                _skip.moveFrom(_selectedHole, m.player.id);
                 _handleScore(ctx, m, n, players, par);
                 // A TAP is a one-shot; only `Edit scores` is a session.
                 if (!_trayEditing) {
@@ -817,6 +838,7 @@ class _Points531ScreenState extends State<Points531Screen>
             children: [
               // ── Active hole card ──
               _P531HoleScoreCard(
+                skippedIds: _skip.skippedOn(_selectedHole),
                 holeData:    holeData,
                 holeNumber:  _selectedHole,
                 holesInPlay: _playOrder(rp),
@@ -901,6 +923,7 @@ class _Points531ScreenState extends State<Points531Screen>
 // ===========================================================================
 
 class _P531HoleScoreCard extends StatelessWidget {
+  final Set<int> skippedIds;
   /// The group's holes in play order — drives the header's shotgun position
   /// marker (`3 of 9`).
   final List<int> holesInPlay;
@@ -922,6 +945,7 @@ class _P531HoleScoreCard extends StatelessWidget {
   final bool Function(int pid) spotsSheetOpen;
 
   const _P531HoleScoreCard({
+    this.skippedIds = const {},
     required this.holeData,
     required this.holeNumber,
     required this.players,
@@ -1087,6 +1111,7 @@ class _P531HoleScoreCard extends StatelessWidget {
             final cumulativePoints  = _pointsFor(m.player.id);
 
             final row = _P531PlayerRow(
+                skipped: skippedIds.contains(m.player.id),
                 position:       idx + 1,
                 member:         m,
                 par:            holeData?.scoreFor(m.player.id)?.par ?? par,
@@ -1149,6 +1174,7 @@ class _P531HoleScoreCard extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _P531PlayerRow extends StatelessWidget {
+  final bool skipped;
   final int          position;
   final Membership   member;
   final int          par;
@@ -1180,6 +1206,7 @@ class _P531PlayerRow extends StatelessWidget {
   final bool               spotsSheetOpen;
 
   const _P531PlayerRow({
+    this.skipped = false,
     required this.position,
     required this.member,
     required this.par,
@@ -1235,6 +1262,10 @@ class _P531PlayerRow extends StatelessWidget {
                     style: Halved.body(
                             color: Halved.muted, weight: FontWeight.w600)
                         .copyWith(fontSize: 11.5)),
+                if (skipped && gross == null) ...[
+                  const SizedBox(width: 6),
+                  const SkippedTag(),
+                ],
                 ComboTeeChip(tee: comboTee),
               ]),
               if (spotsActive)
@@ -1330,6 +1361,7 @@ class _P531PlayerRow extends StatelessWidget {
           strokes: strokesOnThisHole,
           shapeStrokes: netStyle ? strokesOnThisHole : 0,
           active: isHot,
+          skipped: skipped && gross == null,
         )),
       ]),
     );
