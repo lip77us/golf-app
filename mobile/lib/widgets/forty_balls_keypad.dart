@@ -248,6 +248,21 @@ class FortyBallsKeypad extends StatefulWidget {
   /// Which dot is the golfer being entered.
   final int? activeIndex;
 
+  /// Dots for golfers who were skipped on this hole and still owe a score —
+  /// a clay ring (`handoff-score-entry-skip`).
+  final Set<int> skippedIndexes;
+
+  /// Non-null puts **Skip** where Clear is: the golfer at the keypad has no
+  /// score yet. Read `Skip to Dave ›`, or `Skip` when nobody else is owed one.
+  final String? skipLabel;
+
+  /// Null with a `skipLabel` draws Skip disabled and grey — he is the only
+  /// golfer still owed a score, so there is nobody to skip to.
+  final VoidCallback? onSkip;
+
+  /// The golfer at the keypad was skipped: the header line says so.
+  final bool skippedNow;
+
   const FortyBallsKeypad({
     super.key,
     required this.playerName,
@@ -263,6 +278,10 @@ class FortyBallsKeypad extends StatefulWidget {
     this.strokeNote,
     this.progress,
     this.activeIndex,
+    this.skippedIndexes = const {},
+    this.skipLabel,
+    this.onSkip,
+    this.skippedNow = false,
   });
 
   @override
@@ -316,7 +335,16 @@ class _FortyBallsKeypadState extends State<FortyBallsKeypad> {
                 borderRadius: BorderRadius.circular(4),
                 color: i == widget.activeIndex
                     ? Halved.deepPine
-                    : (widget.progress![i] ? Halved.pine : Halved.cardBorder),
+                    : (widget.progress![i]
+                        ? Halved.pine
+                        : (widget.skippedIndexes.contains(i)
+                            ? Colors.white
+                            : Halved.cardBorder)),
+                border: i != widget.activeIndex &&
+                        !widget.progress![i] &&
+                        widget.skippedIndexes.contains(i)
+                    ? Border.all(color: const Color(0xFFB45309), width: 1.5)
+                    : null,
               ),
             ),
         ]),
@@ -340,6 +368,7 @@ class _FortyBallsKeypadState extends State<FortyBallsKeypad> {
             _typing
                 ? 'Type a score of 10 or more'
                 : [
+                    if (widget.skippedNow) 'skipped',
                     (widget.strokeNote ?? '').isNotEmpty
                         ? widget.strokeNote!
                         : _strokeWord(widget.strokes),
@@ -419,7 +448,9 @@ class _FortyBallsKeypadState extends State<FortyBallsKeypad> {
         ],
         Expanded(
           flex: widget.onNoScore == null ? 2 : 1,
-          child: _flatButton('Clear', filled: true, onTap: widget.onClear),
+          child: widget.skipLabel != null
+              ? _skipButton()
+              : _flatButton('Clear', filled: true, onTap: widget.onClear),
         ),
       ]),
     ]);
@@ -464,6 +495,32 @@ class _FortyBallsKeypadState extends State<FortyBallsKeypad> {
     if (n == null) return;
     widget.onScore(n);
     setState(() => _typing = false);
+  }
+
+  /// Pine text on a white key with a 1.5px pine outline; grey when disabled.
+  Widget _skipButton() {
+    final enabled = widget.onSkip != null;
+    final c = enabled ? Halved.pine : Halved.disabledText;
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        key: const ValueKey('keypad-skip'),
+        borderRadius: BorderRadius.circular(10),
+        onTap: widget.onSkip,
+        child: Container(
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+                color: enabled ? Halved.pine : Halved.cardBorder, width: 1.5),
+          ),
+          child: Text(widget.skipLabel!,
+              style: TextStyle(fontWeight: FontWeight.w700, color: c)),
+        ),
+      ),
+    );
   }
 
   Widget _flatButton(String label,

@@ -1315,15 +1315,54 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         clearedSentinel: _kClearedScore,
       );
 
-  int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
-    for (int i = 0; i < players.length; i++) {
-      if (_isInactiveAltShotPlayer(players[i].player.id)) continue;
-      if (players[i].isWithdrawnOnHole(_selectedHole)) continue;
-      // Picked up on a Fourball hole past the close-out — see `_noScore`.
-      if (_isNoScore(_selectedHole, players[i].player.id)) continue;
-      if (!scores.containsKey(players[i].player.id)) return i;
+  /// **Skip** (`handoff-score-entry-skip`): the keypad's cursor remembers
+  /// where it is. [_cursorAfterPid] is the golfer last scored or skipped on
+  /// [_cursorHole]; the next golfer owed a score is the first one DOWN the card
+  /// from him, wrapping to the top. Both are ignored on any other hole, which
+  /// is what resets them when the hole changes. Device-only, never saved.
+  int? _cursorHole;
+  int? _cursorAfterPid;
+  int? _skipHole;
+  final Set<int> _skipPids = <int>{};
+
+  Set<int> get _skippedNow =>
+      _skipHole == _selectedHole ? _skipPids : const <int>{};
+
+  bool _owesScore(Membership m, Map<int, int> scores) {
+    if (_isInactiveAltShotPlayer(m.player.id)) return false;
+    if (m.isWithdrawnOnHole(_selectedHole)) return false;
+    // Picked up on a Fourball hole past the close-out — see `_noScore`.
+    if (_isNoScore(_selectedHole, m.player.id)) return false;
+    return !scores.containsKey(m.player.id);
+  }
+
+  /// The next golfer owed a score, walking DOWN the card from [fromIdx]
+  /// (exclusive) and wrapping. -1 when nobody else is owed one.
+  int _nextOwedIdx(List<Membership> players, Map<int, int> scores,
+      int fromIdx) {
+    for (int k = 1; k <= players.length; k++) {
+      final i = (fromIdx + k) % players.length;
+      if (i == fromIdx) continue;
+      if (_owesScore(players[i], scores)) return i;
     }
     return -1;
+  }
+
+  int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
+    var from = -1;
+    if (_cursorHole == _selectedHole && _cursorAfterPid != null) {
+      from = players.indexWhere((p) => p.player.id == _cursorAfterPid);
+    }
+    for (int k = 1; k <= players.length; k++) {
+      final i = (from + k) % players.length;
+      if (_owesScore(players[i], scores)) return i;
+    }
+    return -1;
+  }
+
+  void _moveCursorFrom(int playerId) {
+    _cursorHole = _selectedHole;
+    _cursorAfterPid = playerId;
   }
 
   /// Holes the group abandoned at a mid-round withdrawal — voided for
@@ -4703,6 +4742,32 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 for (final p in players) scores[p.player.id] != null,
               ],
               activeIndex: fbIdx,
+              skippedIndexes: {
+                for (var i = 0; i < players.length; i++)
+                  if (_skippedNow.contains(players[i].player.id) &&
+                      scores[players[i].player.id] == null)
+                    i,
+              },
+              skippedNow: _skippedNow.contains(fbMember.player.id) &&
+                  scores[fbMember.player.id] == null,
+              // Skip sits where Clear does while this golfer has no score.
+              skipLabel : scores[fbMember.player.id] == null
+                  ? (_nextOwedIdx(players, scores, fbIdx) < 0
+                      ? 'Skip'
+                      : 'Skip to ${players[_nextOwedIdx(players, scores, fbIdx)].player.name.split(' ').first} ›')
+                  : null,
+              onSkip    : scores[fbMember.player.id] == null &&
+                      _nextOwedIdx(players, scores, fbIdx) >= 0
+                  ? () => setState(() {
+                        if (_skipHole != _selectedHole) {
+                          _skipHole = _selectedHole;
+                          _skipPids.clear();
+                        }
+                        _skipPids.add(fbMember.player.id);
+                        _editHotPid = null;
+                        _moveCursorFrom(fbMember.player.id);
+                      })
+                  : null,
               // The keys are coded against par PLUS his strokes when Net
               // Style Entry is on — the setting the inline picker and the
               // score box have always honoured, which the keypad did not.
@@ -4733,6 +4798,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 // and the only way back for a golfer marked by mistake who
                 // then holes out.
                 _noScore[_selectedHole]?.remove(fbMember.player.id);
+                _moveCursorFrom(fbMember.player.id);
                 _selectScore(fbMember, n, _selectedHole);
                 // **`Edit scores` is a SESSION, not one score** (Paul, 30 Oct
                 // 2026). While `_trayEditing` the keypad stays on the golfer
@@ -5156,6 +5222,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 bankerCardId:
                     _bankerRound(rp) ? _bankerForSelectedHole(rp) : null,
                 pickedUpIds: _noScore[_selectedHole] ?? const {},
+                skippedIds: _skippedNow,
                 annandaleSummary:
                     _activeGames(rp.round).contains('annandale_friday')
                         ? rp.annandaleFridaySummary : null,
@@ -5719,6 +5786,9 @@ class _HoleScoreCard extends StatelessWidget {
   /// round but a Fourball past its close-out.
   final Set<int> pickedUpIds;
 
+  /// Skipped at the keypad on this hole and still owed a score.
+  final Set<int> skippedIds;
+
   const _HoleScoreCard({
     this.fortyBallsNet,
     this.ball,
@@ -5731,6 +5801,7 @@ class _HoleScoreCard extends StatelessWidget {
     this.skinsCard,
     this.bankerCardId,
     this.pickedUpIds = const {},
+    this.skippedIds = const {},
     this.useKeypad = false,
     this.solo = false,
     this.anchorId,
@@ -6510,6 +6581,7 @@ class _HoleScoreCard extends StatelessWidget {
                 deemphasized:        hotSpotIdx != -1 && !isHot,
                 withdrawn:           withdrawn,
                 pickedUp:            pickedUp,
+                skipped:             skippedIds.contains(m.player.id),
                 grossOnly:           grossOnly,
                 // Under a team header, or first on the card, the band is the
                 // rule and the row adds none.
@@ -7333,6 +7405,10 @@ class _PlayerRow extends StatelessWidget {
   /// "can't continue" and is the server's.
   final bool          pickedUp;
 
+  /// Skipped at the keypad on this hole and still owed a score: dashed box and
+  /// a SKIPPED tag (`handoff-score-entry-skip`). On this device only.
+  final bool          skipped;
+
   /// The first row under a team header (or the first row at all): no rule
   /// above it, because the band is already the divider.
   final bool          flushTop;
@@ -7372,6 +7448,7 @@ class _PlayerRow extends StatelessWidget {
     this.deemphasized = false,
     this.withdrawn = false,
     this.pickedUp = false,
+    this.skipped = false,
     this.grossOnly = false,
     this.flushTop = false,
     this.p531HolePoints,
@@ -7464,6 +7541,24 @@ class _PlayerRow extends StatelessWidget {
                     style: Halved.body(
                             color: Halved.muted, weight: FontWeight.w600)
                         .copyWith(fontSize: 11.5)),
+                if (skipped) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 5, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFDF0E4),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text('SKIPPED',
+                        style: TextStyle(
+                            fontSize: 10,
+                            height: 1,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.4,
+                            color: Color(0xFF8A4A1C))),
+                  ),
+                ],
                 // The `gets N` chip was here. **Removed 22 Sep 2026.**
                 //
                 // It carried the ROUND's allocation while the dots above the
@@ -7668,6 +7763,7 @@ class _PlayerRow extends StatelessWidget {
                 ? strokesOnThisHole
                 : 0,
             active:       isHot,
+            skipped:      skipped && gross == null,
           ),
         ),
       ]),

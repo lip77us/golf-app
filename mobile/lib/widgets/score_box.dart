@@ -23,6 +23,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'dashed_border.dart';
+
 import '../theme/halved_brand.dart';
 import 'forty_balls_keypad.dart' show ScoreShape, shapeForScore;
 
@@ -45,6 +47,10 @@ class ScoreBox extends StatelessWidget {
   /// offset 2pt, drawn outside the box so it never moves the row.
   final bool active;
 
+  /// The golfer was skipped on this hole and still owes a score
+  /// (`handoff-score-entry-skip`): a dashed `#8FA79A` border.
+  final bool skipped;
+
   static const double size = 40;
 
   const ScoreBox({
@@ -54,6 +60,7 @@ class ScoreBox extends StatelessWidget {
     this.strokes = 0,
     this.shapeStrokes,
     this.active = false,
+    this.skipped = false,
   });
 
   @override
@@ -88,8 +95,9 @@ class ScoreBox extends StatelessWidget {
       decoration: BoxDecoration(
         color: fill,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: line, width: 1.5),
+        border: skipped ? null : Border.all(color: line, width: 1.5),
       ),
+      foregroundDecoration: null,
       child: shape == ScoreShape.double
           // CSS's `4px double`: a line, a gap, a line.
           ? Container(
@@ -130,6 +138,15 @@ class ScoreBox extends StatelessWidget {
           ),
         ],
         face,
+        if (skipped)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: DashedRRect(
+                    color: const Color(0xFF8FA79A), width: 1.5, radius: radius),
+              ),
+            ),
+          ),
         if (strokes > 0)
           Positioned(
             top: dotInset.dy,
