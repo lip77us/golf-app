@@ -7541,7 +7541,7 @@ class _PlayerRow extends StatelessWidget {
                     style: Halved.body(
                             color: Halved.muted, weight: FontWeight.w600)
                         .copyWith(fontSize: 11.5)),
-                if (skipped) ...[
+                if (skipped && gross == null) ...[
                   const SizedBox(width: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(
