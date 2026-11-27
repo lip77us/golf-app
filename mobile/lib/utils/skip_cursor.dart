@@ -22,12 +22,27 @@ class SkipCursor {
   }
 
   void skip(int hole, int pid) {
+    mark(hole, pid);
+    moveFrom(hole, pid);
+  }
+
+  /// Marks [pid] skipped on [hole] without moving the cursor.
+  void mark(int hole, int pid) {
     if (_skipHole != hole) {
       _skipHole = hole;
       _skipPids.clear();
     }
     _skipPids.add(pid);
-    moveFrom(hole, pid);
+  }
+
+  /// A row tapped (`handoff-score-entry-tap`). The caller puts [to] at the
+  /// keypad; this marks the golfer being left when tapping past him was a
+  /// skip. The cursor moves when [to]'s score lands, like any other.
+  void tapTo(int hole,
+      {required int? from,
+      required int to,
+      required bool Function(int) owes}) {
+    if (tapSkips(from: from, to: to, owes: owes)) mark(hole, from!);
   }
 
   /// Index of the next golfer owed a score, walking down from the cursor.
@@ -58,6 +73,15 @@ class SkipCursor {
     return -1;
   }
 }
+
+/// **Tapping a golfer is Skip by pointing**: leaving a golfer who is owed a
+/// score for another who is owed one skips him. Leaving or opening a golfer
+/// who already has a score skips nobody.
+bool tapSkips(
+        {required int? from,
+        required int to,
+        required bool Function(int) owes}) =>
+    from != null && from != to && owes(from) && owes(to);
 
 /// What the keypad needs, worked out once per build.
 class SkipKeys {

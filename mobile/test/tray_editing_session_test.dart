@@ -113,17 +113,30 @@ void main() {
       }
     });
 
-    test('the Rabbit tap handler sets the cursor and nothing else', () {
-      final src = File(files['rabbit']!).readAsStringSync();
-      final at = src.indexOf('onTapPlayer:');
-      expect(at, greaterThan(0));
-      // Bounded by the next argument, not a character count.
-      final end = src.indexOf('rowExtras:', at);
-      expect(end, greaterThan(at), reason: 'the argument list moved');
-      final body = src.substring(at, end);
-      expect(body, contains('_editingPlayerId = pid'));
-      expect(body.contains('_trayEditing'), isFalse);
-    });
+    // Every screen's row tap goes through `_tapPlayer`, which pins a golfer
+    // and starts no session.
+    const tapped = <String, String>{
+      'wolf': 'lib/screens/wolf_screen.dart',
+      'rabbit': 'lib/screens/rabbit_screen.dart',
+      'survivor': 'lib/screens/survivor_screen.dart',
+      'points 5-3-1': 'lib/screens/points_531_screen.dart',
+      'sequoya 3s': 'lib/screens/sequoya_threes_screen.dart',
+      'triple nassau': 'lib/screens/triple_nassau_screen.dart',
+    };
+    for (final e in tapped.entries) {
+      test('the ${e.key} tap handler sets the cursor and nothing else', () {
+        final src = File(e.value).readAsStringSync();
+        final at = src.indexOf('void _tapPlayer(');
+        expect(at, greaterThan(0));
+        // Bounded by the function's own end, not a character count.
+        final body = src.substring(at, src.indexOf('\n  }', at));
+        expect(body, contains('= pid;'));
+        expect(body, contains('_skip.tapTo('));
+        expect(body.contains('_trayEditing'), isFalse);
+        // Defined once and called from the rows.
+        expect('_tapPlayer('.allMatches(src).length, greaterThan(1));
+      });
+    }
   });
 
   /// **A tray game saves and STAYS.**

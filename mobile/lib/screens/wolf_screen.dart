@@ -349,6 +349,31 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
     return (i >= 0 && i < players.length) ? players[i] : null;
   }
 
+  /// A golfer tapped: he goes under the keypad, scored or not
+  /// (`handoff-score-entry-tap`). Tapping past a golfer who is owed a score,
+  /// to another who is, skips him. Tapping the one already there does nothing.
+  void _tapPlayer(
+      int pid, List<Membership> players, Map<int, int> scores) {
+    final from = _keypadMember(players, scores)?.player.id;
+    if (from == pid) return;
+    setState(() {
+      _skip.tapTo(_selectedHole,
+          from: from, to: pid, owes: (id) => !scores.containsKey(id));
+      _editingPlayerId = pid;
+    });
+  }
+
+  /// A score from the inline picker: the cursor carries on down the card from
+  /// this golfer, and a tap's one-shot ends with it.
+  void _pickScore(BuildContext ctx, Membership m, int score,
+      List<Membership> players) {
+    if (score > 0) _skip.moveFrom(_selectedHole, m.player.id);
+    _handleScore(ctx, m, score, players);
+    if (score > 0 && !_trayEditing && _editingPlayerId != null) {
+      setState(() => _editingPlayerId = null);
+    }
+  }
+
   // ── Wolf decision ─────────────────────────────────────────────────────────
 
   /// Set (or clear) the Wolf's call for [hole], defaulting to the hole on
@@ -922,9 +947,8 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
                 // fallback for a hole whose card has not arrived.
                 showPicker: card == null,
                 editingPlayerId: _editingPlayerId,
-                onScoreSelected: (m, s) => _handleScore(ctx, m, s, players),
-                onEditTap: (m) => setState(() => _editingPlayerId =
-                    _editingPlayerId == m.player.id ? null : m.player.id),
+                onScoreSelected: (m, s) => _pickScore(ctx, m, s, players),
+                onEditTap: (m) => _tapPlayer(m.player.id, players, scores),
                 spotsActive:   spotsActive(rp),
                 spotsTypesFor: (pid) =>
                     spotsTypesFor(pid, _selectedHole, rp.spotsSummary),
@@ -1492,10 +1516,9 @@ class _HoleScoreCard extends StatelessWidget {
             final gross = scores[m.player.id];
             final isHot = idx == effHot;
             final isEditing = editingPlayerId == m.player.id;
-            // A scored row that isn't the live hot-spot can be tapped to fix
-            // it — a completed hole has no hot-spot, so without this there'd be
-            // no way to edit a past hole.
-            final editable = gross != null && !isHot;
+            // Any row but the live one can be tapped: to score him next, or
+            // to fix his number.
+            final editable = !isHot;
             final strokes = _strokesForHole(m, holeData);
             final role = _roleFor(m.player.id);
 

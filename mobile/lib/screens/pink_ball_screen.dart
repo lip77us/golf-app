@@ -29,7 +29,10 @@ import '../widgets/golf_app_bar.dart';
 import '../utils/play_order.dart';
 import '../widgets/hole_header.dart';
 import '../widgets/inline_score_picker.dart';
+import '../utils/skip_cursor.dart';
+import '../widgets/dashed_border.dart';
 import '../widgets/net_score_button.dart';
+import '../widgets/skipped_tag.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/combo_tee_chip.dart';
 import '../widgets/side_game_marks.dart';
@@ -97,6 +100,10 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
   /// Tap an already-scored player → they become the active row so the inline
   /// picker edits their score in place (casual score-entry model), not a modal.
   int? _editHotPid;
+
+  /// Where the entry row has got to, and who was tapped past
+  /// (`handoff-score-entry-tap`). Per hole, never saved.
+  final SkipCursor _skip = SkipCursor();
 
   // Match play refresh — sync-drain watcher + 3-second polling timer.
   SyncService?  _syncRef;
@@ -804,18 +811,18 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                     if (_irishBallsToCount != null)
                       _IrishRumbleBallsLine(balls: _irishBallsToCount!),
                     ...() {
-                  // Compute hot spot once — first player without a score.
-                  int hotSpotIdx = -1;
-                  for (int i = 0; i < realMembers.length; i++) {
-                    final pid = realMembers[i].player.id;
-                    final s = _pendingScores[pid] ??
-                        hole?.scores
-                            .where((s) => s.playerId == pid)
-                            .firstOrNull
-                            ?.grossScore;
-                    if (s == null) { hotSpotIdx = i; break; }
-                  }
-                  // Editing an already-scored player: make them the hot row.
+                  // The next golfer owed a score, down the card from the
+                  // last one scored.
+                  bool owes(int pid) =>
+                      (_pendingScores[pid] ??
+                          hole?.scores
+                              .where((s) => s.playerId == pid)
+                              .firstOrNull
+                              ?.grossScore) ==
+                      null;
+                  int hotSpotIdx = _skip.hotIndex(_holeNumber,
+                      [for (final m in realMembers) m.player.id], owes);
+                  // A tapped golfer takes the entry row.
                   if (_editHotPid != null) {
                     final ei = realMembers
                         .indexWhere((m) => m.player.id == _editHotPid);
@@ -844,9 +851,23 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                     par:             par,
                     grossScore:      displayed,
                     handicapStrokes: strokes,
-                    onEditTap: displayed != null
-                        ? () => setState(() => _editHotPid = m.player.id)
-                        : null,
+                    skipped: _skip
+                        .skippedOn(_holeNumber)
+                        .contains(m.player.id),
+                    // Any row but the live one: to score him next, or fix
+                    // his number. Tapping past a golfer who is owed a score,
+                    // to another who is, skips him.
+                    onEditTap: isHot
+                        ? null
+                        : () => setState(() {
+                              _skip.tapTo(_holeNumber,
+                                  from: hotSpotIdx < 0
+                                      ? null
+                                      : realMembers[hotSpotIdx].player.id,
+                                  to: m.player.id,
+                                  owes: owes);
+                              _editHotPid = m.player.id;
+                            }),
                   );
                 final boxColor = Theme.of(context).colorScheme.primary;
                 final editingThis = m.player.id == _editHotPid;
@@ -876,9 +897,17 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                       boxBorderColor:  boxColor,
                       boxFillColor:    Colors.white,
                       onScoreSelected: (score) {
-                        final editing = _editHotPid == m.player.id;
-                        setState(
-                            () => _pendingScores[m.player.id] = score);
+                        // A tapped golfer may have no score yet — that is
+                        // entry, not a correction.
+                        final editing = _editHotPid == m.player.id &&
+                            displayed != null;
+                        setState(() {
+                          _pendingScores[m.player.id] = score;
+                          if (score > 0) {
+                            _skip.moveFrom(_holeNumber, m.player.id);
+                            _editHotPid = null;
+                          }
+                        });
                         // Inline edit of an existing score: drop the one-shot
                         // override and commit the correction immediately.
                         if (editing) {
@@ -1082,7 +1111,8 @@ class _PlayerScoreRow extends StatelessWidget {
   final int                par;
   final int?               grossScore;
   final int                handicapStrokes;
-  final VoidCallback?      onEditTap;  // tap scored box to edit
+  final VoidCallback?      onEditTap;  // tap the row to score or edit
+  final bool               skipped;
   /// When true the Red Ball badge is suppressed (ball already lost).
   final bool               ballAlreadyLost;
 
@@ -1096,6 +1126,7 @@ class _PlayerScoreRow extends StatelessWidget {
     required this.grossScore,
     required this.handicapStrokes,
     this.onEditTap,
+    this.skipped = false,
     this.ballAlreadyLost = false,
   });
 
@@ -1104,7 +1135,7 @@ class _PlayerScoreRow extends StatelessWidget {
     final theme  = Theme.of(context);
     final player = member.player;
 
-    return Container(
+    final inner = Container(
       decoration: BoxDecoration(
         // When active the row is transparent so the bounding box's wash/frame
         // shows; otherwise the carrier gets its distinctive tinted band.
@@ -1168,16 +1199,18 @@ class _PlayerScoreRow extends StatelessWidget {
               const SizedBox(width: 6),
               BallBadge(gameName: gameName),
             ],
+            if (skipped && grossScore == null) ...const [
+              SizedBox(width: 6),
+              SkippedTag(),
+            ],
           ]),
         ),
 
         // Score box — shared NetScoreButton (golf-scorecard notation: under-par
         // red circle, over-par square, stroke dots) once scored; a hot/outline
         // box while empty.  Matches the generic score-entry grid.
-        GestureDetector(
-          onTap: grossScore != null ? onEditTap : null,
-          // Stroke dots in a strip below the box (clear of the bogey square).
-          child: scoreCellWithDots(
+        // Stroke dots in a strip below the box (clear of the bogey square).
+        scoreCellWithDots(
             grossScore != null
                 ? NetScoreButton(
                     score:    grossScore!,
@@ -1187,7 +1220,12 @@ class _PlayerScoreRow extends StatelessWidget {
                     width:    40,
                     height:   36,
                   )
-                : AnimatedContainer(
+                // Skipped on this hole and still owed: a dashed box.
+                : CustomPaint(
+                    foregroundPainter: skipped && !isHot
+                        ? const DashedRRect(color: Color(0xFF8FA79A))
+                        : null,
+                    child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     width: 40,
                     height: 36,
@@ -1197,16 +1235,19 @@ class _PlayerScoreRow extends StatelessWidget {
                       color: isHot ? Colors.white : Colors.transparent,
                       border: isHot
                           ? Border.all(color: theme.colorScheme.primary, width: 2)
-                          : Border.all(color: theme.colorScheme.outline),
+                          : skipped
+                              ? null
+                              : Border.all(color: theme.colorScheme.outline),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                  ),
+                  )),
             handicapStrokes,
             theme.colorScheme.primary,
-          ),
         ),
       ]),
     );
+    if (onEditTap == null) return inner;
+    return InkWell(onTap: onEditTap, child: inner);
   }
 }
 

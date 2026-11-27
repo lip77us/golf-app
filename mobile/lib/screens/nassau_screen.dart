@@ -27,7 +27,9 @@ import '../utils/holes_thru.dart';
 import '../utils/play_order.dart';
 import '../widgets/hole_header.dart';
 import '../widgets/inline_score_picker.dart';
+import '../utils/skip_cursor.dart';
 import '../widgets/score_box.dart';
+import '../widgets/skipped_tag.dart';
 import '../theme/halved_brand.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
@@ -68,6 +70,10 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
   /// form) instead of a modal sheet. Cleared once they pick a value or change
   /// holes.
   int? _editHotPid;
+
+  /// Where the entry row has got to, and who was tapped past
+  /// (`handoff-score-entry-tap`). Per hole, never saved.
+  final SkipCursor _skip = SkipCursor();
 
   // Polling timer used when a cross-foursome phantom is waiting for a donor
   // to score.  Refreshes the scorecard every 8 s so the phantom row updates
@@ -256,13 +262,30 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
         pending: _pending,
       );
 
-  int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
-    for (int i = 0; i < players.length; i++) {
-      // Phantom players are never a hot-spot — their score arrives automatically
-      if (players[i].player.isPhantom) continue;
-      if (!scores.containsKey(players[i].player.id)) return i;
-    }
-    return -1;
+  // Phantom players are never a hot-spot — their score arrives automatically.
+  bool _owes(Membership m, Map<int, int> scores) =>
+      !m.player.isPhantom && !scores.containsKey(m.player.id);
+
+  /// The next golfer owed a score, down the card from the last one scored.
+  int _hotSpotIdx(List<Membership> players, Map<int, int> scores) =>
+      _skip.hot(_selectedHole, players, (m) => _owes(m, scores));
+
+  /// A golfer tapped: he becomes the entry row, scored or not. Tapping past
+  /// a golfer who is owed a score, to another who is, skips him.
+  void _tapPlayer(Membership m, List<Membership> players, int hotSpot,
+      Map<int, int> scores) {
+    final from = (hotSpot >= 0 && hotSpot < players.length)
+        ? players[hotSpot].player.id
+        : null;
+    if (from == m.player.id) return;
+    setState(() {
+      _skip.tapTo(_selectedHole,
+          from: from,
+          to: m.player.id,
+          owes: (id) =>
+              _owes(players.firstWhere((p) => p.player.id == id), scores));
+      _editHotPid = m.player.id;
+    });
   }
 
   bool _allScored(List<Membership> players, Map<int, int> scores) =>
@@ -769,8 +792,17 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
                   final hole = _selectedHole;
                   final wasAllScored = _allScored(
                       players, _effectiveScores(sc, hole));
-                  final wasEditing = _editHotPid != null;
+                  // A tapped golfer may have no score yet — that is entry,
+                  // not a correction.
+                  final wasEditing = _editHotPid != null &&
+                      scores[m.player.id] != null;
                   _selectScore(m, score, hole);
+                  if (score > 0) {
+                    _skip.moveFrom(hole, m.player.id);
+                    if (_editHotPid != null) {
+                      setState(() => _editHotPid = null);
+                    }
+                  }
                   // Editing an existing score (inline): drop the one-shot edit
                   // override and commit the correction immediately, like the
                   // old edit sheet did — no save+advance needed.
@@ -799,7 +831,8 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
                     }
                   }
                 },
-                onEditTap: (m) => setState(() => _editHotPid = m.player.id),
+                onEditTap: (m) => _tapPlayer(m, players, hotSpot, scores),
+                skippedIds: _skip.skippedOn(_selectedHole),
               ),
               // Spots' greenie pick, on par 3s only — empty on every
               // other hole. The server decides which holes are par 3s;
@@ -868,6 +901,7 @@ class _NassauHoleScoreCard extends StatelessWidget {
   final Map<int, Map<int, int>> merged;
   final Map<int, int>           scores;
   final int                     hotSpotIdx;
+  final Set<int>                skippedIds;
   final int                     par;
   final NassauSummary?          nassau;
   final NassauPhantomInfo?      phantomInfo;
@@ -887,6 +921,7 @@ class _NassauHoleScoreCard extends StatelessWidget {
     required this.merged,
     required this.scores,
     required this.hotSpotIdx,
+    this.skippedIds = const {},
     required this.par,
     required this.nassau,
     this.phantomInfo,
@@ -999,7 +1034,6 @@ class _NassauHoleScoreCard extends StatelessWidget {
 
             final gross      = scores[m.player.id];
             final isHot      = idx == hotSpotIdx;
-            final hasScore   = gross != null;
             final matchStrok = _strokesForHole(m, holeData);
 
             final team = _teamOf(m.player.id);
@@ -1014,7 +1048,10 @@ class _NassauHoleScoreCard extends StatelessWidget {
                 comboTee:            m.comboTeeOnHole(holeNumber),
                 strokesOnThisHole:   matchStrok,
                 team:                team,
-                onTap: (hasScore && !isHot) ? () => onEditTap(m) : null,
+                skipped:             skippedIds.contains(m.player.id),
+                // A phantom's score arrives by itself.
+                onTap: (!isHot && !m.player.isPhantom)
+                    ? () => onEditTap(m) : null,
                 spotsActive:   spotsActive,
                 spotsTypes:    spotsActive ? spotsTypesFor(m.player.id) : const [],
                 onSpotsTap:    spotsActive ? () => onSpotsTap(m.player.id) : null,
@@ -1237,6 +1274,7 @@ class _NassauPlayerRow extends StatelessWidget {
   /// This golfer's tee for the hole being entered — combo sets only.
   final String?       comboTee;
   final VoidCallback? onTap;
+  final bool          skipped;
   final int           strokesOnThisHole;
   final int?          team; // 1 = Blue, 2 = Orange (null = unteamed)
   final bool          spotsActive;
@@ -1251,6 +1289,7 @@ class _NassauPlayerRow extends StatelessWidget {
     required this.isHot,
     this.comboTee,
     this.onTap,
+    this.skipped = false,
     this.strokesOnThisHole = 0,
     this.team,
     this.spotsActive = false,
@@ -1267,7 +1306,7 @@ class _NassauPlayerRow extends StatelessWidget {
     final netStyle = context.watch<SettingsProvider>().netStyleEntry;
     final teamColour = team != null ? nassauTeamColor(team!) : null;
 
-    return Container(
+    final inner = Container(
       constraints: const BoxConstraints(minHeight: 50),
       decoration: BoxDecoration(
         color: isHot ? const Color(0x1F3BD89A) : null,
@@ -1302,6 +1341,10 @@ class _NassauPlayerRow extends StatelessWidget {
                             color: Halved.muted, weight: FontWeight.w600)
                         .copyWith(fontSize: 11.5)),
                 ComboTeeChip(tee: comboTee),
+                if (skipped && gross == null) ...const [
+                  SizedBox(width: 6),
+                  SkippedTag(),
+                ],
               ]),
               if (spotsActive)
                 Padding(
@@ -1341,17 +1384,18 @@ class _NassauPlayerRow extends StatelessWidget {
           )),
         ),
         const SizedBox(width: 10),
-        GestureDetector(
-          onTap: onTap,
-          child: ScoreBox(
+        ScoreBox(
           score: gross,
           par: par,
           strokes: strokesOnThisHole,
           shapeStrokes: netStyle ? strokesOnThisHole : 0,
           active: isHot,
-        )),
+          skipped: skipped && gross == null,
+        ),
       ]),
     );
+    if (onTap == null) return inner;
+    return InkWell(onTap: onTap, child: inner);
   }
 }
 

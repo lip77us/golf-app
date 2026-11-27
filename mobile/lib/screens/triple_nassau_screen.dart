@@ -136,6 +136,31 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
     return (i >= 0 && i < players.length) ? players[i] : null;
   }
 
+  /// A golfer tapped: he goes under the keypad, scored or not
+  /// (`handoff-score-entry-tap`). Tapping past a golfer who is owed a score,
+  /// to another who is, skips him. Tapping the one already there does nothing.
+  void _tapPlayer(
+      int pid, List<Membership> players, Map<int, int> scores) {
+    final from = _keypadMember(players, scores)?.player.id;
+    if (from == pid) return;
+    setState(() {
+      _skip.tapTo(_selectedHole,
+          from: from, to: pid, owes: (id) => !scores.containsKey(id));
+      _editingPlayerId = pid;
+    });
+  }
+
+  /// A score from the inline picker: the cursor carries on down the card from
+  /// this golfer, and a tap's one-shot ends with it.
+  void _pickScore(BuildContext ctx, Membership m, int score,
+      List<Membership> players) {
+    if (score > 0) _skip.moveFrom(_selectedHole, m.player.id);
+    _handleScore(ctx, m, score, players);
+    if (score > 0 && !_trayEditing && _editingPlayerId != null) {
+      setState(() => _editingPlayerId = null);
+    }
+  }
+
   Future<void> _refresh() async {
     final rp = context.read<RoundProvider>();
     await rp.loadScorecard(widget.foursomeId);
@@ -554,7 +579,11 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
     final players  = _realMembers(rp);
     final holeData = sc.holeData(_selectedHole);
     final scores   = _effectiveScores(sc, _selectedHole);
-    final hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
+    var hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
+    if (!isComplete && _editingPlayerId != null) {
+      final i = players.indexWhere((p) => p.player.id == _editingPlayerId);
+      if (i >= 0) hotSpot = i;
+    }
     _ensureCard(rp);
     final card = _card(rp);
 
@@ -598,7 +627,7 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
                   ? null
                   : _keypadMember(players, scores)?.player.id,
               // A tap is a one-shot and must not start an edit session.
-              onTapPlayer: (pid) => setState(() => _editingPlayerId = pid),
+              onTapPlayer: (pid) => _tapPlayer(pid, players, scores),
               rowExtras: (p) {
                 final m = players
                     .where((x) => x.player.id == p.playerId).firstOrNull;
@@ -822,12 +851,8 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
       if (active) {
         // Active player: ONE team-colour frame around the row AND the picker
         // (square corners so the mixed-width border is allowed) — the Sixes look.
-        Widget rowPad = Padding(
+        final rowPad = Padding(
             padding: const EdgeInsets.fromLTRB(12, 9, 12, 9), child: rowContent);
-        if (isEditing) {
-          rowPad = InkWell(
-              onTap: () => setState(() => _editingPlayerId = null), child: rowPad);
-        }
         // The template draws no frame round the active row: a mint wash and
         // the golfer's 4pt bar. The picker (the fallback while the hole's
         // card is in flight) sits beneath it.
@@ -844,14 +869,13 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
               currentScore: gross,
               boxBorderColor: colour,
               boxFillColor: Colors.white,
-              onScoreSelected: (v) => _handleScore(ctx, m, v, players),
+              onScoreSelected: (v) => _pickScore(ctx, m, v, players),
             ),
           ]),
         ));
       } else {
         rows.add(InkWell(
-          onTap: gross != null
-              ? () => setState(() => _editingPlayerId = pid) : null,
+          onTap: () => _tapPlayer(pid, players, scores),
           child: Container(
             constraints: const BoxConstraints(minHeight: 50),
             decoration: BoxDecoration(

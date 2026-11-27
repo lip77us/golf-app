@@ -367,6 +367,20 @@ class _Points531ScreenState extends State<Points531Screen>
     return (i >= 0 && i < players.length) ? players[i] : null;
   }
 
+  /// A golfer tapped: he goes under the keypad, scored or not
+  /// (`handoff-score-entry-tap`). Tapping past a golfer who is owed a score,
+  /// to another who is, skips him. Tapping the one already there does nothing.
+  void _tapPlayer(int pid, List<Membership> players, Map<int, int> scores) {
+    final from = _keypadMember(players, scores)?.player.id;
+    if (from == pid) return;
+    setState(() {
+      _skip.tapTo(_selectedHole,
+          from: from, to: pid, owes: (id) => !scores.containsKey(id));
+      _editingPlayerId = null;
+      _editHotPid = pid;
+    });
+  }
+
   /// Roster order → colour. **Roster, not the standing**, or a golfer
   /// changes colour the moment he takes the lead and the tray stops
   /// matching the card above it.
@@ -856,17 +870,26 @@ class _Points531ScreenState extends State<Points531Screen>
                     openSpotsSheet(widget.foursomeId, pid, _selectedHole),
                 spotsSheetOpen: spotsSheetOpenFor,
                 onScoreSelected: (m, score) {
+                  // A tapped golfer may have no score yet — that is entry,
+                  // not a correction.
+                  final correcting = _editHotPid != null &&
+                      scores[m.player.id] != null;
                   if (_editHotPid != null) {
-                    // Inline edit of an existing score: drop the one-shot
-                    // override and commit the correction immediately.
                     setState(() => _editHotPid = null);
+                  }
+                  if (score > 0) {
+                    _skip.moveFrom(_selectedHole, m.player.id);
+                  }
+                  if (correcting) {
+                    // Inline edit of an existing score: commit the correction
+                    // immediately.
                     _selectScore(m, score, _selectedHole);
                     _saveAndAdvance(ctx, players, par, advance: false);
                   } else {
                     _handleScore(ctx, m, score, players, par);
                   }
                 },
-                onEditTap: (m) => setState(() => _editHotPid = m.player.id),
+                onEditTap: (m) => _tapPlayer(m.player.id, players, scores),
               ),
               // Spots' greenie pick, on par 3s only — empty on every
               // other hole. The server decides which holes are par 3s;
@@ -1103,7 +1126,6 @@ class _P531HoleScoreCard extends StatelessWidget {
             final m       = entry.value;
             final gross   = scores[m.player.id];
             final isHot   = idx == hotSpotIdx;
-            final hasScore = gross != null;
 
             final matchStrokes = _strokesForHole(m, holeData);
 
@@ -1123,10 +1145,9 @@ class _P531HoleScoreCard extends StatelessWidget {
                 // Net mode this duplicates the chip's stroke dots, which
                 // is fine; in SO mode it's the ONLY visual indicator.
                 strokesOnThisHole: matchStrokes,
-                // Tapping a scored non-hot row opens the edit picker.
-                onTap: (hasScore && !isHot)
-                    ? () => onEditTap(m)
-                    : null,
+                // Any row but the live one: to score him next, or fix his
+                // number.
+                onTap: !isHot ? () => onEditTap(m) : null,
                 holePoints:      pointsForThisHole,
                 cumulativePoints: cumulativePoints,
                 spotsActive:   spotsActive,
@@ -1353,19 +1374,18 @@ class _P531PlayerRow extends StatelessWidget {
           )),
         ),
         const SizedBox(width: 10),
-        GestureDetector(
-          onTap: onTap,
-          child: ScoreBox(
+        ScoreBox(
           score: gross,
           par: par,
           strokes: strokesOnThisHole,
           shapeStrokes: netStyle ? strokesOnThisHole : 0,
           active: isHot,
           skipped: skipped && gross == null,
-        )),
+        ),
       ]),
     );
-    return inner;
+    if (onTap == null) return inner;
+    return InkWell(onTap: onTap, child: inner);
   }
 }
 

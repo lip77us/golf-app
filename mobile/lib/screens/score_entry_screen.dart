@@ -16,6 +16,7 @@
 ///       – Skins per-hole winner strip
 ///       – Hole ← Prev | Next → navigation / Done button
 
+import '../utils/skip_cursor.dart' show tapSkips;
 import '../utils/effective_scores.dart';
 import '../utils/handicap_rounding.dart';
 import 'dart:async';
@@ -1358,6 +1359,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       if (_owesScore(players[i], scores)) return i;
     }
     return -1;
+  }
+
+  void _markSkipped(int playerId) {
+    if (_skipHole != _selectedHole) {
+      _skipHole = _selectedHole;
+      _skipPids.clear();
+    }
+    _skipPids.add(playerId);
   }
 
   void _moveCursorFrom(int playerId) {
@@ -4759,11 +4768,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               onSkip    : scores[fbMember.player.id] == null &&
                       _nextOwedIdx(players, scores, fbIdx) >= 0
                   ? () => setState(() {
-                        if (_skipHole != _selectedHole) {
-                          _skipHole = _selectedHole;
-                          _skipPids.clear();
-                        }
-                        _skipPids.add(fbMember.player.id);
+                        _markSkipped(fbMember.player.id);
                         _editHotPid = null;
                         _moveCursorFrom(fbMember.player.id);
                       })
@@ -5397,10 +5402,30 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     }
                   }
                 },
-                // Tapping an already-scored player makes THEM the active/hot
-                // player so the normal inline picker appears (with its own
-                // Clear chip) — not a separate edit sheet.
-                onEditTap: (m) => setState(() => _editHotPid = m.player.id),
+                // Tapping any golfer puts him at the keypad, scored or not
+                // (`handoff-score-entry-tap`) — and tapping past one who is
+                // owed a score, to another who is, skips him.
+                onEditTap: (m) {
+                  // No keypad while a Banker hole's bets are open, so there
+                  // is nobody to put at it.
+                  if (_bankerBetsOpen(rp, scores)) return;
+                  final from = (hotSpot >= 0 && hotSpot < players.length)
+                      ? players[hotSpot]
+                      : null;
+                  setState(() {
+                    if (from != null &&
+                        tapSkips(
+                          from: from.player.id,
+                          to: m.player.id,
+                          owes: (id) => _owesScore(
+                              players.firstWhere((p) => p.player.id == id),
+                              scores),
+                        )) {
+                      _markSkipped(from.player.id);
+                    }
+                    _editHotPid = m.player.id;
+                  });
+                },
                 // Junk, set up like Spots: a + Junk button per golfer
                 // opening a tick sheet of the types in play, and on a par 3
                 // the greenie pick at the foot of the card.
@@ -6549,7 +6574,17 @@ class _HoleScoreCard extends StatelessWidget {
             final dimmed = _isInactiveAltShot(m.player.id);
             final withdrawn = m.isWithdrawnOnHole(holeNumber);
             final pickedUp  = pickedUpIds.contains(m.player.id);
+            // Anywhere on the row, scored or not. Blocked while extra-match
+            // teams are unassigned, for a golfer withdrawn on the hole and
+            // for alternate shot's resting partner.
+            final VoidCallback? rowTap = (pickedUp ||
+                    !withdrawn && !dimmed && !isHot &&
+                    blockedExtraSeg == null)
+                ? () => onEditTap(m)
+                : null;
             final rowWidget = GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: rowTap,
               onLongPress: onWithdrawTap != null
                   ? () => onWithdrawTap!(m)
                   : null,
@@ -6588,13 +6623,7 @@ class _HoleScoreCard extends StatelessWidget {
                 flushTop:            idx == 0 || teamHead.isNotEmpty,
                 p531HolePoints:      p531Hole,
                 p531CumulativePoints: p531Cumulative,
-                // Block taps while extra-match teams are unassigned, and for
-                // withdrawn players on holes they're out for.
-                onTap: (pickedUp ||
-                        !withdrawn && gross != null && !isHot
-                        && blockedExtraSeg == null)
-                    ? () => onEditTap(m)
-                    : null,
+                onTap: rowTap,
                 onJunkTap:    allowJunk ? () => onJunkTap(m.player.id) : null,
                 junkSheetOpen: allowJunk && junkSheetOpen(m.player.id),
                 spotsActive:  spotsActive,

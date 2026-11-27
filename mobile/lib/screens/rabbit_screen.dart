@@ -279,6 +279,31 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     return (i >= 0 && i < players.length) ? players[i] : null;
   }
 
+  /// A golfer tapped: he goes under the keypad, scored or not
+  /// (`handoff-score-entry-tap`). Tapping past a golfer who is owed a score,
+  /// to another who is, skips him. Tapping the one already there does nothing.
+  void _tapPlayer(
+      int pid, List<Membership> players, Map<int, int> scores) {
+    final from = _keypadMember(players, scores)?.player.id;
+    if (from == pid) return;
+    setState(() {
+      _skip.tapTo(_selectedHole,
+          from: from, to: pid, owes: (id) => !scores.containsKey(id));
+      _editingPlayerId = pid;
+    });
+  }
+
+  /// A score from the inline picker: the cursor carries on down the card from
+  /// this golfer, and a tap's one-shot ends with it.
+  void _pickScore(BuildContext ctx, Membership m, int score,
+      List<Membership> players) {
+    if (score > 0) _skip.moveFrom(_selectedHole, m.player.id);
+    _handleScore(ctx, m, score, players);
+    if (score > 0 && !_trayEditing && _editingPlayerId != null) {
+      setState(() => _editingPlayerId = null);
+    }
+  }
+
   /// The combo-tee chip and the Spots button, which belong to the ROW and are
   /// the two things a dedicated screen is most likely to lose.
   Widget? _rowExtras(RoundProvider rp, List<Membership> players, int pid) {
@@ -676,7 +701,11 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     final holeInfo = summary?.holeFor(_selectedHole);
     final holeData = sc.holeData(_selectedHole);
     final scores   = _effectiveScores(sc, _selectedHole);
-    final hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
+    var hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
+    if (!isComplete && _editingPlayerId != null) {
+      final i = players.indexWhere((p) => p.player.id == _editingPlayerId);
+      if (i >= 0) hotSpot = i;
+    }
     final par      = holeData?.par ?? 4;
     _ensureCard(rp);
     final card     = _card(rp);
@@ -727,8 +756,7 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
                 // inherited it: tapping any box pinned the keypad for the
                 // rest of the hole, so nothing advanced to the next golfer.
                 // Score entry has only ever set it from a tray's `onEdit`.
-                onTapPlayer: (pid) =>
-                    setState(() => _editingPlayerId = pid),
+                onTapPlayer: (pid) => _tapPlayer(pid, players, scores),
                 rowExtras: (p) => _rowExtras(rp, players, p.playerId)
                     ?? const SizedBox.shrink(),
               ),
@@ -755,9 +783,8 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
               holeInfo:   holeInfo,
               holderId:   rabHolderId,
               editingPlayerId: _editingPlayerId,
-              onScoreSelected: (m, s) => _handleScore(ctx, m, s, players),
-              onEditTap: (m) => setState(() => _editingPlayerId =
-                  _editingPlayerId == m.player.id ? null : m.player.id),
+              onScoreSelected: (m, s) => _pickScore(ctx, m, s, players),
+              onEditTap: (m) => _tapPlayer(m.player.id, players, scores),
               spotsActive:   spotsActive(rp),
               spotsTypesFor: (pid) =>
                   spotsTypesFor(pid, _selectedHole, rp.spotsSummary),
@@ -1158,10 +1185,9 @@ class _HoleScoreCard extends StatelessWidget {
           final gross = scores[m.player.id];
           final isHot = idx == hotSpotIdx;
           final isEditing = editingPlayerId == m.player.id;
-          // A scored row that isn't the live hot-spot can be tapped to correct
-          // it — that re-opens the inline picker (a completed hole has no
-          // hot-spot, so without this there'd be no way to edit a past hole).
-          final editable = gross != null && !isHot;
+          // Any row but the live one can be tapped: to score him next, or
+          // to fix his number.
+          final editable = !isHot;
           final strokes = _strokesForHole(m, holeData);
           final row = _PlayerRow(
                 skipped: skippedIds.contains(m.player.id),

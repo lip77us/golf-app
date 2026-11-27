@@ -322,6 +322,31 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
     return null;
   }
 
+  /// A golfer tapped: he goes under the keypad, scored or not
+  /// (`handoff-score-entry-tap`). Tapping past a golfer who is owed a score,
+  /// to another who is, skips him. Tapping the one already there does nothing.
+  void _tapPlayer(
+      int pid, List<Membership> players, Map<int, int> scores) {
+    final from = _keypadMember(players, scores)?.player.id;
+    if (from == pid) return;
+    setState(() {
+      _skip.tapTo(_selectedHole,
+          from: from, to: pid, owes: (id) => !scores.containsKey(id));
+      _editingPlayerId = pid;
+    });
+  }
+
+  /// A score from the inline picker: the cursor carries on down the card from
+  /// this golfer, and a tap's one-shot ends with it.
+  void _pickScore(BuildContext ctx, Membership m, int score,
+      List<Membership> players) {
+    if (score > 0) _skip.moveFrom(_selectedHole, m.player.id);
+    _handleScore(ctx, m, score, players);
+    if (score > 0 && !_trayEditing && _editingPlayerId != null) {
+      setState(() => _editingPlayerId = null);
+    }
+  }
+
   // --- saving ------------------------------------------------------------
 
   Future<void> _saveHole(
@@ -682,7 +707,9 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
     // Roster order, the same order the scorecard grid draws — score entry and
     // the card must never disagree about who is who.
     final displayOrder = players.map((m) => m.player.id).toList();
-    final hotSpotId = isComplete ? null : _hotSpotId(displayOrder, scores);
+    final hotSpotId = isComplete
+        ? null
+        : (_editingPlayerId ?? _hotSpotId(displayOrder, scores));
     if (!isComplete) _ensureCard(rp);
     final card = _card(rp);
     final holeScored = _allScored(players, scores);
@@ -750,12 +777,11 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
               summary:    summary,
               hotSpotId:  hotSpotId,
               editingPlayerId: _editingPlayerId,
-              onScoreSelected: (m, s) => _handleScore(ctx, m, s, players),
+              onScoreSelected: (m, s) => _pickScore(ctx, m, s, players),
               // A TAP is a one-shot — it never starts an `Edit scores`
               // session (`_trayEditing`), which only the tray's own button
               // does.
-              onEditTap: (m) => setState(() => _editingPlayerId =
-                  _editingPlayerId == m.player.id ? null : m.player.id),
+              onEditTap: (m) => _tapPlayer(m.player.id, players, scores),
               // The keypad is the picker once the hole has a card; two
               // full-width score pickers on one screen is one too many. It
               // stays as the fallback for a hole whose card has not arrived.
@@ -1385,10 +1411,8 @@ class _HoleScoreCard extends StatelessWidget {
       isHot:    isHot,
       isEditing: editing,
       colour:   colour,
-      // With the keypad up any row can be tapped to score it next; with
-      // the inline picker only a scored row opens for a correction.
-      onTap: (!isHot && (gross != null || !showPicker))
-          ? () => onEditTap(m) : null,
+      // Any row but the live one: to score him next, or fix his number.
+      onTap: !isHot ? () => onEditTap(m) : null,
       spotsActive:   spotsActive,
       spotsTypes:    spotsActive ? spotsTypesFor(pid) : const [],
       onSpotsTap:    spotsActive ? () => onSpotsTap(pid) : null,
